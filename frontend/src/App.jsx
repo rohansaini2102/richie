@@ -11,6 +11,8 @@ import AdvisorProfile from './components/AdvisorProfile'
 import ClientsPage from './components/ClientsPage'
 import ClientOnboardingForm from './components/client/ClientOnboardingForm'
 import ClientDetailView from './components/client/ClientDetailView'
+import AdminLogin from './components/AdminLogin'
+import AdminDashboard from './components/AdminDashboard'
 
 function App() {
   return (
@@ -46,6 +48,10 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/client-onboarding/:token" element={<ClientOnboardingForm />} />
+            
+            {/* Admin routes */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
             
             {/* Protected routes with layout */}
             <Route

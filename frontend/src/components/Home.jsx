@@ -29,6 +29,15 @@ function Home() {
           </Link>
         </div>
         
+        <div className="mt-6">
+          <Link
+            to="/admin/login"
+            className="text-white/70 hover:text-white text-sm underline transition duration-300"
+          >
+            Admin Access
+          </Link>
+        </div>
+        
         <div className="mt-12 text-white/80 text-sm">
           <p>For SEBI-registered financial advisors in India</p>
         </div>

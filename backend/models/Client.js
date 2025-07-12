@@ -30,6 +30,11 @@ const clientSchema = new mongoose.Schema({
   dateOfBirth: {
     type: Date
   },
+  gender: {
+    type: String,
+    enum: ['male', 'female', 'other', ''],
+    default: ''
+  },
   
   // Address Information
   address: {
@@ -126,7 +131,7 @@ const clientSchema = new mongoose.Schema({
     }
   }],
 
-  // CAS Information - NEW ADDITION
+  // Enhanced CAS Information Schema
   casData: {
     // CAS File Information
     casFile: {
@@ -140,7 +145,7 @@ const clientSchema = new mongoose.Schema({
       password: String // Encrypted password if CAS is password protected
     },
     
-    // Parsed CAS Data
+    // Parsed CAS Data - Enhanced Structure
     parsedData: {
       // Investor Information
       investor: {
@@ -153,13 +158,15 @@ const clientSchema = new mongoose.Schema({
         pincode: String
       },
       
-      // Demat Accounts
+      // Demat Accounts - Enhanced Structure
       demat_accounts: [{
         dp_id: String,
         dp_name: String,
         bo_id: String,
         client_id: String,
         demat_type: String,
+        
+        // Holdings within Demat Account
         holdings: {
           equities: [{
             symbol: String,
@@ -169,56 +176,75 @@ const clientSchema = new mongoose.Schema({
             price: Number,
             value: Number,
             face_value: Number,
-            market_lot: Number
+            market_lot: Number,
+            sector: String,
+            industry: String
           }],
+          
           demat_mutual_funds: [{
             scheme_name: String,
             isin: String,
             units: Number,
             nav: Number,
             value: Number,
-            fund_house: String
+            fund_house: String,
+            scheme_type: String,
+            category: String
           }],
+          
           corporate_bonds: [{
             symbol: String,
             isin: String,
             company_name: String,
             quantity: Number,
             face_value: Number,
-            value: Number
+            value: Number,
+            maturity_date: Date,
+            coupon_rate: Number
           }],
+          
           government_securities: [{
             symbol: String,
             isin: String,
             security_name: String,
             quantity: Number,
             face_value: Number,
-            value: Number
+            value: Number,
+            maturity_date: Date,
+            coupon_rate: Number
           }],
+          
           aifs: [{
             scheme_name: String,
             isin: String,
             units: Number,
             nav: Number,
             value: Number,
-            fund_house: String
+            fund_house: String,
+            aif_category: String
           }]
         },
+        
+        // Account Additional Info
         additional_info: {
           status: String,
           bo_type: String,
           bo_sub_status: String,
           bsda: String,
           nominee: String,
-          email: String
+          email: String,
+          mobile: String
         },
+        
+        // Account Total Value
         value: Number
       }],
       
-      // Mutual Funds
+      // Mutual Funds - Enhanced Structure
       mutual_funds: [{
         amc: String,
         folio_number: String,
+        
         schemes: [{
           scheme_name: String,
           isin: String,
@@ -226,50 +252,109 @@ const clientSchema = new mongoose.Schema({
           nav: Number,
           value: Number,
           closing_balance: Number,
+          scheme_type: String,
+          category: String,
+          sub_category: String,
+          
+          // Transaction History
           transactions: [{
             date: Date,
             description: String,
+            transaction_type: String, // Purchase, Redemption, Dividend, etc.
             amount: Number,
             units: Number,
             nav: Number,
             balance: Number
           }]
         }],
+        
+        // Folio Total Value
         value: Number
       }],
       
-      // Insurance
+      // Insurance - Enhanced Structure
       insurance: {
         life_insurance_policies: [{
           policy_number: String,
           policy_name: String,
+          insurer_name: String,
           sum_assured: Number,
           premium: Number,
+          premium_frequency: String,
           policy_status: String,
-          maturity_date: Date
+          policy_start_date: Date,
+          maturity_date: Date,
+          nominee: String
+        }],
+        
+        health_insurance_policies: [{
+          policy_number: String,
+          policy_name: String,
+          insurer_name: String,
+          sum_insured: Number,
+          premium: Number,
+          policy_status: String,
+          policy_start_date: Date,
+          policy_end_date: Date
         }]
       },
       
-      // Summary
+      // Enhanced Summary with Detailed Breakdown
       summary: {
         accounts: {
           demat: {
             total_value: Number,
-            total_accounts: Number
+            total_accounts: Number,
+            breakdown: {
+              equities: Number,
+              mutual_funds: Number,
+              bonds: Number,
+              government_securities: Number,
+              aifs: Number
+            }
           },
+          
           mutual_funds: {
             total_value: Number,
-            total_folios: Number
+            total_folios: Number,
+            breakdown: {
+              equity_funds: Number,
+              debt_funds: Number,
+              hybrid_funds: Number,
+              other_funds: Number
+            }
           },
+          
           insurance: {
             total_policies: Number,
-            total_sum_assured: Number
+            total_sum_assured: Number,
+            total_premium: Number
           }
         },
-        total_value: Number
+        
+        // Overall Portfolio Summary
+        total_value: Number,
+        currency: {
+          type: String,
+          default: 'INR'
+        },
+        
+        // Asset Allocation
+        asset_allocation: {
+          equity_percentage: Number,
+          debt_percentage: Number,
+          others_percentage: Number
+        },
+        
+        // Risk Metrics
+        risk_metrics: {
+          portfolio_beta: Number,
+          sharpe_ratio: Number,
+          volatility: Number
+        }
       },
       
-      // Metadata
+      // Metadata - Enhanced
       meta: {
         cas_type: String,
         generated_at: String,
@@ -277,18 +362,36 @@ const clientSchema = new mongoose.Schema({
           type: Date,
           default: Date.now
         },
-        parser_version: String
+        parser_version: String,
+        file_hash: String,
+        processing_time_ms: Number,
+        data_points_extracted: Number,
+        confidence_score: Number
       }
     },
     
-    // CAS Status
+    // CAS Processing Status
     casStatus: {
       type: String,
-      enum: ['not_uploaded', 'uploaded', 'parsing', 'parsed', 'error'],
+      enum: ['not_uploaded', 'uploaded', 'parsing', 'parsed', 'error', 'expired'],
       default: 'not_uploaded'
     },
+    
+    // Error Handling
     parseError: String,
-    lastParsedAt: Date
+    lastParsedAt: Date,
+    
+    // Processing History
+    processingHistory: [{
+      action: String, // upload, parse, update, etc.
+      timestamp: {
+        type: Date,
+        default: Date.now
+      },
+      status: String, // success, failed, warning
+      details: String,
+      eventId: String
+    }]
   },
 
   // Account Information
@@ -385,6 +488,7 @@ clientSchema.index({ advisor: 1, status: 1 });
 clientSchema.index({ email: 1 });
 clientSchema.index({ 'advisor': 1, 'firstName': 1, 'lastName': 1 });
 clientSchema.index({ 'casData.casStatus': 1 });
+clientSchema.index({ 'casData.parsedData.summary.total_value': 1 });
 
 // Virtual for full name
 clientSchema.virtual('fullName').get(function() {
@@ -396,11 +500,32 @@ clientSchema.virtual('totalPortfolioValue').get(function() {
   return this.casData?.parsedData?.summary?.total_value || 0;
 });
 
+// Virtual to check if client has CAS data
+clientSchema.virtual('hasCASData').get(function() {
+  return this.casData && this.casData.casStatus !== 'not_uploaded';
+});
+
+// Virtual for CAS summary info
+clientSchema.virtual('casSummary').get(function() {
+  if (!this.hasCASData || !this.casData.parsedData) {
+    return null;
+  }
+
+  const summary = this.casData.parsedData.summary;
+  return {
+    totalValue: summary?.total_value || 0,
+    dematAccounts: this.casData.parsedData.demat_accounts?.length || 0,
+    mutualFunds: this.casData.parsedData.mutual_funds?.length || 0,
+    lastUpdated: this.casData.lastParsedAt,
+    status: this.casData.casStatus
+  };
+});
+
 // Ensure virtual fields are serialized
 clientSchema.set('toJSON', { virtuals: true });
 clientSchema.set('toObject', { virtuals: true });
 
-// Remove sensitive information from JSON output
+// Enhanced toJSON method with security
 clientSchema.methods.toJSON = function() {
   const client = this.toObject();
   
@@ -417,7 +542,60 @@ clientSchema.methods.toJSON = function() {
     delete client.casData.casFile.password;
   }
   
+  // Mask sensitive CAS data in parsed content
+  if (client.casData && client.casData.parsedData && client.casData.parsedData.investor) {
+    if (client.casData.parsedData.investor.pan) {
+      client.casData.parsedData.investor.pan = client.casData.parsedData.investor.pan.replace(/\w(?=\w{4})/g, '*');
+    }
+  }
+  
   return client;
+};
+
+// Method to update CAS processing history
+clientSchema.methods.addCASProcessingEvent = function(action, status, details, eventId) {
+  if (!this.casData) {
+    this.casData = { processingHistory: [] };
+  }
+  if (!this.casData.processingHistory) {
+    this.casData.processingHistory = [];
+  }
+  
+  this.casData.processingHistory.push({
+    action,
+    status,
+    details,
+    eventId,
+    timestamp: new Date()
+  });
+  
+  // Keep only last 50 events to prevent unlimited growth
+  if (this.casData.processingHistory.length > 50) {
+    this.casData.processingHistory = this.casData.processingHistory.slice(-50);
+  }
+};
+
+// Method to get portfolio asset allocation
+clientSchema.methods.getAssetAllocation = function() {
+  if (!this.hasCASData || !this.casData.parsedData) {
+    return null;
+  }
+
+  const summary = this.casData.parsedData.summary;
+  const totalValue = summary?.total_value || 0;
+  
+  if (totalValue === 0) return null;
+
+  const equityValue = summary?.accounts?.demat?.breakdown?.equities || 0;
+  const debtValue = summary?.accounts?.demat?.breakdown?.bonds || 0;
+  const mfValue = summary?.accounts?.mutual_funds?.total_value || 0;
+  
+  return {
+    equity: Math.round((equityValue / totalValue) * 100),
+    debt: Math.round((debtValue / totalValue) * 100),
+    mutualFunds: Math.round((mfValue / totalValue) * 100),
+    others: Math.round(((totalValue - equityValue - debtValue - mfValue) / totalValue) * 100)
+  };
 };
 
 // Mongoose middleware for logging database operations

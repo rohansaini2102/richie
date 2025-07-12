@@ -257,21 +257,33 @@ function ClientOnboardingForm() {
     });
 
     try {
-      // Note: For onboarding, parsing happens automatically on the backend
-      // This is just for demonstration - in real implementation, 
-      // the parsing would be triggered automatically after upload
+      // Parse CAS data
+      const parseResponse = await clientAPI.parseOnboardingCAS(token);
       
-      const parseDuration = new Date() - parseStartTime;
-      setCasUploadStatus('parsed');
-      
-      console.log('✅ CAS PARSING COMPLETED:', {
-        trackingId: parseTrackingId,
-        uploadTrackingId: casTrackingId,
-        parseDuration: `${parseDuration}ms`,
-        token
-      });
-      
-      toast.success('CAS file processed successfully!');
+      if (parseResponse.success) {
+        const parseDuration = new Date() - parseStartTime;
+        setCasUploadStatus('parsed');
+        setCasData(parseResponse.data);
+        
+        console.log('✅ CAS PARSING COMPLETED:', {
+          trackingId: parseTrackingId,
+          uploadTrackingId: casTrackingId,
+          parseDuration: `${parseDuration}ms`,
+          parsedData: parseResponse.data,
+          token
+        });
+        
+        toast.success('CAS file processed successfully!');
+      } else {
+        setCasUploadStatus('parse_error');
+        console.log('❌ CAS PARSING FAILED:', {
+          trackingId: parseTrackingId,
+          uploadTrackingId: casTrackingId,
+          error: parseResponse.message,
+          token
+        });
+        toast.error(parseResponse.message || 'Failed to process CAS file');
+      }
       
     } catch (error) {
       setCasUploadStatus('parse_error');
@@ -316,13 +328,26 @@ function ClientOnboardingForm() {
         fileName: casFile?.name,
         fileSize: casFile?.size,
         status: casUploadStatus,
-        uploadTrackingId: casTrackingId
+        uploadTrackingId: casTrackingId,
+        hasParsedData: !!(casData?.parsedData)
       }
     });
     
     try {
-      // Submit the onboarding form
-      const response = await clientAPI.submitOnboardingForm(token, data);
+      // Include CAS data in the form submission
+      const submitData = {
+        ...data,
+        casData: casData ? {
+          fileName: casFile?.name,
+          fileSize: casFile?.size,
+          status: casUploadStatus,
+          parsedData: casData.parsedData,
+          uploadTrackingId: casTrackingId
+        } : null
+      };
+
+      // Submit the onboarding form with CAS data
+      const response = await clientAPI.submitOnboardingForm(token, submitData);
       
       const submissionDuration = new Date() - submissionStartTime;
       
@@ -332,7 +357,8 @@ function ClientOnboardingForm() {
         clientId: response.data?.clientId,
         submissionDuration: `${submissionDuration}ms`,
         totalFormTime: `${formCompletionTime}ms`,
-        response: response.data
+        response: response.data,
+        includedCASData: !!casData
       });
       
       console.log('🎉 CLIENT ONBOARDING COMPLETED:', {
@@ -341,7 +367,8 @@ function ClientOnboardingForm() {
         clientId: response.data?.clientId,
         completedAt: new Date().toISOString(),
         hasCASData: casUploadStatus === 'parsed' || casUploadStatus === 'uploaded',
-        totalJourneyTime: `${formCompletionTime}ms`
+        totalJourneyTime: `${formCompletionTime}ms`,
+        casTrackingId: casTrackingId
       });
       
       toast.success('Your information has been submitted successfully!');
@@ -872,6 +899,11 @@ function ClientOnboardingForm() {
                   </div>
                   <div className="text-sm text-blue-700">
                     <p>Your portfolio data has been extracted and will be available to your advisor.</p>
+                    {casData?.parsedData?.summary?.totalValue && (
+                      <p className="font-medium mt-2">
+                        Total Portfolio Value: ₹{casData.parsedData.summary.totalValue.toLocaleString('en-IN')}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -930,6 +962,7 @@ function ClientOnboardingForm() {
               <div>CAS Tracking ID: {casTrackingId || 'Not assigned'}</div>
               <div>Has CAS File: {casFile ? 'Yes' : 'No'}</div>
               {casFile && <div>CAS File: {casFile.name} ({(casFile.size / 1024).toFixed(1)} KB)</div>}
+              {casData && <div>CAS Data: {JSON.stringify(casData.parsedData?.summary || {}, null, 2)}</div>}
             </div>
           </div>
         )}

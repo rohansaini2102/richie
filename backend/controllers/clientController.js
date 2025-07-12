@@ -4,6 +4,7 @@ const Advisor = require('../models/Advisor');
 const { logger, logAuth, logApi, logSecurity } = require('../utils/logger');
 const nodemailer = require('nodemailer');
 const CASParser = require('../services/cas-parser');
+const { OnboardingCASController } = require('./OnboardingCASController');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -754,7 +755,10 @@ const submitClientOnboardingForm = async (req, res) => {
       status: 'onboarding'
     };
     
-    const client = new Client(clientData);
+    // Integrate CAS data if available
+    const clientDataWithCAS = await OnboardingCASController.completeOnboardingWithCAS(clientData, invitation);
+    
+    const client = new Client(clientDataWithCAS);
     await client.save();
     
     // Mark invitation as completed
@@ -937,10 +941,29 @@ const parseClientCAS = async (req, res) => {
       if (client.casData.casFile.password && client.casData.casFile.iv) {
         try {
           password = decryptText(client.casData.casFile.password, client.casData.casFile.iv);
+          // Enhanced password validation
+          if (!password || password.trim() === '') {
+            throw new Error('Decrypted password is empty');
+          }
+          
+          CASLogger.logClientEvent('CAS_PASSWORD_DECRYPTED', clientId, {
+            passwordLength: password.length,
+            hasPassword: true
+          });
         } catch (error) {
           logDetailedError('CAS Password Decryption', error, { clientId, advisorId });
-          return res.status(400).json({ success: false, message: 'Failed to decrypt CAS password. Please re-upload the CAS file.' });
+          client.casData.casStatus = 'error';
+          client.casData.parseError = 'Failed to decrypt CAS password. Please re-upload the CAS file.';
+          await client.save();
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Failed to decrypt CAS password. Please re-upload the CAS file.' 
+          });
         }
+      } else {
+        CASLogger.logClientEvent('CAS_NO_PASSWORD_PROVIDED', clientId, {
+          hasPassword: false
+        });
       }
       CASLogger.logClientEvent('CAS_PDF_PARSING_STARTED', clientId);
       // Parse the CAS file

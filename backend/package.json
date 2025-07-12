@@ -1,34 +1,71 @@
 {
-  "name": "backend",
+  "name": "richeai-backend",
   "version": "1.0.0",
+  "description": "RichieAI Backend with Enhanced CAS Parser",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test-cas": "node test-cas-parsing.js",
+    "test-cas-init": "node test-cas-parsing.js init",
+    "test-cas-files": "node test-cas-parsing.js files",
+    "lint": "eslint .",
+    "seed": "node scripts/seed.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "bcryptjs": "^3.0.2",
-    "cors": "^2.8.5",
-    "dotenv": "^17.0.1",
     "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.1",
+    "bcryptjs": "^3.0.2",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
     "morgan": "^1.10.0",
-    "multer": "^2.0.1",
+    "compression": "^1.7.4",
+    "express-rate-limit": "^6.10.0",
+    "express-validator": "^7.0.1",
+    "dotenv": "^17.0.1",
+    "winston": "^3.17.0",
     "nodemailer": "^7.0.5",
-    "pdf-lib": "^1.17.1",
+    "crypto": "^1.0.1",
+    "multer": "^2.0.1",
     "pdf-parse": "^1.1.1",
+    "pdf-lib": "^1.17.1",
     "pdf2json": "^3.1.6",
     "pdfjs-dist": "^5.3.93",
     "pdfreader": "^3.0.7",
-    "winston": "^3.17.0"
+    "moment": "^2.29.4",
+    "date-fns": "^2.30.0",
+    "joi": "^17.9.2",
+    "xss": "^1.0.14",
+    "express-mongo-sanitize": "^2.2.0",
+    "axios": "^1.5.0",
+    "fs-extra": "^11.1.1",
+    "path": "^0.12.7"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
-  }
+    "nodemon": "^3.1.10",
+    "jest": "^29.6.2",
+    "supertest": "^6.3.3",
+    "eslint": "^8.47.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "prettier": "^3.0.2",
+    "@types/node": "^20.5.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "fintech",
+    "cas-parser",
+    "financial-planning",
+    "cdsl",
+    "nsdl",
+    "mutual-funds",
+    "demat-accounts",
+    "pdf-parsing"
+  ],
+  "author": "RichieAI Team",
+  "license": "MIT"
 }

@@ -1,8 +1,17 @@
 const { logger } = require('../../../utils/logger');
+const { casEventLogger } = require('../../../utils/casEventLogger');
 
 class JSONFormatter {
   constructor() {
-    this.version = '1.0.0';
+    this.version = '2.0.0';
+    this.trackingId = this.generateTrackingId();
+  }
+
+  /**
+   * Generate unique tracking ID
+   */
+  generateTrackingId() {
+    return `FORMATTER_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
@@ -11,7 +20,18 @@ class JSONFormatter {
    * @returns {Object} - Formatted JSON data
    */
   format(data) {
+    const formatStartTime = Date.now();
+    
+    casEventLogger.logInfo('JSON_FORMAT_STARTED', {
+      hasInvestorInfo: !!data.investor,
+      dematAccountsCount: data.demat_accounts?.length || 0,
+      mutualFundsCount: data.mutual_funds?.length || 0,
+      trackingId: this.trackingId
+    });
+
     try {
+      console.log(`🔧 Formatting parsed data...`);
+
       const formattedData = {
         investor: this.formatInvestorInfo(data.investor),
         demat_accounts: this.formatDematAccounts(data.demat_accounts),
@@ -21,11 +41,38 @@ class JSONFormatter {
         meta: this.formatMeta(data.meta)
       };
 
-      logger.info('Data formatted successfully');
+      const formatDuration = Date.now() - formatStartTime;
+
+      casEventLogger.logInfo('JSON_FORMAT_SUCCESS', {
+        formatDuration: `${formatDuration}ms`,
+        outputSize: JSON.stringify(formattedData).length,
+        trackingId: this.trackingId
+      });
+
+      console.log(`✅ Data formatting completed in ${formatDuration}ms`);
+
+      logger.info('Data formatted successfully', {
+        formatDuration,
+        outputSize: JSON.stringify(formattedData).length,
+        trackingId: this.trackingId
+      });
+      
       return formattedData;
       
     } catch (error) {
-      logger.error('Error formatting data:', error.message);
+      const formatDuration = Date.now() - formatStartTime;
+      
+      casEventLogger.logError('JSON_FORMAT_FAILED', error, {
+        formatDuration: `${formatDuration}ms`,
+        trackingId: this.trackingId
+      });
+
+      logger.error('Error formatting data:', {
+        error: error.message,
+        formatDuration,
+        trackingId: this.trackingId
+      });
+      
       throw new Error(`Failed to format data: ${error.message}`);
     }
   }
@@ -36,14 +83,26 @@ class JSONFormatter {
    * @returns {Object} - Formatted investor data
    */
   formatInvestorInfo(investor) {
+    if (!investor) {
+      return {
+        name: '',
+        pan: '',
+        address: '',
+        email: '',
+        mobile: '',
+        cas_id: '',
+        pincode: ''
+      };
+    }
+
     return {
-      name: this.cleanString(investor?.name || ''),
-      pan: this.cleanString(investor?.pan || ''),
-      address: this.cleanString(investor?.address || ''),
-      email: this.cleanString(investor?.email || ''),
-      mobile: this.cleanString(investor?.mobile || ''),
-      cas_id: this.cleanString(investor?.cas_id || ''),
-      pincode: this.cleanString(investor?.pincode || '')
+      name: this.cleanString(investor.name || ''),
+      pan: this.cleanString(investor.pan || '').toUpperCase(),
+      address: this.cleanString(investor.address || ''),
+      email: this.cleanString(investor.email || '').toLowerCase(),
+      mobile: this.cleanString(investor.mobile || ''),
+      cas_id: this.cleanString(investor.cas_id || ''),
+      pincode: this.cleanString(investor.pincode || '')
     };
   }
 
@@ -56,14 +115,14 @@ class JSONFormatter {
     if (!Array.isArray(accounts)) return [];
     
     return accounts.map(account => ({
-      dp_id: this.cleanString(account?.dp_id || ''),
-      dp_name: this.cleanString(account?.dp_name || ''),
-      bo_id: this.cleanString(account?.bo_id || ''),
-      client_id: this.cleanString(account?.client_id || ''),
-      demat_type: this.cleanString(account?.demat_type || ''),
-      holdings: this.formatHoldings(account?.holdings),
-      additional_info: this.formatAdditionalInfo(account?.additional_info),
-      value: this.parseNumber(account?.value || 0)
+      dp_id: this.cleanString(account.dp_id || ''),
+      dp_name: this.cleanString(account.dp_name || ''),
+      bo_id: this.cleanString(account.bo_id || ''),
+      client_id: this.cleanString(account.client_id || ''),
+      demat_type: this.cleanString(account.demat_type || 'cdsl').toLowerCase(),
+      holdings: this.formatHoldings(account.holdings),
+      additional_info: this.formatAdditionalInfo(account.additional_info),
+      value: this.parseNumber(account.value || 0)
     }));
   }
 
@@ -73,12 +132,22 @@ class JSONFormatter {
    * @returns {Object} - Formatted holdings data
    */
   formatHoldings(holdings) {
+    if (!holdings) {
+      return {
+        equities: [],
+        demat_mutual_funds: [],
+        corporate_bonds: [],
+        government_securities: [],
+        aifs: []
+      };
+    }
+
     return {
-      equities: this.formatEquities(holdings?.equities || []),
-      demat_mutual_funds: this.formatDematMutualFunds(holdings?.demat_mutual_funds || []),
-      corporate_bonds: this.formatCorporateBonds(holdings?.corporate_bonds || []),
-      government_securities: this.formatGovernmentSecurities(holdings?.government_securities || []),
-      aifs: this.formatAIFs(holdings?.aifs || [])
+      equities: this.formatEquities(holdings.equities || []),
+      demat_mutual_funds: this.formatDematMutualFunds(holdings.demat_mutual_funds || []),
+      corporate_bonds: this.formatCorporateBonds(holdings.corporate_bonds || []),
+      government_securities: this.formatGovernmentSecurities(holdings.government_securities || []),
+      aifs: this.formatAIFs(holdings.aifs || [])
     };
   }
 
@@ -91,14 +160,13 @@ class JSONFormatter {
     if (!Array.isArray(equities)) return [];
     
     return equities.map(equity => ({
-      symbol: this.cleanString(equity?.symbol || ''),
-      isin: this.cleanString(equity?.isin || ''),
-      company_name: this.cleanString(equity?.company_name || ''),
-      quantity: this.parseNumber(equity?.quantity || 0),
-      price: this.parseNumber(equity?.price || 0),
-      value: this.parseNumber(equity?.value || 0),
-      face_value: this.parseNumber(equity?.face_value || 0),
-      market_lot: this.parseNumber(equity?.market_lot || 0)
+      isin: this.cleanString(equity.isin || ''),
+      name: this.cleanString(equity.name || equity.company_name || ''),
+      symbol: this.cleanString(equity.symbol || ''),
+      units: this.parseNumber(equity.units || equity.quantity || 0),
+      price: this.parseNumber(equity.price || equity.market_price || 0),
+      value: this.parseNumber(equity.value || 0),
+      additional_info: equity.additional_info || {}
     }));
   }
 
@@ -111,12 +179,13 @@ class JSONFormatter {
     if (!Array.isArray(funds)) return [];
     
     return funds.map(fund => ({
-      scheme_name: this.cleanString(fund?.scheme_name || ''),
-      isin: this.cleanString(fund?.isin || ''),
-      units: this.parseNumber(fund?.units || 0),
-      nav: this.parseNumber(fund?.nav || 0),
-      value: this.parseNumber(fund?.value || 0),
-      fund_house: this.cleanString(fund?.fund_house || '')
+      isin: this.cleanString(fund.isin || ''),
+      name: this.cleanString(fund.name || fund.scheme_name || ''),
+      units: this.parseNumber(fund.units || 0),
+      nav: this.parseNumber(fund.nav || 0),
+      value: this.parseNumber(fund.value || 0),
+      fund_house: this.cleanString(fund.fund_house || ''),
+      additional_info: fund.additional_info || {}
     }));
   }
 
@@ -129,12 +198,13 @@ class JSONFormatter {
     if (!Array.isArray(bonds)) return [];
     
     return bonds.map(bond => ({
-      symbol: this.cleanString(bond?.symbol || ''),
-      isin: this.cleanString(bond?.isin || ''),
-      company_name: this.cleanString(bond?.company_name || ''),
-      quantity: this.parseNumber(bond?.quantity || 0),
-      face_value: this.parseNumber(bond?.face_value || 0),
-      value: this.parseNumber(bond?.value || 0)
+      isin: this.cleanString(bond.isin || ''),
+      name: this.cleanString(bond.name || bond.company_name || ''),
+      symbol: this.cleanString(bond.symbol || ''),
+      units: this.parseNumber(bond.units || bond.quantity || 0),
+      face_value: this.parseNumber(bond.face_value || 0),
+      value: this.parseNumber(bond.value || 0),
+      additional_info: bond.additional_info || {}
     }));
   }
 
@@ -147,12 +217,13 @@ class JSONFormatter {
     if (!Array.isArray(securities)) return [];
     
     return securities.map(security => ({
-      symbol: this.cleanString(security?.symbol || ''),
-      isin: this.cleanString(security?.isin || ''),
-      security_name: this.cleanString(security?.security_name || ''),
-      quantity: this.parseNumber(security?.quantity || 0),
-      face_value: this.parseNumber(security?.face_value || 0),
-      value: this.parseNumber(security?.value || 0)
+      isin: this.cleanString(security.isin || ''),
+      name: this.cleanString(security.name || security.security_name || ''),
+      symbol: this.cleanString(security.symbol || ''),
+      units: this.parseNumber(security.units || security.quantity || 0),
+      face_value: this.parseNumber(security.face_value || 0),
+      value: this.parseNumber(security.value || 0),
+      additional_info: security.additional_info || {}
     }));
   }
 
@@ -165,12 +236,13 @@ class JSONFormatter {
     if (!Array.isArray(aifs)) return [];
     
     return aifs.map(aif => ({
-      scheme_name: this.cleanString(aif?.scheme_name || ''),
-      isin: this.cleanString(aif?.isin || ''),
-      units: this.parseNumber(aif?.units || 0),
-      nav: this.parseNumber(aif?.nav || 0),
-      value: this.parseNumber(aif?.value || 0),
-      fund_house: this.cleanString(aif?.fund_house || '')
+      isin: this.cleanString(aif.isin || ''),
+      name: this.cleanString(aif.name || aif.scheme_name || ''),
+      units: this.parseNumber(aif.units || 0),
+      nav: this.parseNumber(aif.nav || 0),
+      value: this.parseNumber(aif.value || 0),
+      fund_house: this.cleanString(aif.fund_house || ''),
+      additional_info: aif.additional_info || {}
     }));
   }
 
@@ -180,13 +252,24 @@ class JSONFormatter {
    * @returns {Object} - Formatted additional info data
    */
   formatAdditionalInfo(info) {
+    if (!info) {
+      return {
+        status: 'Active',
+        bo_type: null,
+        bo_sub_status: '',
+        bsda: 'NO',
+        nominee: '',
+        email: ''
+      };
+    }
+
     return {
-      status: this.cleanString(info?.status || ''),
-      bo_type: this.cleanString(info?.bo_type || ''),
-      bo_sub_status: this.cleanString(info?.bo_sub_status || ''),
-      bsda: this.cleanString(info?.bsda || ''),
-      nominee: this.cleanString(info?.nominee || ''),
-      email: this.cleanString(info?.email || '')
+      status: this.cleanString(info.status || 'Active'),
+      bo_type: info.bo_type || null,
+      bo_sub_status: this.cleanString(info.bo_sub_status || ''),
+      bsda: this.cleanString(info.bsda || 'NO'),
+      nominee: this.cleanString(info.nominee || ''),
+      email: this.cleanString(info.email || '').toLowerCase()
     };
   }
 
@@ -199,10 +282,11 @@ class JSONFormatter {
     if (!Array.isArray(funds)) return [];
     
     return funds.map(fund => ({
-      amc: this.cleanString(fund?.amc || ''),
-      folio_number: this.cleanString(fund?.folio_number || ''),
-      schemes: this.formatSchemes(fund?.schemes || []),
-      value: this.parseNumber(fund?.value || 0)
+      amc: this.cleanString(fund.amc || ''),
+      folio_number: this.cleanString(fund.folio_number || ''),
+      registrar: this.cleanString(fund.registrar || ''),
+      schemes: this.formatSchemes(fund.schemes || []),
+      value: this.parseNumber(fund.value || 0)
     }));
   }
 
@@ -215,31 +299,16 @@ class JSONFormatter {
     if (!Array.isArray(schemes)) return [];
     
     return schemes.map(scheme => ({
-      scheme_name: this.cleanString(scheme?.scheme_name || ''),
-      isin: this.cleanString(scheme?.isin || ''),
-      units: this.parseNumber(scheme?.units || 0),
-      nav: this.parseNumber(scheme?.nav || 0),
-      value: this.parseNumber(scheme?.value || 0),
-      closing_balance: this.parseNumber(scheme?.closing_balance || 0),
-      transactions: this.formatTransactions(scheme?.transactions || [])
-    }));
-  }
-
-  /**
-   * Format transactions data
-   * @param {Array} transactions - Raw transactions data
-   * @returns {Array} - Formatted transactions data
-   */
-  formatTransactions(transactions) {
-    if (!Array.isArray(transactions)) return [];
-    
-    return transactions.map(transaction => ({
-      date: this.parseDate(transaction?.date),
-      description: this.cleanString(transaction?.description || ''),
-      amount: this.parseNumber(transaction?.amount || 0),
-      units: this.parseNumber(transaction?.units || 0),
-      nav: this.parseNumber(transaction?.nav || 0),
-      balance: this.parseNumber(transaction?.balance || 0)
+      isin: this.cleanString(scheme.isin || ''),
+      name: this.cleanString(scheme.name || scheme.scheme_name || ''),
+      units: this.parseNumber(scheme.units || 0),
+      nav: this.parseNumber(scheme.nav || 0),
+      value: this.parseNumber(scheme.value || 0),
+      scheme_type: this.cleanString(scheme.scheme_type || 'equity'),
+      additional_info: {
+        arn_code: scheme.additional_info?.arn_code || null,
+        investment_value: this.parseNumber(scheme.additional_info?.investment_value || 0)
+      }
     }));
   }
 
@@ -249,8 +318,14 @@ class JSONFormatter {
    * @returns {Object} - Formatted insurance data
    */
   formatInsurance(insurance) {
+    if (!insurance) {
+      return {
+        life_insurance_policies: []
+      };
+    }
+
     return {
-      life_insurance_policies: this.formatLifeInsurancePolicies(insurance?.life_insurance_policies || [])
+      life_insurance_policies: this.formatLifeInsurancePolicies(insurance.life_insurance_policies || [])
     };
   }
 
@@ -263,12 +338,12 @@ class JSONFormatter {
     if (!Array.isArray(policies)) return [];
     
     return policies.map(policy => ({
-      policy_number: this.cleanString(policy?.policy_number || ''),
-      policy_name: this.cleanString(policy?.policy_name || ''),
-      sum_assured: this.parseNumber(policy?.sum_assured || 0),
-      premium: this.parseNumber(policy?.premium || 0),
-      policy_status: this.cleanString(policy?.policy_status || ''),
-      maturity_date: this.parseDate(policy?.maturity_date)
+      policy_number: this.cleanString(policy.policy_number || ''),
+      policy_name: this.cleanString(policy.policy_name || ''),
+      sum_assured: this.parseNumber(policy.sum_assured || 0),
+      premium: this.parseNumber(policy.premium || 0),
+      policy_status: this.cleanString(policy.policy_status || ''),
+      maturity_date: this.parseDate(policy.maturity_date)
     }));
   }
 
@@ -278,22 +353,42 @@ class JSONFormatter {
    * @returns {Object} - Formatted summary data
    */
   formatSummary(summary) {
+    if (!summary) {
+      return {
+        accounts: {
+          demat: {
+            count: 0,
+            total_value: 0
+          },
+          mutual_funds: {
+            count: 0,
+            total_value: 0
+          },
+          insurance: {
+            count: 0,
+            total_value: 0
+          }
+        },
+        total_value: 0
+      };
+    }
+
     return {
       accounts: {
         demat: {
-          total_value: this.parseNumber(summary?.accounts?.demat?.total_value || 0),
-          total_accounts: this.parseNumber(summary?.accounts?.demat?.total_accounts || 0)
+          count: summary.accounts?.demat?.count || 0,
+          total_value: this.parseNumber(summary.accounts?.demat?.total_value || 0)
         },
         mutual_funds: {
-          total_value: this.parseNumber(summary?.accounts?.mutual_funds?.total_value || 0),
-          total_folios: this.parseNumber(summary?.accounts?.mutual_funds?.total_folios || 0)
+          count: summary.accounts?.mutual_funds?.count || 0,
+          total_value: this.parseNumber(summary.accounts?.mutual_funds?.total_value || 0)
         },
         insurance: {
-          total_policies: this.parseNumber(summary?.accounts?.insurance?.total_policies || 0),
-          total_sum_assured: this.parseNumber(summary?.accounts?.insurance?.total_sum_assured || 0)
+          count: summary.accounts?.insurance?.count || 0,
+          total_value: this.parseNumber(summary.accounts?.insurance?.total_value || 0)
         }
       },
-      total_value: this.parseNumber(summary?.total_value || 0)
+      total_value: this.parseNumber(summary.total_value || 0)
     };
   }
 
@@ -303,11 +398,24 @@ class JSONFormatter {
    * @returns {Object} - Formatted meta data
    */
   formatMeta(meta) {
+    if (!meta) {
+      return {
+        cas_type: 'UNKNOWN',
+        generated_at: new Date().toISOString().split('.')[0],
+        statement_period: {
+          from: '',
+          to: ''
+        }
+      };
+    }
+
     return {
-      cas_type: this.cleanString(meta?.cas_type || ''),
-      generated_at: this.cleanString(meta?.generated_at || ''),
-      parsed_at: new Date().toISOString(),
-      parser_version: this.version
+      cas_type: this.cleanString(meta.cas_type || 'UNKNOWN'),
+      generated_at: meta.generated_at || new Date().toISOString().split('.')[0],
+      statement_period: {
+        from: meta.statement_period?.from || '',
+        to: meta.statement_period?.to || ''
+      }
     };
   }
 
@@ -322,16 +430,16 @@ class JSONFormatter {
   }
 
   /**
-   * Parse number from string
+   * Parse number from string with enhanced handling
    * @param {string|number} value - Input value
    * @returns {number} - Parsed number
    */
   parseNumber(value) {
-    if (typeof value === 'number') return value;
+    if (typeof value === 'number') return Math.round(value * 100) / 100;
     if (typeof value === 'string') {
       const cleaned = value.replace(/[^0-9.-]/g, '');
       const num = parseFloat(cleaned);
-      return isNaN(num) ? 0 : num;
+      return isNaN(num) ? 0 : Math.round(num * 100) / 100;
     }
     return 0;
   }
@@ -339,25 +447,80 @@ class JSONFormatter {
   /**
    * Parse date from string
    * @param {string|Date} value - Input value
-   * @returns {Date|null} - Parsed date
+   * @returns {string|null} - Parsed date in ISO format
    */
   parseDate(value) {
-    if (value instanceof Date) return value;
+    if (!value) return null;
+    if (value instanceof Date) return value.toISOString().split('T')[0];
     if (typeof value === 'string') {
       const date = new Date(value);
-      return isNaN(date.getTime()) ? null : date;
+      return isNaN(date.getTime()) ? null : date.toISOString().split('T')[0];
     }
     return null;
   }
 
   /**
-   * Pretty print JSON data
+   * Pretty print JSON data with proper formatting
    * @param {Object} data - JSON data
    * @returns {string} - Pretty printed JSON string
    */
   prettyPrint(data) {
-    return JSON.stringify(data, null, 2);
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch (error) {
+      logger.error('Error pretty printing JSON:', {
+        error: error.message,
+        trackingId: this.trackingId
+      });
+      return JSON.stringify({ error: 'Failed to format JSON' }, null, 2);
+    }
+  }
+
+  /**
+   * Validate formatted data structure
+   * @param {Object} data - Formatted data
+   * @returns {Object} - Validation result
+   */
+  validateFormat(data) {
+    const validation = {
+      isValid: true,
+      errors: [],
+      warnings: []
+    };
+
+    try {
+      // Check required top-level properties
+      const requiredProps = ['investor', 'demat_accounts', 'mutual_funds', 'insurance', 'summary', 'meta'];
+      requiredProps.forEach(prop => {
+        if (!(prop in data)) {
+          validation.errors.push(`Missing required property: ${prop}`);
+          validation.isValid = false;
+        }
+      });
+
+      // Check data types
+      if (data.demat_accounts && !Array.isArray(data.demat_accounts)) {
+        validation.errors.push('demat_accounts must be an array');
+        validation.isValid = false;
+      }
+
+      if (data.mutual_funds && !Array.isArray(data.mutual_funds)) {
+        validation.errors.push('mutual_funds must be an array');
+        validation.isValid = false;
+      }
+
+      // Check summary totals
+      if (data.summary && typeof data.summary.total_value !== 'number') {
+        validation.warnings.push('summary.total_value should be a number');
+      }
+
+    } catch (error) {
+      validation.errors.push(`Validation error: ${error.message}`);
+      validation.isValid = false;
+    }
+
+    return validation;
   }
 }
 
-module.exports = JSONFormatter; 
+module.exports = JSONFormatter;

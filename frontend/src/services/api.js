@@ -203,7 +203,7 @@ export const clientAPI = {
     }
   },
 
-  // ===== NEW CAS-RELATED METHODS =====
+  // ===== ENHANCED CAS-RELATED METHODS =====
   
   // Upload CAS file for existing client (protected)
   uploadClientCAS: async (clientId, formData) => {
@@ -237,6 +237,23 @@ export const clientAPI = {
     }
   },
 
+  // Parse CAS file during onboarding (public) - NEW METHOD
+  parseOnboardingCAS: async (token) => {
+    try {
+      const publicApi = axios.create({
+        baseURL: API_BASE_URL,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const response = await publicApi.post(`/clients/onboarding/${token}/cas/parse`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
   // Parse CAS file for existing client (protected)
   parseClientCAS: async (clientId) => {
     try {
@@ -261,6 +278,71 @@ export const clientAPI = {
   deleteClientCAS: async (clientId) => {
     try {
       const response = await api.delete(`/clients/manage/${clientId}/cas`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Get CAS status for onboarding (public) - NEW METHOD
+  getOnboardingCASStatus: async (token) => {
+    try {
+      const publicApi = axios.create({
+        baseURL: API_BASE_URL,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const response = await publicApi.get(`/clients/onboarding/${token}/cas/status`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  }
+};
+
+// Admin API methods
+export const adminAPI = {
+  // Get all advisors with client counts
+  getAllAdvisors: async () => {
+    try {
+      const adminToken = localStorage.getItem('adminToken');
+      const response = await api.get('/admin/advisors', {
+        headers: {
+          'admin-token': adminToken
+        }
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Get advisor details with clients
+  getAdvisorClients: async (advisorId) => {
+    try {
+      const adminToken = localStorage.getItem('adminToken');
+      const response = await api.get(`/admin/advisors/${advisorId}/clients`, {
+        headers: {
+          'admin-token': adminToken
+        }
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Get admin dashboard stats
+  getDashboardStats: async () => {
+    try {
+      const adminToken = localStorage.getItem('adminToken');
+      const response = await api.get('/admin/dashboard/stats', {
+        headers: {
+          'admin-token': adminToken
+        }
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data || error.message;

@@ -108,6 +108,7 @@ app.get('/', (req, res) => {
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/clients', require('./routes/clients'));
+app.use('/api/admin', require('./routes/admin'));
 
 // Global error handling middleware
 app.use((err, req, res, next) => {

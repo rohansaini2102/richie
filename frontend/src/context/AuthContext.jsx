@@ -25,24 +25,38 @@ export const AuthProvider = ({ children }) => {
   const checkAuthStatus = async () => {
     try {
       const token = localStorage.getItem('token');
+      const adminToken = localStorage.getItem('adminToken');
       const storedUser = localStorage.getItem('user');
+      const storedAdminData = localStorage.getItem('adminData');
       
-      if (token && storedUser) {
-        // Try to get fresh user data from server
-        const response = await authAPI.getProfile();
-        if (response.success) {
-          setUser(response.advisor);
-          setIsAuthenticated(true);
-        } else {
-          // If failed, clear local storage
+      if (adminToken && storedAdminData) {
+        // Admin is logged in
+        const adminData = JSON.parse(storedAdminData);
+        setUser(adminData);
+        setIsAuthenticated(true);
+      } else if (token && storedUser) {
+        // Regular advisor is logged in
+        try {
+          const response = await authAPI.getProfile();
+          if (response.success) {
+            setUser(response.advisor);
+            setIsAuthenticated(true);
+          } else {
+            // If failed, clear local storage
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          }
+        } catch {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
         }
       }
-    } catch (error) {
+    } catch {
       // If error, clear local storage
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminData');
     } finally {
       setLoading(false);
     }
@@ -125,7 +139,19 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       setLoading(true);
-      await authAPI.logout();
+      
+      // Check if admin is logged in
+      const adminToken = localStorage.getItem('adminToken');
+      if (adminToken) {
+        // Admin logout - just clear local storage
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminData');
+      } else {
+        // Regular advisor logout
+        await authAPI.logout();
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
       
       // Clear state
       setUser(null);

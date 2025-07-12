@@ -118,6 +118,20 @@ const clientInvitationSchema = new mongoose.Schema({
   },
   userAgent: {
     type: String
+  },
+  
+  // Temporary CAS data storage during onboarding
+  casUploadData: {
+    fileName: String,
+    filePath: String,
+    fileSize: Number,
+    password: String,
+    uploadedAt: Date,
+    eventId: String
+  },
+  casParsedData: {
+    type: Object,
+    default: null
   }
 }, {
   timestamps: true
