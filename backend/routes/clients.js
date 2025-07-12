@@ -22,8 +22,8 @@ const {
 
 const { OnboardingCASController, upload } = require('../controllers/OnboardingCASController');
 
-// Import middleware
-const { protect } = require('../middleware/auth');
+// Import middleware - FIXED: Changed from { protect } to auth (default import)
+const auth = require('../middleware/auth');
 const { logger } = require('../utils/logger');
 const { casEventLogger } = require('../utils/casEventLogger');
 
@@ -103,32 +103,32 @@ const handleMulterError = (error, req, res, next) => {
 // PROTECTED ROUTES (Require advisor authentication)
 // ============================================================================
 
-// Client Management Routes
-// router.get('/', protect, getClients);
-// router.get('/invitations', protect, getClientInvitations);
-// router.post('/invite', protect, sendClientInvitation);
-// router.get('/:id', protect, getClientById);
-// router.put('/:id', protect, updateClient);
-// router.delete('/:id', protect, deleteClient);
+// Client Management Routes - FIXED: Changed protect to auth
+router.get('/manage', auth, getClients);
+router.get('/manage/invitations', auth, getClientInvitations);
+router.post('/manage/invitations', auth, sendClientInvitation);
+router.get('/manage/:id', auth, getClientById);
+router.put('/manage/:id', auth, updateClient);
+router.delete('/manage/:id', auth, deleteClient);
 
-// CAS Management Routes for existing clients
-// router.post('/:id/cas/upload', protect, casUpload.single('casFile'), handleMulterError, uploadClientCAS);
-// router.post('/:id/cas/parse', protect, parseClientCAS);
-// router.get('/:id/cas', protect, getClientCASData);
-// router.delete('/:id/cas', protect, deleteClientCAS);
+// CAS Management Routes for existing clients - FIXED: Changed protect to auth
+router.post('/manage/:id/cas/upload', auth, casUpload.single('casFile'), handleMulterError, uploadClientCAS);
+router.post('/manage/:id/cas/parse', auth, parseClientCAS);
+router.get('/manage/:id/cas', auth, getClientCASData);
+router.delete('/manage/:id/cas', auth, deleteClientCAS);
 
 // ============================================================================
 // PUBLIC ROUTES (Client onboarding - no authentication required)
 // ============================================================================
 
 // Client Onboarding Routes
-// router.get('/onboarding/:token', getClientOnboardingForm);
-// router.post('/onboarding/:token/submit', submitClientOnboardingForm);
+router.get('/onboarding/:token', getClientOnboardingForm);
+router.post('/onboarding/:token', submitClientOnboardingForm);
 
 // CAS Upload Routes for onboarding flow
-// router.post('/onboarding/:token/cas/upload', upload.single('casFile'), handleMulterError, OnboardingCASController.uploadCAS);
-// router.post('/onboarding/:token/cas/parse', OnboardingCASController.parseCAS);
-// router.get('/onboarding/:token/cas/status', OnboardingCASController.getCASStatus);
+router.post('/onboarding/:token/cas/upload', upload.single('casFile'), handleMulterError, OnboardingCASController.uploadCAS);
+router.post('/onboarding/:token/cas/parse', OnboardingCASController.parseCAS);
+router.get('/onboarding/:token/cas/status', OnboardingCASController.getCASStatus);
 
 // ============================================================================
 // UTILITY ROUTES

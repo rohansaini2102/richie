@@ -31,12 +31,12 @@ class CDSLParser extends BaseParser {
       });
       
       const cleanedText = this.cleanText(pdfText);
-
+      
       // Validate that we have meaningful content
       if (cleanedText.length < 100) {
         throw new Error('Extracted text is too short. This might not be a valid CAS document.');
       }
-
+      
       console.log(`🔧 CDSL Parser: Starting data extraction...`);
 
       // Extract all data components
@@ -114,38 +114,38 @@ class CDSLParser extends BaseParser {
       console.log(`👤 Extracting investor information...`);
 
       // Extract name - Enhanced patterns
-      const namePatterns = [
+    const namePatterns = [
         /([A-Z][a-z]+(?:\s+[a-z]+)*)\s+(?:S\s+O|D\s+O|W\s+O)\s+/i,
         /([A-Z][a-z]+(?:\s+[a-z]+)*)\s+PAN\s*:/i,
         /Your\s+Demat\s+Account[^]*?single\s+name\s+of\s+([A-Z\s]+)\s+\(/i,
         /Name\s*:\s*([A-Z][a-zA-Z\s]+?)(?:\n|PAN|S\s+O)/i,
         /Investor\s+Name\s*:\s*([A-Z][a-zA-Z\s]+?)(?:\n|PAN)/i
-      ];
+    ];
 
-      for (const pattern of namePatterns) {
+    for (const pattern of namePatterns) {
         const nameMatch = text.match(pattern);
         if (nameMatch && nameMatch[1]) {
           investor.name = this.cleanText(nameMatch[1]);
           console.log(`   ✅ Name extracted: ${investor.name}`);
-          break;
-        }
+        break;
       }
+    }
 
       // Extract PAN - Enhanced patterns
-      const panPatterns = [
+    const panPatterns = [
         /PAN\s*:?\s*([A-Z]{5}[0-9]{4}[A-Z])/i,
         /Permanent\s+Account\s+Number\s*:?\s*([A-Z]{5}[0-9]{4}[A-Z])/i,
         /([A-Z]{5}[0-9]{4}[A-Z])/g
-      ];
+    ];
 
-      for (const pattern of panPatterns) {
+    for (const pattern of panPatterns) {
         const panMatch = text.match(pattern);
         if (panMatch && panMatch[1]) {
           // Validate PAN format
           if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panMatch[1])) {
             investor.pan = panMatch[1];
             console.log(`   ✅ PAN extracted: ${investor.pan}`);
-            break;
+        break;
           }
         }
       }
@@ -170,9 +170,9 @@ class CDSLParser extends BaseParser {
           }
           investor.address = address;
           console.log(`   ✅ Address extracted`);
-          break;
-        }
+        break;
       }
+    }
 
       // Extract email - Enhanced patterns
       const emailPatterns = [
@@ -235,7 +235,7 @@ class CDSLParser extends BaseParser {
    */
   async extractDematAccounts(text) {
     const accounts = [];
-    
+
     try {
       console.log(`🏦 Extracting demat accounts...`);
 
@@ -540,7 +540,7 @@ class CDSLParser extends BaseParser {
    */
   async extractMutualFunds(text) {
     const mutualFunds = [];
-    
+
     try {
       console.log(`📈 Extracting mutual funds...`);
 
@@ -736,4 +736,4 @@ class CDSLParser extends BaseParser {
   }
 }
 
-module.exports = CDSLParser;
+module.exports = CDSLParser; 
