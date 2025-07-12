@@ -62,9 +62,45 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Check if this is an admin login attempt
+  const isAdminLogin = (credentials) => {
+    const ADMIN_EMAIL = 'admin@richeai.com';
+    const ADMIN_PASSWORD = 'admin123';
+    
+    return credentials.email === ADMIN_EMAIL && credentials.password === ADMIN_PASSWORD;
+  };
+
   const login = async (credentials) => {
     try {
       setLoading(true);
+      
+      // Check if this is an admin login attempt
+      if (isAdminLogin(credentials)) {
+        console.log('🔧 ADMIN LOGIN: Processing admin login locally');
+        
+        // Handle admin login locally (no API call)
+        const adminData = {
+          id: 'admin',
+          email: 'admin@richeai.com',
+          name: 'System Administrator',
+          role: 'admin',
+          isAdmin: true
+        };
+
+        // Store admin session
+        localStorage.setItem('adminToken', 'admin-session-token');
+        localStorage.setItem('adminData', JSON.stringify(adminData));
+        
+        setUser(adminData);
+        setIsAuthenticated(true);
+        
+        console.log('✅ ADMIN LOGIN: Admin login successful');
+        toast.success('Admin login successful!');
+        return { success: true, user: adminData };
+      }
+      
+      // Handle regular advisor login
+      console.log('👤 ADVISOR LOGIN: Processing advisor login via API');
       const response = await authAPI.login(credentials);
       
       if (response.success) {
@@ -75,6 +111,7 @@ export const AuthProvider = ({ children }) => {
         setUser(response.advisor);
         setIsAuthenticated(true);
         
+        console.log('✅ ADVISOR LOGIN: Advisor login successful');
         toast.success('Login successful!');
         return { success: true, user: response.advisor };
       } else {
@@ -82,7 +119,7 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: response.message };
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('💥 LOGIN ERROR:', error);
       let message = 'Login failed. Please try again.';
       
       // Handle specific error types
@@ -144,11 +181,18 @@ export const AuthProvider = ({ children }) => {
       const adminToken = localStorage.getItem('adminToken');
       if (adminToken) {
         // Admin logout - just clear local storage
+        console.log('🚪 ADMIN LOGOUT: Clearing admin session');
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminData');
       } else {
         // Regular advisor logout
-        await authAPI.logout();
+        console.log('🚪 ADVISOR LOGOUT: Logging out advisor via API');
+        try {
+          await authAPI.logout();
+        } catch (error) {
+          console.warn('⚠️ LOGOUT API FAILED:', error.message);
+          // Continue with local cleanup even if API fails
+        }
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
@@ -157,6 +201,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
       
+      console.log('✅ LOGOUT SUCCESS: User logged out successfully');
       toast.success('Logged out successfully!');
       return { success: true };
     } catch (error) {
@@ -164,6 +209,10 @@ export const AuthProvider = ({ children }) => {
       // Even if logout fails, clear local state
       setUser(null);
       setIsAuthenticated(false);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminData');
       return { success: true };
     } finally {
       setLoading(false);

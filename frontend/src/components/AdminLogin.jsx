@@ -17,10 +17,13 @@ const AdminLogin = () => {
   const ADMIN_PASSWORD = 'admin123';
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error when user starts typing
+    if (error) setError('');
   };
 
   const handleSubmit = async (e) => {
@@ -28,35 +31,49 @@ const AdminLogin = () => {
     setLoading(true);
     setError('');
 
-    try {
-      // Check static admin credentials
-      if (formData.email === ADMIN_EMAIL && formData.password === ADMIN_PASSWORD) {
-        // Create admin session
-        const adminData = {
-          id: 'admin',
-          email: ADMIN_EMAIL,
-          name: 'System Administrator',
-          role: 'admin',
-          isAdmin: true
-        };
+    console.log('🔐 ADMIN LOGIN ATTEMPT:', {
+      email: formData.email,
+      hasPassword: !!formData.password,
+      emailMatch: formData.email === ADMIN_EMAIL,
+      passwordMatch: formData.password === ADMIN_PASSWORD
+    });
 
-        // Store admin session
-        localStorage.setItem('adminToken', 'admin-session-token');
-        localStorage.setItem('adminData', JSON.stringify(adminData));
+    try {
+      // Validate form data
+      if (!formData.email || !formData.password) {
+        const missingFields = [];
+        if (!formData.email) missingFields.push('email');
+        if (!formData.password) missingFields.push('password');
         
-        // Update auth context
-        login(adminData);
-        
-        // Redirect to admin dashboard
+        setError(`Please fill in: ${missingFields.join(', ')}`);
+        return;
+      }
+
+      // Use the AuthContext login function which now handles admin login
+      const result = await login(formData);
+      
+      if (result.success) {
+        console.log('✅ ADMIN LOGIN SUCCESS:', result.user);
         navigate('/admin/dashboard');
       } else {
-        setError('Invalid admin credentials');
+        console.log('❌ ADMIN LOGIN FAILED:', result.message);
+        setError(result.message || 'Invalid admin credentials');
       }
-    } catch {
+    } catch (error) {
+      console.error('💥 ADMIN LOGIN ERROR:', error);
       setError('Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  // For development: Auto-fill with admin credentials
+  const handleAutoFill = () => {
+    setFormData({
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD
+    });
+    console.log('🔧 AUTO-FILL: Admin credentials filled');
   };
 
   return (
@@ -77,6 +94,17 @@ const AdminLogin = () => {
         </div>
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {/* Debug button for development */}
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={handleAutoFill}
+              className="text-sm text-blue-600 hover:text-blue-800 underline"
+            >
+              🔧 Auto-fill admin credentials
+            </button>
+          </div>
+
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email" className="sr-only">
@@ -153,6 +181,11 @@ const AdminLogin = () => {
             <p className="text-xs text-gray-500">
               Default credentials: admin@richeai.com / admin123
             </p>
+            <div className="mt-2 text-xs text-gray-400">
+              <p>Current Values:</p>
+              <p>Email: {formData.email || 'Empty'}</p>
+              <p>Password: {formData.password ? '•'.repeat(formData.password.length) : 'Empty'}</p>
+            </div>
           </div>
         </form>
       </div>
@@ -160,4 +193,4 @@ const AdminLogin = () => {
   );
 };
 
-export default AdminLogin; 
+export default AdminLogin;

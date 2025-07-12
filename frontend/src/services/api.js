@@ -304,47 +304,68 @@ export const clientAPI = {
 
 // Admin API methods
 export const adminAPI = {
-  // Get all advisors with client counts
+  // Get all advisors
   getAllAdvisors: async () => {
     try {
-      const adminToken = localStorage.getItem('adminToken');
-      const response = await api.get('/admin/advisors', {
+      // Create admin API instance with admin token
+      const adminApi = axios.create({
+        baseURL: API_BASE_URL,
         headers: {
-          'admin-token': adminToken
-        }
+          'Content-Type': 'application/json',
+          'admin-token': 'admin-session-token' // Static admin token
+        },
       });
+
+      console.log('🔍 ADMIN API: Fetching all advisors');
+      const response = await adminApi.get('/admin/advisors');
+      console.log('✅ ADMIN API: Advisors fetched successfully', response.data);
       return response.data;
     } catch (error) {
+      console.error('❌ ADMIN API ERROR: Failed to fetch advisors', error);
       throw error.response?.data || error.message;
     }
   },
 
-  // Get advisor details with clients
+  // Get advisor clients
   getAdvisorClients: async (advisorId) => {
     try {
-      const adminToken = localStorage.getItem('adminToken');
-      const response = await api.get(`/admin/advisors/${advisorId}/clients`, {
+      // Create admin API instance with admin token
+      const adminApi = axios.create({
+        baseURL: API_BASE_URL,
         headers: {
-          'admin-token': adminToken
-        }
+          'Content-Type': 'application/json',
+          'admin-token': 'admin-session-token' // Static admin token
+        },
       });
+
+      console.log('🔍 ADMIN API: Fetching clients for advisor:', advisorId);
+      const response = await adminApi.get(`/admin/advisors/${advisorId}/clients`);
+      console.log('✅ ADMIN API: Advisor clients fetched successfully', response.data);
       return response.data;
     } catch (error) {
+      console.error('❌ ADMIN API ERROR: Failed to fetch advisor clients', error);
       throw error.response?.data || error.message;
     }
   },
 
-  // Get admin dashboard stats
+  // Get dashboard stats
   getDashboardStats: async () => {
     try {
-      const adminToken = localStorage.getItem('adminToken');
-      const response = await api.get('/admin/dashboard/stats', {
+      // Create admin API instance with admin token
+      const adminApi = axios.create({
+        baseURL: API_BASE_URL,
         headers: {
-          'admin-token': adminToken
-        }
+          'Content-Type': 'application/json',
+          'admin-token': 'admin-session-token' // Static admin token
+        },
       });
+
+      console.log('🔍 ADMIN API: Fetching dashboard stats');
+      const response = await adminApi.get('/admin/dashboard/stats');
+      console.log('✅ ADMIN API: Dashboard stats fetched successfully', response.data);
       return response.data;
     } catch (error) {
+      console.error('❌ ADMIN API ERROR: Failed to fetch dashboard stats', error);
       throw error.response?.data || error.message;
     }
   }
