@@ -1,9 +1,9 @@
+// frontend/src/services/api.js
 import axios from 'axios';
-import toast from 'react-hot-toast';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-// Create axios instance
+// Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -11,7 +11,7 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Add auth token to requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -25,54 +25,60 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle errors
+// Handle response errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message = error.response?.data?.message || 'An error occurred';
-    
     if (error.response?.status === 401) {
-      // Token expired or invalid
       localStorage.removeItem('token');
-      localStorage.removeItem('user');
       window.location.href = '/login';
-      toast.error('Session expired. Please login again.');
-    } else if (error.response?.status >= 500) {
-      toast.error('Server error. Please try again later.');
-    } else if (error.response?.status >= 400) {
-      toast.error(message);
     }
-    
     return Promise.reject(error);
   }
 );
 
 // Auth API methods
 export const authAPI = {
-  // Register advisor
-  register: async (userData) => {
-    try {
-      const response = await api.post('/auth/register', userData);
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
-
   // Login advisor
   login: async (credentials) => {
     try {
       const response = await api.post('/auth/login', credentials);
+      if (response.data.success && response.data.token) {
+        localStorage.setItem('token', response.data.token);
+      }
       return response.data;
     } catch (error) {
       throw error.response?.data || error.message;
     }
   },
 
-  // Get current user profile
+  // Register advisor
+  register: async (userData) => {
+    try {
+      const response = await api.post('/auth/register', userData);
+      if (response.data.success && response.data.token) {
+        localStorage.setItem('token', response.data.token);
+      }
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Get advisor profile
   getProfile: async () => {
     try {
       const response = await api.get('/auth/profile');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Update advisor profile
+  updateProfile: async (profileData) => {
+    try {
+      const response = await api.put('/auth/profile', profileData);
       return response.data;
     } catch (error) {
       throw error.response?.data || error.message;
@@ -84,28 +90,16 @@ export const authAPI = {
     try {
       await api.post('/auth/logout');
       localStorage.removeItem('token');
-      localStorage.removeItem('user');
       return { success: true };
     } catch (error) {
-      // Even if logout fails on backend, clear local storage
+      // Even if logout fails, remove token
       localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      return { success: true };
-    }
-  },
-
-  // Update profile
-  updateProfile: async (profileData) => {
-    try {
-      const response = await api.put('/auth/profile', profileData);
-      return response.data;
-    } catch (error) {
       throw error.response?.data || error.message;
     }
   }
 };
 
-// Client API methods
+// Client API methods with enhanced CAS support
 export const clientAPI = {
   // Get all clients
   getClients: async (params = {}) => {
@@ -167,6 +161,10 @@ export const clientAPI = {
     }
   },
 
+  // ============================================================================
+  // PUBLIC ONBOARDING ROUTES (No authentication required)
+  // ============================================================================
+
   // Get client onboarding form (public)
   getOnboardingForm: async (token) => {
     try {
@@ -185,7 +183,7 @@ export const clientAPI = {
     }
   },
 
-  // Submit client onboarding form (public)
+  // Submit client onboarding form with CAS data (public)
   submitOnboardingForm: async (token, formData) => {
     try {
       // Create a separate axios instance without auth for public routes
@@ -196,6 +194,13 @@ export const clientAPI = {
         },
       });
       
+      console.log('📤 SUBMITTING ONBOARDING FORM:', {
+        token,
+        hasCasData: !!formData.casData,
+        casStatus: formData.casData?.status,
+        frontendProcessed: formData.casData?.frontendProcessed
+      });
+      
       const response = await publicApi.post(`/clients/onboarding/${token}`, formData);
       return response.data;
     } catch (error) {
@@ -203,9 +208,11 @@ export const clientAPI = {
     }
   },
 
-  // ===== ENHANCED CAS-RELATED METHODS =====
-  
-  // Upload CAS file for existing client (protected)
+  // ============================================================================
+  // CAS MANAGEMENT ROUTES (For existing clients)
+  // ============================================================================
+
+  // Upload CAS file for existing client
   uploadClientCAS: async (clientId, formData) => {
     try {
       const response = await api.post(`/clients/manage/${clientId}/cas/upload`, formData, {
@@ -219,25 +226,58 @@ export const clientAPI = {
     }
   },
 
-  // Upload CAS file during onboarding (public)
-  uploadOnboardingCAS: async (token, formData) => {
+  // Parse CAS file for existing client
+  parseClientCAS: async (clientId) => {
     try {
-      const publicApi = axios.create({
-        baseURL: API_BASE_URL,
-      });
-      
-      const response = await publicApi.post(`/clients/onboarding/${token}/cas/upload`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await api.post(`/clients/manage/${clientId}/cas/parse`);
       return response.data;
     } catch (error) {
       throw error.response?.data || error.message;
     }
   },
 
-  // Parse CAS file during onboarding (public) - NEW METHOD
+  // Get CAS data for client
+  getClientCAS: async (clientId) => {
+    try {
+      const response = await api.get(`/clients/manage/${clientId}/cas`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Delete CAS data for client
+  deleteClientCAS: async (clientId) => {
+    try {
+      const response = await api.delete(`/clients/manage/${clientId}/cas`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // ============================================================================
+  // DEPRECATED ONBOARDING CAS ROUTES (Backend processing - kept for compatibility)
+  // ============================================================================
+
+  // Upload CAS during onboarding (Backend processing - DEPRECATED)
+  uploadOnboardingCAS: async (token, formData) => {
+    try {
+      const publicApi = axios.create({
+        baseURL: API_BASE_URL,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      const response = await publicApi.post(`/clients/onboarding/${token}/cas/upload`, formData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Parse CAS during onboarding (Backend processing - DEPRECATED)
   parseOnboardingCAS: async (token) => {
     try {
       const publicApi = axios.create({
@@ -254,38 +294,8 @@ export const clientAPI = {
     }
   },
 
-  // Parse CAS file for existing client (protected)
-  parseClientCAS: async (clientId) => {
-    try {
-      const response = await api.post(`/clients/manage/${clientId}/cas/parse`);
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
-
-  // Get CAS data for client (protected)
-  getClientCAS: async (clientId) => {
-    try {
-      const response = await api.get(`/clients/manage/${clientId}/cas`);
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
-
-  // Delete CAS data for client (protected)
-  deleteClientCAS: async (clientId) => {
-    try {
-      const response = await api.delete(`/clients/manage/${clientId}/cas`);
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
-
-  // Get CAS status for onboarding (public) - NEW METHOD
-  getOnboardingCASStatus: async (token) => {
+  // Get CAS status during onboarding (Backend processing - DEPRECATED)
+  getCASStatus: async (token) => {
     try {
       const publicApi = axios.create({
         baseURL: API_BASE_URL,
@@ -305,23 +315,15 @@ export const clientAPI = {
 // Admin API methods
 export const adminAPI = {
   // Get all advisors
-  getAllAdvisors: async () => {
+  getAdvisors: async () => {
     try {
-      // Create admin API instance with admin token
-      const adminApi = axios.create({
-        baseURL: API_BASE_URL,
+      const response = await api.get('/admin/advisors', {
         headers: {
-          'Content-Type': 'application/json',
           'admin-token': 'admin-session-token' // Static admin token
-        },
+        }
       });
-
-      console.log('🔍 ADMIN API: Fetching all advisors');
-      const response = await adminApi.get('/admin/advisors');
-      console.log('✅ ADMIN API: Advisors fetched successfully', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ ADMIN API ERROR: Failed to fetch advisors', error);
       throw error.response?.data || error.message;
     }
   },
@@ -329,21 +331,13 @@ export const adminAPI = {
   // Get advisor clients
   getAdvisorClients: async (advisorId) => {
     try {
-      // Create admin API instance with admin token
-      const adminApi = axios.create({
-        baseURL: API_BASE_URL,
+      const response = await api.get(`/admin/advisors/${advisorId}/clients`, {
         headers: {
-          'Content-Type': 'application/json',
-          'admin-token': 'admin-session-token' // Static admin token
-        },
+          'admin-token': 'admin-session-token'
+        }
       });
-
-      console.log('🔍 ADMIN API: Fetching clients for advisor:', advisorId);
-      const response = await adminApi.get(`/admin/advisors/${advisorId}/clients`);
-      console.log('✅ ADMIN API: Advisor clients fetched successfully', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ ADMIN API ERROR: Failed to fetch advisor clients', error);
       throw error.response?.data || error.message;
     }
   },
@@ -351,24 +345,48 @@ export const adminAPI = {
   // Get dashboard stats
   getDashboardStats: async () => {
     try {
-      // Create admin API instance with admin token
-      const adminApi = axios.create({
-        baseURL: API_BASE_URL,
+      const response = await api.get('/admin/dashboard/stats', {
         headers: {
-          'Content-Type': 'application/json',
-          'admin-token': 'admin-session-token' // Static admin token
-        },
+          'admin-token': 'admin-session-token'
+        }
       });
-
-      console.log('🔍 ADMIN API: Fetching dashboard stats');
-      const response = await adminApi.get('/admin/dashboard/stats');
-      console.log('✅ ADMIN API: Dashboard stats fetched successfully', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ ADMIN API ERROR: Failed to fetch dashboard stats', error);
       throw error.response?.data || error.message;
     }
   }
 };
 
+// Utility functions
+export const apiUtils = {
+  // Check if API is healthy
+  healthCheck: async () => {
+    try {
+      const response = await api.get('/clients/cas/health');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Test CAS parsing (development only)
+  debugCASParse: async (formData) => {
+    try {
+      if (import.meta.env.MODE !== 'development') {
+        throw new Error('Debug endpoints only available in development');
+      }
+      
+      const response = await api.post('/clients/cas/debug/parse', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  }
+};
+
+// Export default API instance
 export default api;

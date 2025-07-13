@@ -700,6 +700,7 @@ const getClientOnboardingForm = async (req, res) => {
 };
 
 // Public endpoint - Submit client onboarding form
+// Public endpoint - Submit client onboarding form with frontend-processed CAS data
 const submitClientOnboardingForm = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
@@ -747,18 +748,67 @@ const submitClientOnboardingForm = async (req, res) => {
       });
     }
     
-    // Create client record
+    // Extract form data and CAS data
+    const { casData, ...clientFormData } = req.body;
+    
+    console.log('📥 ONBOARDING SUBMISSION RECEIVED:', {
+      token,
+      clientEmail: invitation.clientEmail,
+      hasCasData: !!casData,
+      casStatus: casData?.status,
+      frontendProcessed: casData?.frontendProcessed,
+      totalValue: casData?.parsedData?.summary?.total_value
+    });
+    
+    // Create client record with form data
     const clientData = {
-      ...req.body,
+      ...clientFormData,
       email: invitation.clientEmail,
       advisor: invitation.advisor,
       status: 'onboarding'
     };
     
-    // Integrate CAS data if available
-    const clientDataWithCAS = await OnboardingCASController.completeOnboardingWithCAS(clientData, invitation);
+    // Process frontend-generated CAS data if available
+    if (casData && casData.frontendProcessed && casData.parsedData) {
+      console.log('🔧 PROCESSING FRONTEND CAS DATA:', {
+        fileName: casData.fileName,
+        fileSize: casData.fileSize,
+        status: casData.status,
+        totalValue: casData.parsedData.summary?.total_value,
+        dematAccounts: casData.parsedData.demat_accounts?.length || 0,
+        mutualFunds: casData.parsedData.mutual_funds?.length || 0
+      });
+      
+      // Structure CAS data according to our schema
+      clientData.casData = {
+        casFile: {
+          fileName: casData.fileName,
+          uploadDate: new Date(),
+          fileSize: casData.fileSize,
+          // Note: No filePath since this is frontend processed
+          frontendProcessed: true
+        },
+        parsedData: casData.parsedData,
+        casStatus: 'parsed', // Frontend successfully parsed
+        lastParsedAt: new Date(),
+        processingHistory: [{
+          action: 'frontend_processing',
+          timestamp: new Date(),
+          status: 'success',
+          details: 'CAS processed in frontend during onboarding',
+          eventId: casData.processingTrackingId || 'frontend_processing'
+        }]
+      };
+      
+      console.log('✅ FRONTEND CAS DATA INTEGRATED:', {
+        totalValue: clientData.casData.parsedData.summary?.total_value,
+        investorName: clientData.casData.parsedData.investor?.name,
+        investorPAN: clientData.casData.parsedData.investor?.pan ? '***MASKED***' : 'Not found'
+      });
+    }
     
-    const client = new Client(clientDataWithCAS);
+    // Create and save client
+    const client = new Client(clientData);
     await client.save();
     
     // Mark invitation as completed
@@ -767,6 +817,15 @@ const submitClientOnboardingForm = async (req, res) => {
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration);
     
+    console.log('🎉 CLIENT ONBOARDING COMPLETED WITH FRONTEND CAS:', {
+      token,
+      clientId: client._id,
+      clientEmail: client.email,
+      hasCasData: !!client.casData,
+      casStatus: client.casData?.casStatus,
+      portfolioValue: client.casData?.parsedData?.summary?.total_value || 0
+    });
+    
     logger.info(`Client onboarding completed successfully for token: ${token}, client: ${client._id}`);
     
     res.json({
@@ -774,9 +833,12 @@ const submitClientOnboardingForm = async (req, res) => {
       message: 'Client onboarding completed successfully',
       data: {
         clientId: client._id,
-        status: client.status
+        status: client.status,
+        hasCasData: !!client.casData,
+        portfolioValue: client.casData?.parsedData?.summary?.total_value || 0
       }
     });
+    
   } catch (error) {
     const duration = Date.now() - startTime;
     logApi.error(method, url, error);

@@ -1,8 +1,10 @@
+// frontend/src/components/client/ClientOnboardingForm.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { clientAPI } from '../../services/api';
+import { FrontendCASParser } from '../../utils/casParser';
 import { 
   User, 
   Mail, 
@@ -18,7 +20,11 @@ import {
   Upload,
   AlertCircle,
   Eye,
-  Clock
+  Clock,
+  BarChart3,
+  TrendingUp,
+  Briefcase,
+  Download
 } from 'lucide-react';
 
 function ClientOnboardingForm() {
@@ -28,13 +34,14 @@ function ClientOnboardingForm() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // CAS Upload State with enhanced tracking
+  // CAS Upload State with enhanced frontend processing
   const [casFile, setCasFile] = useState(null);
   const [casPassword, setCasPassword] = useState('');
   const [casUploadStatus, setCasUploadStatus] = useState('not_uploaded');
   const [casData, setCasData] = useState(null);
-  const [casUploadProgress, setCasUploadProgress] = useState(0);
+  const [casParsingProgress, setCasParsingProgress] = useState(0);
   const [casTrackingId, setCasTrackingId] = useState(null);
+  const [showCasDetails, setShowCasDetails] = useState(false);
 
   // Form tracking
   const [formStartTime, setFormStartTime] = useState(null);
@@ -117,7 +124,7 @@ function ClientOnboardingForm() {
     }
   }, [token, navigate, setValue]);
 
-  // Enhanced CAS File Upload Handlers with detailed tracking
+  // Enhanced CAS File Upload Handlers with FRONTEND processing
   const handleCasFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -144,156 +151,100 @@ function ClientOnboardingForm() {
     }
   };
 
-  const handleCasUpload = async () => {
+  // FRONTEND CAS PROCESSING - Main function
+  const handleCasProcessing = async () => {
     if (!casFile) {
-      toast.error('Please select a CAS file to upload');
+      toast.error('Please select a CAS file to process');
       return;
     }
 
-    const uploadStartTime = new Date();
-    const uploadTrackingId = `CAS_UPLOAD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    setCasTrackingId(uploadTrackingId);
-    setCasUploadStatus('uploading');
-    setCasUploadProgress(0);
+    const processingStartTime = new Date();
+    const processingTrackingId = `FRONTEND_CAS_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setCasTrackingId(processingTrackingId);
+    setCasUploadStatus('processing');
+    setCasParsingProgress(0);
     
-    console.log('🚀 CAS UPLOAD STARTED:', {
-      trackingId: uploadTrackingId,
+    console.log('🚀 FRONTEND CAS PROCESSING STARTED:', {
+      trackingId: processingTrackingId,
       fileName: casFile.name,
       fileSize: casFile.size,
       hasPassword: !!casPassword,
       passwordLength: casPassword ? casPassword.length : 0,
       token,
-      startTime: uploadStartTime.toISOString()
+      startTime: processingStartTime.toISOString()
     });
-    
-    const formData = new FormData();
-    formData.append('casFile', casFile);
-    if (casPassword) {
-      formData.append('casPassword', casPassword);
-    }
 
     try {
-      // Simulate upload progress
+      // Create frontend parser instance
+      const casParser = new FrontendCASParser();
+      
+      // Simulate progress updates
       const progressInterval = setInterval(() => {
-        setCasUploadProgress(prev => {
-          if (prev >= 90) {
+        setCasParsingProgress(prev => {
+          if (prev >= 85) {
             clearInterval(progressInterval);
             return prev;
           }
-          return prev + Math.random() * 20;
+          return prev + Math.random() * 15;
         });
-      }, 200);
+      }, 300);
 
-      const response = await clientAPI.uploadOnboardingCAS(token, formData);
-
+      // Parse PDF in frontend
+      const parsedData = await casParser.parsePDFFile(casFile, casPassword);
+      
       clearInterval(progressInterval);
-      setCasUploadProgress(100);
+      setCasParsingProgress(100);
 
-      if (response.success) {
-        const uploadDuration = new Date() - uploadStartTime;
-        setCasUploadStatus('uploaded');
-        setCasData(response.data);
-        
-        console.log('✅ CAS UPLOAD SUCCESS:', {
-          trackingId: uploadTrackingId,
-          fileName: casFile.name,
-          fileSize: casFile.size,
-          uploadDuration: `${uploadDuration}ms`,
-          responseData: response.data,
+      const processingDuration = new Date() - processingStartTime;
+      setCasUploadStatus('processed');
+      setCasData(parsedData);
+      
+      console.log('✅ FRONTEND CAS PROCESSING SUCCESS:', {
+        trackingId: processingTrackingId,
+        fileName: casFile.name,
+        fileSize: casFile.size,
+        processingDuration: `${processingDuration}ms`,
+        totalValue: parsedData.summary?.total_value || 0,
+        dematAccounts: parsedData.demat_accounts?.length || 0,
+        mutualFunds: parsedData.mutual_funds?.length || 0,
+        token
+      });
+      
+      toast.success('CAS file processed successfully!');
+      
+      // Auto-fill PAN if available and not already filled
+      if (parsedData.investor?.pan && !watch('panNumber')) {
+        setValue('panNumber', parsedData.investor.pan);
+        console.log('🔄 PAN AUTO-FILLED:', {
+          trackingId: processingTrackingId,
+          panNumber: '***MASKED***',
           token
         });
-        
-        toast.success('CAS file uploaded successfully!');
-        
-        // Auto-fill PAN if available and not already filled
-        if (response.data.investorPAN && !watch('panNumber')) {
-          setValue('panNumber', response.data.investorPAN);
-          console.log('🔄 PAN AUTO-FILLED:', {
-            trackingId: uploadTrackingId,
-            panNumber: '***MASKED***',
-            token
-          });
-        }
-
-        // Start parsing automatically
-        setTimeout(() => handleCasParse(), 1000);
-      } else {
-        setCasUploadStatus('error');
-        console.log('❌ CAS UPLOAD FAILED:', {
-          trackingId: uploadTrackingId,
-          error: response.message,
-          token
-        });
-        toast.error(response.message || 'Failed to upload CAS file');
       }
+
+      // Show extracted details
+      setShowCasDetails(true);
+
     } catch (error) {
       setCasUploadStatus('error');
-      console.error('❌ CAS UPLOAD ERROR:', {
-        trackingId: uploadTrackingId,
+      console.error('❌ FRONTEND CAS PROCESSING ERROR:', {
+        trackingId: processingTrackingId,
         error: error.message,
         stack: error.stack,
         token
       });
-      toast.error('Failed to upload CAS file');
-    }
-  };
-
-  const handleCasParse = async () => {
-    if (!casData || casUploadStatus !== 'uploaded') {
-      return;
-    }
-
-    const parseStartTime = new Date();
-    const parseTrackingId = `CAS_PARSE_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    setCasUploadStatus('parsing');
-    
-    console.log('🔍 CAS PARSING STARTED:', {
-      trackingId: parseTrackingId,
-      uploadTrackingId: casTrackingId,
-      fileName: casFile.name,
-      token,
-      startTime: parseStartTime.toISOString()
-    });
-
-    try {
-      // Parse CAS data
-      const parseResponse = await clientAPI.parseOnboardingCAS(token);
       
-      if (parseResponse.success) {
-        const parseDuration = new Date() - parseStartTime;
-        setCasUploadStatus('parsed');
-        setCasData(parseResponse.data);
-        
-        console.log('✅ CAS PARSING COMPLETED:', {
-          trackingId: parseTrackingId,
-          uploadTrackingId: casTrackingId,
-          parseDuration: `${parseDuration}ms`,
-          parsedData: parseResponse.data,
-          token
-        });
-        
-        toast.success('CAS file processed successfully!');
-      } else {
-        setCasUploadStatus('parse_error');
-        console.log('❌ CAS PARSING FAILED:', {
-          trackingId: parseTrackingId,
-          uploadTrackingId: casTrackingId,
-          error: parseResponse.message,
-          token
-        });
-        toast.error(parseResponse.message || 'Failed to process CAS file');
+      // Better error messages for users
+      let userMessage = 'Failed to process CAS file';
+      if (error.message.includes('password')) {
+        userMessage = 'Incorrect CAS password. Please check and try again.';
+      } else if (error.message.includes('text')) {
+        userMessage = 'Unable to read PDF content. File may be corrupted.';
+      } else if (error.message.includes('Unknown CAS format')) {
+        userMessage = 'Unsupported CAS format. Currently supported: CDSL';
       }
       
-    } catch (error) {
-      setCasUploadStatus('parse_error');
-      console.error('❌ CAS PARSING ERROR:', {
-        trackingId: parseTrackingId,
-        uploadTrackingId: casTrackingId,
-        error: error.message,
-        token
-      });
-      toast.error('Failed to process CAS file');
+      toast.error(userMessage);
     }
   };
 
@@ -312,7 +263,6 @@ function ClientOnboardingForm() {
       formData: {
         ...data,
         panNumber: data.panNumber ? '***MASKED***' : null,
-        // Remove sensitive data for logging
       },
       formMetrics: {
         totalTime: `${formCompletionTime}ms`,
@@ -328,21 +278,22 @@ function ClientOnboardingForm() {
         fileName: casFile?.name,
         fileSize: casFile?.size,
         status: casUploadStatus,
-        uploadTrackingId: casTrackingId,
-        hasParsedData: !!(casData?.parsedData)
+        processingTrackingId: casTrackingId,
+        hasParsedData: !!(casData?.summary)
       }
     });
     
     try {
-      // Include CAS data in the form submission
+      // Include PARSED CAS data in the form submission
       const submitData = {
         ...data,
         casData: casData ? {
           fileName: casFile?.name,
           fileSize: casFile?.size,
           status: casUploadStatus,
-          parsedData: casData.parsedData,
-          uploadTrackingId: casTrackingId
+          parsedData: casData,
+          processingTrackingId: casTrackingId,
+          frontendProcessed: true // Flag to indicate frontend processing
         } : null
       };
 
@@ -366,7 +317,7 @@ function ClientOnboardingForm() {
         token,
         clientId: response.data?.clientId,
         completedAt: new Date().toISOString(),
-        hasCASData: casUploadStatus === 'parsed' || casUploadStatus === 'uploaded',
+        hasCASData: casUploadStatus === 'processed',
         totalJourneyTime: `${formCompletionTime}ms`,
         casTrackingId: casTrackingId
       });
@@ -393,6 +344,186 @@ function ClientOnboardingForm() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount) return '₹0';
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const renderCasDetails = () => {
+    if (!casData || !showCasDetails) return null;
+
+    const { summary, investor, demat_accounts, mutual_funds } = casData;
+
+    return (
+      <div className="mt-6 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-lg font-semibold text-gray-900 flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+            CAS Data Extracted Successfully!
+          </h4>
+          <button
+            type="button"
+            onClick={() => setShowCasDetails(!showCasDetails)}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <Eye className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Portfolio Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white p-4 rounded-lg border border-green-200">
+            <div className="flex items-center">
+              <DollarSign className="h-8 w-8 text-green-600 mr-3" />
+              <div>
+                <p className="text-sm text-gray-600">Total Portfolio Value</p>
+                <p className="text-xl font-bold text-green-700">
+                  {formatCurrency(summary?.total_value || 0)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center">
+              <TrendingUp className="h-8 w-8 text-blue-600 mr-3" />
+              <div>
+                <p className="text-sm text-gray-600">Demat Accounts</p>
+                <p className="text-xl font-bold text-blue-700">
+                  {demat_accounts?.length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg border border-purple-200">
+            <div className="flex items-center">
+              <Briefcase className="h-8 w-8 text-purple-600 mr-3" />
+              <div>
+                <p className="text-sm text-gray-600">Mutual Fund Folios</p>
+                <p className="text-xl font-bold text-purple-700">
+                  {mutual_funds?.length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Investor Information */}
+        {investor && (investor.name || investor.pan) && (
+          <div className="mb-6">
+            <h5 className="text-md font-semibold text-gray-900 mb-3">Investor Details</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-4 rounded-lg">
+              {investor.name && (
+                <div>
+                  <p className="text-sm text-gray-600">Name</p>
+                  <p className="font-medium">{investor.name}</p>
+                </div>
+              )}
+              {investor.pan && (
+                <div>
+                  <p className="text-sm text-gray-600">PAN</p>
+                  <p className="font-medium">{investor.pan}</p>
+                </div>
+              )}
+              {investor.email && (
+                <div>
+                  <p className="text-sm text-gray-600">Email</p>
+                  <p className="font-medium">{investor.email}</p>
+                </div>
+              )}
+              {investor.mobile && (
+                <div>
+                  <p className="text-sm text-gray-600">Mobile</p>
+                  <p className="font-medium">{investor.mobile}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Demat Accounts Summary */}
+        {demat_accounts && demat_accounts.length > 0 && (
+          <div className="mb-6">
+            <h5 className="text-md font-semibold text-gray-900 mb-3">Demat Accounts</h5>
+            <div className="space-y-3">
+              {demat_accounts.slice(0, 2).map((account, index) => (
+                <div key={index} className="bg-white p-4 rounded-lg border border-gray-200">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">DP Name</p>
+                      <p className="font-medium">{account.dp_name || 'Not available'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">DP ID / Client ID</p>
+                      <p className="font-medium">{account.dp_id} / {account.client_id}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Account Value</p>
+                      <p className="font-medium text-green-600">{formatCurrency(account.value)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {demat_accounts.length > 2 && (
+                <div className="text-center py-2">
+                  <p className="text-sm text-gray-500">
+                    ... and {demat_accounts.length - 2} more demat accounts
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Mutual Funds Summary */}
+        {mutual_funds && mutual_funds.length > 0 && (
+          <div className="mb-6">
+            <h5 className="text-md font-semibold text-gray-900 mb-3">Mutual Fund Holdings</h5>
+            <div className="space-y-3">
+              {mutual_funds.slice(0, 2).map((fund, index) => (
+                <div key={index} className="bg-white p-4 rounded-lg border border-gray-200">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">AMC</p>
+                      <p className="font-medium">{fund.amc}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Folio Number</p>
+                      <p className="font-medium">{fund.folio_number}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Value</p>
+                      <p className="font-medium text-green-600">{formatCurrency(fund.value)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {mutual_funds.length > 2 && (
+                <div className="text-center py-2">
+                  <p className="text-sm text-gray-500">
+                    ... and {mutual_funds.length - 2} more mutual fund folios
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+          <p className="text-sm text-blue-700">
+            <strong>✅ Your portfolio data has been extracted and will be sent to your advisor along with your onboarding form.</strong>
+          </p>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -451,7 +582,7 @@ function ClientOnboardingForm() {
           <div className="mt-4 bg-gray-200 rounded-full h-2">
             <div 
               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${submitting ? 100 : 60}%` }}
+              style={{ width: `${submitting ? 100 : casUploadStatus === 'processed' ? 80 : 60}%` }}
             ></div>
           </div>
         </div>
@@ -785,7 +916,7 @@ function ClientOnboardingForm() {
               </div>
             </div>
 
-            {/* Enhanced CAS Upload Section */}
+            {/* Enhanced FRONTEND CAS Processing Section */}
             <div className="space-y-4 border-t border-gray-200 pt-6">
               <h3 className="text-md font-medium text-gray-900 flex items-center">
                 <FileText className="h-4 w-4 mr-2" />
@@ -832,97 +963,78 @@ function ClientOnboardingForm() {
                 </div>
               </div>
 
-              {/* Upload Progress */}
-              {casUploadStatus === 'uploading' && (
+              {/* Processing Progress */}
+              {casUploadStatus === 'processing' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <div className="flex items-center space-x-2 mb-2">
                     <Loader2 className="w-5 h-5 text-yellow-600 animate-spin" />
-                    <span className="text-yellow-800 font-medium">Uploading CAS file...</span>
+                    <span className="text-yellow-800 font-medium">Processing CAS file in your browser...</span>
                   </div>
                   <div className="w-full bg-yellow-200 rounded-full h-2">
                     <div 
                       className="bg-yellow-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${casUploadProgress}%` }}
+                      style={{ width: `${casParsingProgress}%` }}
                     ></div>
                   </div>
-                  <p className="text-sm text-yellow-700 mt-1">{Math.round(casUploadProgress)}% complete</p>
+                  <p className="text-sm text-yellow-700 mt-1">{Math.round(casParsingProgress)}% complete</p>
                 </div>
               )}
 
-              {/* Upload Button */}
+              {/* Process Button */}
               <div>
                 <button
                   type="button"
-                  onClick={handleCasUpload}
-                  disabled={!casFile || casUploadStatus === 'uploading' || casUploadStatus === 'parsing'}
+                  onClick={handleCasProcessing}
+                  disabled={!casFile || casUploadStatus === 'processing'}
                   className="flex items-center px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-400 transition-colors"
                 >
-                  {casUploadStatus === 'uploading' ? (
+                  {casUploadStatus === 'processing' ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      <span>Uploading... ({Math.round(casUploadProgress)}%)</span>
-                    </>
-                  ) : casUploadStatus === 'parsing' ? (
-                    <>
-                      <Eye className="w-4 h-4 mr-2" />
-                      <span>Processing...</span>
+                      <span>Processing... ({Math.round(casParsingProgress)}%)</span>
                     </>
                   ) : (
                     <>
                       <Upload className="w-4 h-4 mr-2" />
-                      <span>Upload & Process CAS</span>
+                      <span>Process CAS in Browser</span>
                     </>
                   )}
                 </button>
               </div>
 
-              {/* CAS Upload Status */}
-              {casUploadStatus === 'uploaded' && casData && (
+              {/* CAS Processing Status */}
+              {casUploadStatus === 'processed' && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-center space-x-2 mb-2">
                     <CheckCircle className="w-5 h-5 text-green-600" />
-                    <span className="text-green-800 font-medium">CAS uploaded successfully!</span>
+                    <span className="text-green-800 font-medium">CAS processed successfully in your browser!</span>
                   </div>
                   <div className="text-sm text-green-700 space-y-1">
-                    <p><strong>File:</strong> {casData.fileName}</p>
-                    <p><strong>Size:</strong> {(casData.fileSize / 1024 / 1024).toFixed(2)} MB</p>
-                    <p className="text-xs mt-2">Your portfolio data will be available in your advisor's dashboard.</p>
+                    <p><strong>File:</strong> {casFile?.name}</p>
+                    <p><strong>Size:</strong> {casFile ? (casFile.size / 1024 / 1024).toFixed(2) : 0} MB</p>
+                    <p className="text-xs mt-2">Your portfolio data has been extracted and will be sent with your form.</p>
                   </div>
                 </div>
               )}
 
-              {casUploadStatus === 'parsed' && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                    <span className="text-blue-800 font-medium">CAS processed successfully!</span>
-                  </div>
-                  <div className="text-sm text-blue-700">
-                    <p>Your portfolio data has been extracted and will be available to your advisor.</p>
-                    {casData?.parsedData?.summary?.totalValue && (
-                      <p className="font-medium mt-2">
-                        Total Portfolio Value: ₹{casData.parsedData.summary.totalValue.toLocaleString('en-IN')}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {(casUploadStatus === 'error' || casUploadStatus === 'parse_error') && (
+              {casUploadStatus === 'error' && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <div className="flex items-center space-x-2">
                     <AlertCircle className="w-5 h-5 text-red-600" />
                     <span className="text-red-800">
-                      {casUploadStatus === 'error' ? 'Failed to upload CAS file.' : 'Failed to process CAS file.'} 
-                      Please try again or contact support.
+                      Failed to process CAS file. Please check the file and password, then try again.
                     </span>
                   </div>
                 </div>
               )}
 
+              {/* Display Extracted CAS Details */}
+              {renderCasDetails()}
+
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-sm text-gray-600">
                   <strong>Note:</strong> CAS upload is optional. You can complete onboarding without it and upload later.
+                  All processing happens in your browser for security.
                 </p>
               </div>
             </div>
@@ -962,7 +1074,8 @@ function ClientOnboardingForm() {
               <div>CAS Tracking ID: {casTrackingId || 'Not assigned'}</div>
               <div>Has CAS File: {casFile ? 'Yes' : 'No'}</div>
               {casFile && <div>CAS File: {casFile.name} ({(casFile.size / 1024).toFixed(1)} KB)</div>}
-              {casData && <div>CAS Data: {JSON.stringify(casData.parsedData?.summary || {}, null, 2)}</div>}
+              {casData && <div>CAS Total Value: ₹{(casData.summary?.total_value || 0).toLocaleString('en-IN')}</div>}
+              <div>Frontend Processing: {casData ? 'Success' : 'Not processed'}</div>
             </div>
           </div>
         )}
