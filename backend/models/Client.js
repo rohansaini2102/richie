@@ -66,11 +66,269 @@ const clientSchema = new mongoose.Schema({
     }
   },
 
-  // Financial Information
+  // ENHANCED Income & Employment Information
+  occupation: {
+    type: String,
+    trim: true,
+    maxlength: [100, 'Occupation cannot exceed 100 characters']
+  },
+  employerBusinessName: {
+    type: String,
+    trim: true,
+    maxlength: [150, 'Employer/Business name cannot exceed 150 characters']
+  },
+  
+  // Income Details
   annualIncome: {
     type: Number,
     min: [0, 'Annual income cannot be negative']
   },
+  additionalIncome: {
+    type: Number,
+    min: [0, 'Additional income cannot be negative'],
+    default: 0
+  },
+  
+  // Monthly Expense Breakdown
+  monthlyExpenses: {
+    housingRent: {
+      type: Number,
+      min: [0, 'Housing/Rent cannot be negative'],
+      default: 0
+    },
+    groceriesUtilitiesFood: {
+      type: Number,
+      min: [0, 'Groceries, Utilities & Food cannot be negative'],
+      default: 0
+    },
+    transportation: {
+      type: Number,
+      min: [0, 'Transportation cannot be negative'],
+      default: 0
+    },
+    education: {
+      type: Number,
+      min: [0, 'Education cannot be negative'],
+      default: 0
+    },
+    healthcare: {
+      type: Number,
+      min: [0, 'Healthcare cannot be negative'],
+      default: 0
+    },
+    entertainment: {
+      type: Number,
+      min: [0, 'Entertainment cannot be negative'],
+      default: 0
+    },
+    insurancePremiums: {
+      type: Number,
+      min: [0, 'Insurance premiums cannot be negative'],
+      default: 0
+    },
+    loanEmis: {
+      type: Number,
+      min: [0, 'Loan EMIs cannot be negative'],
+      default: 0
+    },
+    otherExpenses: {
+      type: Number,
+      min: [0, 'Other expenses cannot be negative'],
+      default: 0
+    }
+  },
+  
+  // Expense Notes
+  expenseNotes: {
+    type: String,
+    maxlength: [500, 'Expense notes cannot exceed 500 characters']
+  },
+  
+  // Annual & Emergency Expenses
+  annualTaxes: {
+    type: Number,
+    min: [0, 'Annual taxes cannot be negative'],
+    default: 0
+  },
+  annualVacationExpenses: {
+    type: Number,
+    min: [0, 'Annual vacation expenses cannot be negative'],
+    default: 0
+  },
+
+  // Financial Goals - Enhanced Structure
+  retirementPlanning: {
+    targetRetirementAge: {
+      type: Number,
+      min: [18, 'Retirement age must be at least 18'],
+      max: [100, 'Retirement age cannot exceed 100']
+    },
+    retirementCorpusTarget: {
+      type: Number,
+      min: [0, 'Retirement corpus target cannot be negative']
+    }
+  },
+  
+  // Other Major Goals - Dynamic Goals Array
+  majorGoals: [{
+    goalName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: [100, 'Goal name cannot exceed 100 characters']
+    },
+    targetAmount: {
+      type: Number,
+      required: true,
+      min: [0, 'Target amount cannot be negative']
+    },
+    targetYear: {
+      type: Number,
+      required: true,
+      min: [2024, 'Target year cannot be in the past']
+    },
+    priority: {
+      type: String,
+      required: true,
+      enum: ['Low', 'Medium', 'High', 'Critical'],
+      default: 'Medium'
+    }
+  }],
+
+  // Assets & Liabilities - Enhanced Structure
+  assets: {
+    // Basic Assets
+    cashBankSavings: {
+      type: Number,
+      min: [0, 'Cash & Bank savings cannot be negative'],
+      default: 0
+    },
+    realEstate: {
+      type: Number,
+      min: [0, 'Real estate value cannot be negative'],
+      default: 0
+    },
+    
+    // Existing Investments - Equity
+    investments: {
+      equity: {
+        mutualFunds: {
+          type: Number,
+          min: [0, 'Mutual funds value cannot be negative'],
+          default: 0
+        },
+        directStocks: {
+          type: Number,
+          min: [0, 'Direct stocks value cannot be negative'],
+          default: 0
+        }
+      },
+      
+      // Fixed Income
+      fixedIncome: {
+        ppf: {
+          type: Number,
+          min: [0, 'PPF value cannot be negative'],
+          default: 0
+        },
+        epf: {
+          type: Number,
+          min: [0, 'EPF value cannot be negative'],
+          default: 0
+        },
+        nps: {
+          type: Number,
+          min: [0, 'NPS value cannot be negative'],
+          default: 0
+        },
+        fixedDeposits: {
+          type: Number,
+          min: [0, 'Fixed deposits value cannot be negative'],
+          default: 0
+        },
+        bondsDebentures: {
+          type: Number,
+          min: [0, 'Bonds & debentures value cannot be negative'],
+          default: 0
+        },
+        nsc: {
+          type: Number,
+          min: [0, 'NSC value cannot be negative'],
+          default: 0
+        }
+      },
+      
+      // Other Investments
+      other: {
+        ulip: {
+          type: Number,
+          min: [0, 'ULIP value cannot be negative'],
+          default: 0
+        },
+        otherInvestments: {
+          type: Number,
+          min: [0, 'Other investments value cannot be negative'],
+          default: 0
+        }
+      }
+    }
+  },
+  
+  // Liabilities
+  liabilities: {
+    loans: {
+      type: Number,
+      min: [0, 'Loans cannot be negative'],
+      default: 0
+    },
+    creditCardDebt: {
+      type: Number,
+      min: [0, 'Credit card debt cannot be negative'],
+      default: 0
+    }
+  },
+
+  // Form Progress Tracking
+  formProgress: {
+    step1Completed: {
+      type: Boolean,
+      default: false
+    },
+    step2Completed: {
+      type: Boolean,
+      default: false
+    },
+    step3Completed: {
+      type: Boolean,
+      default: false
+    },
+    step4Completed: {
+      type: Boolean,
+      default: false
+    },
+    step5Completed: {
+      type: Boolean,
+      default: false
+    },
+    currentStep: {
+      type: Number,
+      default: 1,
+      min: 1,
+      max: 5
+    },
+    lastSavedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+
+  // Draft Data Storage
+  draftData: {
+    type: Object,
+    default: {}
+  },
+
+  // ORIGINAL FIELDS - Preserved
   netWorth: {
     type: Number,
     min: [0, 'Net worth cannot be negative']
@@ -131,7 +389,7 @@ const clientSchema = new mongoose.Schema({
     }
   }],
 
-  // Enhanced CAS Information Schema
+  // Enhanced CAS Information Schema - PRESERVED COMPLETELY
   casData: {
     // CAS File Information
     casFile: {
@@ -142,7 +400,9 @@ const clientSchema = new mongoose.Schema({
         default: Date.now
       },
       fileSize: Number,
-      password: String // Encrypted password if CAS is password protected
+      password: String, // Encrypted password if CAS is password protected
+      iv: String,
+      frontendProcessed: Boolean
     },
     
     // Parsed CAS Data - Enhanced Structure
@@ -521,6 +781,52 @@ clientSchema.virtual('casSummary').get(function() {
   };
 });
 
+// NEW Virtual for calculated financial summaries
+clientSchema.virtual('calculatedFinancials').get(function() {
+  const monthlyIncome = (this.annualIncome || 0) / 12 + (this.additionalIncome || 0) / 12;
+  
+  const totalMonthlyExpenses = (this.monthlyExpenses?.housingRent || 0) +
+                               (this.monthlyExpenses?.groceriesUtilitiesFood || 0) +
+                               (this.monthlyExpenses?.transportation || 0) +
+                               (this.monthlyExpenses?.education || 0) +
+                               (this.monthlyExpenses?.healthcare || 0) +
+                               (this.monthlyExpenses?.entertainment || 0) +
+                               (this.monthlyExpenses?.insurancePremiums || 0) +
+                               (this.monthlyExpenses?.loanEmis || 0) +
+                               (this.monthlyExpenses?.otherExpenses || 0);
+  
+  const monthlySavings = monthlyIncome - totalMonthlyExpenses;
+  
+  // Calculate total assets
+  const totalAssets = (this.assets?.cashBankSavings || 0) +
+                      (this.assets?.realEstate || 0) +
+                      (this.assets?.investments?.equity?.mutualFunds || 0) +
+                      (this.assets?.investments?.equity?.directStocks || 0) +
+                      (this.assets?.investments?.fixedIncome?.ppf || 0) +
+                      (this.assets?.investments?.fixedIncome?.epf || 0) +
+                      (this.assets?.investments?.fixedIncome?.nps || 0) +
+                      (this.assets?.investments?.fixedIncome?.fixedDeposits || 0) +
+                      (this.assets?.investments?.fixedIncome?.bondsDebentures || 0) +
+                      (this.assets?.investments?.fixedIncome?.nsc || 0) +
+                      (this.assets?.investments?.other?.ulip || 0) +
+                      (this.assets?.investments?.other?.otherInvestments || 0);
+  
+  // Calculate total liabilities
+  const totalLiabilities = (this.liabilities?.loans || 0) + (this.liabilities?.creditCardDebt || 0);
+  
+  // Calculate net worth
+  const netWorth = totalAssets - totalLiabilities;
+
+  return {
+    monthlyIncome: Math.round(monthlyIncome),
+    totalMonthlyExpenses: Math.round(totalMonthlyExpenses),
+    monthlySavings: Math.round(monthlySavings),
+    totalAssets: Math.round(totalAssets),
+    totalLiabilities: Math.round(totalLiabilities),
+    netWorth: Math.round(netWorth)
+  };
+});
+
 // Ensure virtual fields are serialized
 clientSchema.set('toJSON', { virtuals: true });
 clientSchema.set('toObject', { virtuals: true });
@@ -552,7 +858,7 @@ clientSchema.methods.toJSON = function() {
   return client;
 };
 
-// Method to update CAS processing history
+// Method to update CAS processing history - PRESERVED
 clientSchema.methods.addCASProcessingEvent = function(action, status, details, eventId) {
   if (!this.casData) {
     this.casData = { processingHistory: [] };
@@ -575,7 +881,7 @@ clientSchema.methods.addCASProcessingEvent = function(action, status, details, e
   }
 };
 
-// Method to get portfolio asset allocation
+// Method to get portfolio asset allocation - PRESERVED
 clientSchema.methods.getAssetAllocation = function() {
   if (!this.hasCASData || !this.casData.parsedData) {
     return null;
@@ -596,6 +902,26 @@ clientSchema.methods.getAssetAllocation = function() {
     mutualFunds: Math.round((mfValue / totalValue) * 100),
     others: Math.round(((totalValue - equityValue - debtValue - mfValue) / totalValue) * 100)
   };
+};
+
+// NEW Method to save form draft
+clientSchema.methods.saveDraft = function(stepData, stepNumber) {
+  this.draftData[`step${stepNumber}`] = stepData;
+  this.formProgress.currentStep = stepNumber;
+  this.formProgress.lastSavedAt = new Date();
+  return this.save();
+};
+
+// NEW Method to get form draft
+clientSchema.methods.getDraft = function(stepNumber) {
+  return this.draftData[`step${stepNumber}`] || {};
+};
+
+// NEW Method to mark step as completed
+clientSchema.methods.markStepCompleted = function(stepNumber) {
+  this.formProgress[`step${stepNumber}Completed`] = true;
+  this.formProgress.currentStep = Math.min(stepNumber + 1, 5);
+  return this.save();
 };
 
 // Mongoose middleware for logging database operations

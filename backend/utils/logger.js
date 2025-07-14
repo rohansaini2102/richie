@@ -63,6 +63,9 @@ const logAuth = {
   loginSuccess: (email, advisorId, ip) => {
     logger.info(`Successful login for advisor: ${advisorId} (${email}) from IP: ${ip}`);
   },
+  authSuccess: (email, advisorId, ip) => {
+    logger.info(`Authentication successful for advisor: ${advisorId} (${email}) from IP: ${ip}`);
+  },
   loginFailed: (email, reason, ip) => {
     logger.warn(`Failed login attempt for email: ${email} - Reason: ${reason} from IP: ${ip}`);
   },
