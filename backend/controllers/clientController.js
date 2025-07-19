@@ -9,8 +9,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// Enhanced logging utilities for CAS tracking
-const CASLogger = {
+// Enhanced logging utilities for form tracking
+const FormLogger = {
   logEvent: (event, data = {}) => {
     const timestamp = new Date().toISOString();
     const logData = {
@@ -18,19 +18,16 @@ const CASLogger = {
       timestamp,
       ...data
     };
-    logger.info(`[CAS_TRACKER] ${event}`, logData);
+    logger.info(`[ENHANCED_FORM] ${event}`, logData);
     console.log('\n' + '='.repeat(80));
-    console.log(`🔄 CAS EVENT: ${event}`);
+    console.log(`📝 FORM EVENT: ${event}`);
     console.log(`⏰ Time: ${timestamp}`);
     console.log('📊 Data:');
     console.log(JSON.stringify(logData, null, 2));
     console.log('='.repeat(80));
   },
-  logClientEvent: (event, clientId, data = {}) => {
-    CASLogger.logEvent(event, { clientId, ...data });
-  },
   logOnboardingEvent: (event, token, data = {}) => {
-    CASLogger.logEvent(event, { onboardingToken: token, ...data });
+    FormLogger.logEvent(event, { onboardingToken: token, ...data });
   },
   logError: (event, error, data = {}) => {
     const errorData = {
@@ -43,9 +40,9 @@ const CASLogger = {
       timestamp: new Date().toISOString(),
       ...data
     };
-    logger.error(`[CAS_TRACKER_ERROR] ${event}`, errorData);
+    logger.error(`[ENHANCED_FORM_ERROR] ${event}`, errorData);
     console.log('\n' + '❌'.repeat(40));
-    console.log(`🚨 CAS ERROR: ${event}`);
+    console.log(`🚨 FORM ERROR: ${event}`);
     console.log(`⏰ Time: ${errorData.timestamp}`);
     console.log('💥 Error Details:');
     console.log(JSON.stringify(errorData, null, 2));
@@ -58,7 +55,7 @@ const createEmailTransporter = () => {
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port: process.env.EMAIL_PORT || 587,
-    secure: false, // true for 465, false for other ports
+    secure: false,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
@@ -72,7 +69,7 @@ const createEmailTransporter = () => {
 // Email templates
 const getInvitationEmailTemplate = (advisorName, advisorFirm, clientName, invitationUrl, expiryHours) => {
   return {
-    subject: `Complete Your Financial Profile - ${advisorFirm || 'Richie AI'}`,
+    subject: `Complete Your Comprehensive Financial Profile - ${advisorFirm || 'Richie AI'}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -85,44 +82,58 @@ const getInvitationEmailTemplate = (advisorName, advisorFirm, clientName, invita
           .button { background-color: #f97316; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0; }
           .footer { background-color: #e5e7eb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }
           .warning { background-color: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; margin: 20px 0; }
+          .features { background-color: #e0f2fe; padding: 15px; border-radius: 5px; margin: 20px 0; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>Richie AI</h1>
-            <p>Your Financial Advisory Platform</p>
+            <h1>🏆 Richie AI</h1>
+            <p>Your Comprehensive Financial Planning Platform</p>
           </div>
           
           <div class="content">
             <h2>Hello ${clientName || 'Valued Client'},</h2>
             
-            <p>You have been invited by <strong>${advisorName}</strong> ${advisorFirm ? `from <strong>${advisorFirm}</strong>` : ''} to complete your financial profile on our secure platform.</p>
+            <p>You have been invited by <strong>${advisorName}</strong> ${advisorFirm ? `from <strong>${advisorFirm}</strong>` : ''} to complete your comprehensive financial profile on our advanced platform.</p>
             
-            <p>To get started with your personalized financial planning journey, please click the button below to complete your profile:</p>
+            <div class="features">
+              <h3>🎯 Enhanced 5-Stage Onboarding Process</h3>
+              <ul>
+                <li><strong>Stage 1:</strong> Personal Information & KYC Details</li>
+                <li><strong>Stage 2:</strong> Comprehensive Income & Expense Analysis</li>
+                <li><strong>Stage 3:</strong> Financial Goals & Retirement Planning</li>
+                <li><strong>Stage 4:</strong> Complete Assets & Liabilities Assessment</li>
+                <li><strong>Stage 5:</strong> Investment Profile & CAS Upload</li>
+              </ul>
+            </div>
+            
+            <p>To get started with your personalized financial planning journey, please click the button below:</p>
             
             <div style="text-align: center;">
-              <a href="${invitationUrl}" class="button">Complete Your Profile</a>
+              <a href="${invitationUrl}" class="button">🚀 Start Your Financial Profile</a>
             </div>
             
             <div class="warning">
-              <strong>Important:</strong> This invitation link will expire in ${expiryHours} hours for security reasons. Please complete your profile before then.
+              <strong>⏰ Important:</strong> This invitation link will expire in ${expiryHours} hours for security reasons. Please complete your comprehensive profile before then.
             </div>
             
-            <p>What you'll need to complete your profile:</p>
+            <p><strong>What makes this onboarding special:</strong></p>
             <ul>
-              <li>Personal information (name, contact details, address)</li>
-              <li>Financial information (income, net worth, investment goals)</li>
-              <li>KYC documents (PAN, Aadhar, address proof)</li>
-              <li>Bank account details</li>
+              <li>📊 Detailed financial health assessment</li>
+              <li>🎯 Comprehensive goal setting and prioritization</li>
+              <li>💰 Complete asset and liability mapping</li>
+              <li>📈 Investment risk profiling</li>
+              <li>📄 Optional CAS (Consolidated Account Statement) upload for automatic portfolio import</li>
+              <li>🔒 Bank-grade security and encryption</li>
             </ul>
             
-            <p>Your information is completely secure and will only be used to provide you with personalized financial advice.</p>
+            <p>Your information is completely secure and will only be used to provide you with personalized financial advice and planning recommendations.</p>
             
-            <p>If you have any questions or need assistance, please don't hesitate to contact your advisor or our support team.</p>
+            <p>If you have any questions or need assistance during the onboarding process, please don't hesitate to contact your advisor or our support team.</p>
             
             <p>Best regards,<br>
-            The Richie AI Team</p>
+            <strong>The Richie AI Team</strong></p>
             
             <hr>
             <p style="font-size: 11px; color: #6b7280;">
@@ -168,6 +179,7 @@ function getEncryptionKey() {
   Buffer.from(key, 'utf8').copy(buf);
   return buf;
 }
+
 function encryptText(text) {
   const key = getEncryptionKey();
   const iv = crypto.randomBytes(16);
@@ -176,6 +188,7 @@ function encryptText(text) {
   encrypted += cipher.final('hex');
   return { encrypted, iv: iv.toString('hex') };
 }
+
 function decryptText(encrypted, ivHex) {
   const key = getEncryptionKey();
   const iv = Buffer.from(ivHex, 'hex');
@@ -185,14 +198,14 @@ function decryptText(encrypted, ivHex) {
   return decrypted;
 }
 
-// Get all clients for an advisor
+// Get all clients for an advisor - ENHANCED
 const getClients = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
   const advisorId = req.advisor.id;
   
   try {
-    logger.info(`Client list request for advisor: ${advisorId}`);
+    FormLogger.logEvent('CLIENT_LIST_REQUEST', { advisorId });
     
     const {
       page = 1,
@@ -224,7 +237,7 @@ const getClients = async (req, res) => {
     const skip = (page - 1) * limit;
     const sort = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
     
-    // Execute query
+    // Execute query with enhanced population
     const clients = await Client.find(query)
       .sort(sort)
       .skip(skip)
@@ -234,15 +247,47 @@ const getClients = async (req, res) => {
     const totalClients = await Client.countDocuments(query);
     const totalPages = Math.ceil(totalClients / limit);
     
+    // Calculate enhanced metrics for each client
+    const enhancedClients = clients.map(client => {
+      const clientObj = client.toObject();
+      
+      // Calculate financial summaries
+      const calculatedFinancials = client.calculatedFinancials;
+      
+      // Add portfolio summary if CAS data exists
+      let portfolioSummary = null;
+      if (client.hasCASData && client.casData.parsedData) {
+        portfolioSummary = {
+          totalValue: client.casData.parsedData.summary?.total_value || 0,
+          dematAccounts: client.casData.parsedData.demat_accounts?.length || 0,
+          mutualFunds: client.casData.parsedData.mutual_funds?.length || 0,
+          lastUpdated: client.casData.lastParsedAt,
+          status: client.casData.casStatus
+        };
+      }
+      
+      return {
+        ...clientObj,
+        calculatedFinancials,
+        portfolioSummary,
+        completionPercentage: calculateProfileCompletion(client)
+      };
+    });
+    
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration, advisorId);
     
-    logger.info(`Client list retrieved successfully for advisor: ${advisorId} - ${clients.length} clients found`);
+    FormLogger.logEvent('CLIENT_LIST_SUCCESS', {
+      advisorId,
+      clientCount: enhancedClients.length,
+      totalClients,
+      duration: `${duration}ms`
+    });
     
     res.json({
       success: true,
       data: {
-        clients,
+        clients: enhancedClients,
         pagination: {
           currentPage: parseInt(page),
           totalPages,
@@ -254,9 +299,8 @@ const getClients = async (req, res) => {
     });
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('CLIENT_LIST_ERROR', error, { advisorId });
     logApi.error(method, url, error, advisorId);
-    
-    logger.error(`Client list retrieval failed for advisor: ${advisorId} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -266,7 +310,49 @@ const getClients = async (req, res) => {
   }
 };
 
-// Get client by ID
+// Calculate profile completion percentage
+const calculateProfileCompletion = (client) => {
+  let completed = 0;
+  let total = 0;
+  
+  // Stage 1: Personal Information (20%)
+  total += 20;
+  if (client.firstName && client.lastName && client.email && client.phoneNumber && 
+      client.dateOfBirth && client.panNumber && client.address?.street && 
+      client.address?.city && client.address?.state) {
+    completed += 20;
+  }
+  
+  // Stage 2: Income & Employment (20%)
+  total += 20;
+  if (client.occupation && client.employerBusinessName && client.annualIncome && 
+      client.monthlyExpenses?.housingRent !== undefined) {
+    completed += 20;
+  }
+  
+  // Stage 3: Financial Goals (20%)
+  total += 20;
+  if (client.retirementPlanning?.targetRetirementAge && client.majorGoals?.length > 0) {
+    completed += 20;
+  }
+  
+  // Stage 4: Assets & Liabilities (20%)
+  total += 20;
+  if (client.assets?.cashBankSavings !== undefined || client.assets?.realEstate || 
+      client.liabilities?.loans !== undefined) {
+    completed += 20;
+  }
+  
+  // Stage 5: Investment Profile (20%)
+  total += 20;
+  if (client.investmentExperience && client.riskTolerance) {
+    completed += 20;
+  }
+  
+  return Math.round((completed / total) * 100);
+};
+
+// Get client by ID - ENHANCED
 const getClientById = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
@@ -274,7 +360,7 @@ const getClientById = async (req, res) => {
   const { id } = req.params;
   
   try {
-    logger.info(`Client details request for advisor: ${advisorId}, client: ${id}`);
+    FormLogger.logEvent('CLIENT_DETAIL_REQUEST', { advisorId, clientId: id });
     
     const client = await Client.findOne({ _id: id, advisor: advisorId })
       .populate('advisor', 'firstName lastName firmName');
@@ -283,7 +369,7 @@ const getClientById = async (req, res) => {
       const duration = Date.now() - startTime;
       logApi.response(method, url, 404, duration, advisorId);
       
-      logger.warn(`Client not found for advisor: ${advisorId}, client: ${id}`);
+      FormLogger.logError('CLIENT_NOT_FOUND', new Error('Client not found'), { advisorId, clientId: id });
       
       return res.status(404).json({
         success: false,
@@ -291,20 +377,33 @@ const getClientById = async (req, res) => {
       });
     }
     
+    // Enhanced client data with calculations
+    const enhancedClient = {
+      ...client.toObject(),
+      calculatedFinancials: client.calculatedFinancials,
+      completionPercentage: calculateProfileCompletion(client),
+      portfolioSummary: client.casSummary,
+      assetAllocation: client.getAssetAllocation()
+    };
+    
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration, advisorId);
     
-    logger.info(`Client details retrieved successfully for advisor: ${advisorId}, client: ${id}`);
+    FormLogger.logEvent('CLIENT_DETAIL_SUCCESS', {
+      advisorId,
+      clientId: id,
+      completionPercentage: enhancedClient.completionPercentage,
+      hasCasData: !!enhancedClient.portfolioSummary
+    });
     
     res.json({
       success: true,
-      data: client
+      data: enhancedClient
     });
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('CLIENT_DETAIL_ERROR', error, { advisorId, clientId: id });
     logApi.error(method, url, error, advisorId);
-    
-    logger.error(`Client details retrieval failed for advisor: ${advisorId}, client: ${id} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -314,7 +413,7 @@ const getClientById = async (req, res) => {
   }
 };
 
-// Send client invitation
+// Send client invitation - ENHANCED
 const sendClientInvitation = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
@@ -324,6 +423,12 @@ const sendClientInvitation = async (req, res) => {
   try {
     const { clientEmail, clientFirstName, clientLastName, notes } = req.body;
     
+    FormLogger.logEvent('INVITATION_REQUEST', {
+      advisorId,
+      clientEmail,
+      clientName: `${clientFirstName} ${clientLastName}`.trim()
+    });
+    
     // Validate required fields
     if (!clientEmail) {
       return res.status(400).json({
@@ -332,8 +437,6 @@ const sendClientInvitation = async (req, res) => {
       });
     }
     
-    logger.info(`Client invitation request for advisor: ${advisorId}, client email: ${clientEmail}`);
-    
     // Check if client already exists
     const existingClient = await Client.findOne({ 
       email: clientEmail.toLowerCase(), 
@@ -341,28 +444,35 @@ const sendClientInvitation = async (req, res) => {
     });
     
     if (existingClient) {
-      logger.warn(`Client invitation failed - client already exists: ${clientEmail} for advisor: ${advisorId}`);
+      FormLogger.logError('INVITATION_DUPLICATE_CLIENT', new Error('Client already exists'), {
+        advisorId,
+        clientEmail
+      });
       return res.status(400).json({
         success: false,
         message: 'Client already exists in your account'
       });
     }
     
-    // Check if maximum invitations limit reached (5 per client)
+    // Check invitation limit
     const invitationCount = await ClientInvitation.countDocuments({
       clientEmail: clientEmail.toLowerCase(),
       advisor: advisorId
     });
     
     if (invitationCount >= 5) {
-      logger.warn(`Client invitation failed - maximum invitations reached: ${clientEmail} for advisor: ${advisorId} (${invitationCount}/5)`);
+      FormLogger.logError('INVITATION_LIMIT_EXCEEDED', new Error('Max invitations reached'), {
+        advisorId,
+        clientEmail,
+        invitationCount
+      });
       return res.status(400).json({
         success: false,
         message: `Maximum of 5 invitations reached for this client. Current count: ${invitationCount}/5`
       });
     }
     
-    // Get advisor details for email
+    // Get advisor details
     const advisor = await Advisor.findById(advisorId);
     
     // Create invitation
@@ -381,7 +491,7 @@ const sendClientInvitation = async (req, res) => {
     const invitationUrl = invitation.generateInvitationUrl();
     const expiryHours = process.env.INVITATION_EXPIRY_HOURS || 48;
     
-    // Send email
+    // Send enhanced email
     const transporter = createEmailTransporter();
     const emailTemplate = getInvitationEmailTemplate(
       `${advisor.firstName} ${advisor.lastName}`,
@@ -404,27 +514,39 @@ const sendClientInvitation = async (req, res) => {
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration, advisorId);
     
-    // Get updated invitation count for logging
     const finalInvitationCount = invitationCount + 1;
-    logger.info(`Client invitation sent successfully for advisor: ${advisorId}, client: ${clientEmail}, invitation: ${invitation._id} - Count: ${finalInvitationCount}/5`);
+    
+    FormLogger.logEvent('INVITATION_SUCCESS', {
+      advisorId,
+      clientEmail,
+      invitationId: invitation._id,
+      invitationCount: finalInvitationCount,
+      expiryHours
+    });
     
     res.json({
       success: true,
-      message: `Client invitation sent successfully! (${finalInvitationCount}/5 invitations used)`,
+      message: `Enhanced client invitation sent successfully! (${finalInvitationCount}/5 invitations used)`,
       data: {
         invitationId: invitation._id,
         clientEmail: clientEmail,
         expiresAt: invitation.expiresAt,
         invitationUrl: invitationUrl,
         invitationCount: finalInvitationCount,
-        maxInvitations: 5
+        maxInvitations: 5,
+        enhancedFeatures: [
+          'Five-stage comprehensive onboarding',
+          'Financial health assessment',
+          'Goal prioritization system',
+          'Asset allocation mapping',
+          'CAS portfolio import'
+        ]
       }
     });
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('INVITATION_ERROR', error, { advisorId });
     logApi.error(method, url, error, advisorId);
-    
-    logger.error(`Client invitation failed for advisor: ${advisorId} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -434,14 +556,14 @@ const sendClientInvitation = async (req, res) => {
   }
 };
 
-// Get client invitations
+// Get client invitations - ENHANCED
 const getClientInvitations = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
   const advisorId = req.advisor.id;
   
   try {
-    logger.info(`Client invitations request for advisor: ${advisorId}`);
+    FormLogger.logEvent('INVITATIONS_LIST_REQUEST', { advisorId });
     
     const {
       page = 1,
@@ -477,7 +599,11 @@ const getClientInvitations = async (req, res) => {
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration, advisorId);
     
-    logger.info(`Client invitations retrieved successfully for advisor: ${advisorId} - ${invitations.length} invitations found`);
+    FormLogger.logEvent('INVITATIONS_LIST_SUCCESS', {
+      advisorId,
+      invitationCount: invitations.length,
+      totalInvitations
+    });
     
     res.json({
       success: true,
@@ -494,9 +620,8 @@ const getClientInvitations = async (req, res) => {
     });
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('INVITATIONS_LIST_ERROR', error, { advisorId });
     logApi.error(method, url, error, advisorId);
-    
-    logger.error(`Client invitations retrieval failed for advisor: ${advisorId} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -506,7 +631,7 @@ const getClientInvitations = async (req, res) => {
   }
 };
 
-// Update client information
+// Update client information - ENHANCED
 const updateClient = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
@@ -514,7 +639,7 @@ const updateClient = async (req, res) => {
   const { id } = req.params;
   
   try {
-    logger.info(`Client update request for advisor: ${advisorId}, client: ${id}`);
+    FormLogger.logEvent('CLIENT_UPDATE_REQUEST', { advisorId, clientId: id });
     
     const client = await Client.findOne({ _id: id, advisor: advisorId });
     
@@ -522,7 +647,10 @@ const updateClient = async (req, res) => {
       const duration = Date.now() - startTime;
       logApi.response(method, url, 404, duration, advisorId);
       
-      logger.warn(`Client not found for update - advisor: ${advisorId}, client: ${id}`);
+      FormLogger.logError('CLIENT_UPDATE_NOT_FOUND', new Error('Client not found'), {
+        advisorId,
+        clientId: id
+      });
       
       return res.status(404).json({
         success: false,
@@ -530,9 +658,11 @@ const updateClient = async (req, res) => {
       });
     }
     
-    // Update client data
+    // Track what's being updated
     const updateData = { ...req.body };
     delete updateData.advisor; // Prevent advisor change
+    
+    const fieldsBeingUpdated = Object.keys(updateData);
     
     const updatedClient = await Client.findByIdAndUpdate(
       id,
@@ -543,18 +673,26 @@ const updateClient = async (req, res) => {
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration, advisorId);
     
-    logger.info(`Client updated successfully for advisor: ${advisorId}, client: ${id}`);
+    FormLogger.logEvent('CLIENT_UPDATE_SUCCESS', {
+      advisorId,
+      clientId: id,
+      fieldsUpdated: fieldsBeingUpdated,
+      newCompletionPercentage: calculateProfileCompletion(updatedClient)
+    });
     
     res.json({
       success: true,
       message: 'Client updated successfully',
-      data: updatedClient
+      data: {
+        ...updatedClient.toObject(),
+        calculatedFinancials: updatedClient.calculatedFinancials,
+        completionPercentage: calculateProfileCompletion(updatedClient)
+      }
     });
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('CLIENT_UPDATE_ERROR', error, { advisorId, clientId: id });
     logApi.error(method, url, error, advisorId);
-    
-    logger.error(`Client update failed for advisor: ${advisorId}, client: ${id} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -564,7 +702,7 @@ const updateClient = async (req, res) => {
   }
 };
 
-// Delete client
+// Delete client - ENHANCED
 const deleteClient = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
@@ -572,7 +710,7 @@ const deleteClient = async (req, res) => {
   const { id } = req.params;
   
   try {
-    logger.info(`Client deletion request for advisor: ${advisorId}, client: ${id}`);
+    FormLogger.logEvent('CLIENT_DELETE_REQUEST', { advisorId, clientId: id });
     
     const client = await Client.findOne({ _id: id, advisor: advisorId });
     
@@ -580,7 +718,10 @@ const deleteClient = async (req, res) => {
       const duration = Date.now() - startTime;
       logApi.response(method, url, 404, duration, advisorId);
       
-      logger.warn(`Client not found for deletion - advisor: ${advisorId}, client: ${id}`);
+      FormLogger.logError('CLIENT_DELETE_NOT_FOUND', new Error('Client not found'), {
+        advisorId,
+        clientId: id
+      });
       
       return res.status(404).json({
         success: false,
@@ -588,12 +729,23 @@ const deleteClient = async (req, res) => {
       });
     }
     
+    // Store client info for logging before deletion
+    const clientInfo = {
+      name: `${client.firstName} ${client.lastName}`,
+      email: client.email,
+      hasCasData: !!client.casData?.parsedData
+    };
+    
     await Client.findByIdAndDelete(id);
     
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration, advisorId);
     
-    logger.info(`Client deleted successfully for advisor: ${advisorId}, client: ${id}`);
+    FormLogger.logEvent('CLIENT_DELETE_SUCCESS', {
+      advisorId,
+      clientId: id,
+      deletedClient: clientInfo
+    });
     
     res.json({
       success: true,
@@ -601,9 +753,8 @@ const deleteClient = async (req, res) => {
     });
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('CLIENT_DELETE_ERROR', error, { advisorId, clientId: id });
     logApi.error(method, url, error, advisorId);
-    
-    logger.error(`Client deletion failed for advisor: ${advisorId}, client: ${id} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -613,7 +764,7 @@ const deleteClient = async (req, res) => {
   }
 };
 
-// Public endpoint - Get client onboarding form by token
+// Public endpoint - Get client onboarding form by token - ENHANCED
 const getClientOnboardingForm = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
@@ -622,7 +773,10 @@ const getClientOnboardingForm = async (req, res) => {
   const userAgent = req.get('User-Agent');
   
   try {
-    logger.info(`Client onboarding form request for token: ${token}`);
+    FormLogger.logOnboardingEvent('FORM_ACCESS_REQUEST', token, {
+      clientIp,
+      userAgent
+    });
     
     const invitation = await ClientInvitation.findOne({ token })
       .populate('advisor', 'firstName lastName firmName email');
@@ -631,7 +785,7 @@ const getClientOnboardingForm = async (req, res) => {
       const duration = Date.now() - startTime;
       logApi.response(method, url, 404, duration);
       
-      logger.warn(`Invalid invitation token: ${token}`);
+      FormLogger.logError('FORM_ACCESS_INVALID_TOKEN', new Error('Invalid token'), { token });
       
       return res.status(404).json({
         success: false,
@@ -643,7 +797,7 @@ const getClientOnboardingForm = async (req, res) => {
       const duration = Date.now() - startTime;
       logApi.response(method, url, 410, duration);
       
-      logger.warn(`Expired invitation token: ${token}`);
+      FormLogger.logError('FORM_ACCESS_EXPIRED', new Error('Invitation expired'), { token });
       
       return res.status(410).json({
         success: false,
@@ -655,7 +809,7 @@ const getClientOnboardingForm = async (req, res) => {
       const duration = Date.now() - startTime;
       logApi.response(method, url, 410, duration);
       
-      logger.warn(`Already completed invitation token: ${token}`);
+      FormLogger.logError('FORM_ACCESS_COMPLETED', new Error('Already completed'), { token });
       
       return res.status(410).json({
         success: false,
@@ -669,7 +823,10 @@ const getClientOnboardingForm = async (req, res) => {
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration);
     
-    logger.info(`Client onboarding form accessed successfully for token: ${token}`);
+    FormLogger.logOnboardingEvent('FORM_ACCESS_SUCCESS', token, {
+      advisorId: invitation.advisor._id,
+      clientEmail: invitation.clientEmail
+    });
     
     res.json({
       success: true,
@@ -682,14 +839,23 @@ const getClientOnboardingForm = async (req, res) => {
           expiresAt: invitation.expiresAt,
           timeRemaining: invitation.timeRemaining
         },
-        advisor: invitation.advisor
+        advisor: invitation.advisor,
+        formConfiguration: {
+          totalStages: 5,
+          stages: [
+            { stage: 1, title: 'Personal Information', description: 'Basic details and KYC information' },
+            { stage: 2, title: 'Income & Employment', description: 'Comprehensive financial income analysis' },
+            { stage: 3, title: 'Financial Goals', description: 'Retirement and major life goals planning' },
+            { stage: 4, title: 'Assets & Liabilities', description: 'Complete financial position assessment' },
+            { stage: 5, title: 'Investment Profile & CAS', description: 'Risk tolerance and portfolio import' }
+          ]
+        }
       }
     });
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('FORM_ACCESS_ERROR', error, { token });
     logApi.error(method, url, error);
-    
-    logger.error(`Client onboarding form access failed for token: ${token} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -699,8 +865,7 @@ const getClientOnboardingForm = async (req, res) => {
   }
 };
 
-// Public endpoint - Submit client onboarding form
-// Public endpoint - Submit client onboarding form with frontend-processed CAS data
+// Public endpoint - Submit client onboarding form - ENHANCED FOR 5-STAGE FORM
 const submitClientOnboardingForm = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
@@ -708,7 +873,10 @@ const submitClientOnboardingForm = async (req, res) => {
   const clientIp = req.ip || req.connection.remoteAddress;
   
   try {
-    logger.info(`Client onboarding form submission for token: ${token}`);
+    FormLogger.logOnboardingEvent('FORM_SUBMISSION_STARTED', token, {
+      clientIp,
+      hasData: !!req.body
+    });
     
     const invitation = await ClientInvitation.findOne({ token });
     
@@ -716,7 +884,7 @@ const submitClientOnboardingForm = async (req, res) => {
       const duration = Date.now() - startTime;
       logApi.response(method, url, 404, duration);
       
-      logger.warn(`Invalid invitation token for submission: ${token}`);
+      FormLogger.logError('FORM_SUBMISSION_INVALID_TOKEN', new Error('Invalid token'), { token });
       
       return res.status(404).json({
         success: false,
@@ -728,7 +896,7 @@ const submitClientOnboardingForm = async (req, res) => {
       const duration = Date.now() - startTime;
       logApi.response(method, url, 410, duration);
       
-      logger.warn(`Expired invitation token for submission: ${token}`);
+      FormLogger.logError('FORM_SUBMISSION_EXPIRED', new Error('Invitation expired'), { token });
       
       return res.status(410).json({
         success: false,
@@ -740,7 +908,7 @@ const submitClientOnboardingForm = async (req, res) => {
       const duration = Date.now() - startTime;
       logApi.response(method, url, 410, duration);
       
-      logger.warn(`Already completed invitation token for submission: ${token}`);
+      FormLogger.logError('FORM_SUBMISSION_ALREADY_COMPLETED', new Error('Already completed'), { token });
       
       return res.status(410).json({
         success: false,
@@ -748,29 +916,122 @@ const submitClientOnboardingForm = async (req, res) => {
       });
     }
     
-    // Extract form data and CAS data
-    const { casData, ...clientFormData } = req.body;
+    // Extract enhanced form data and CAS data
+    const { casData, customGoals, ...clientFormData } = req.body;
     
-    console.log('📥 ONBOARDING SUBMISSION RECEIVED:', {
-      token,
-      clientEmail: invitation.clientEmail,
+    FormLogger.logOnboardingEvent('FORM_DATA_EXTRACTED', token, {
       hasCasData: !!casData,
-      casStatus: casData?.status,
-      frontendProcessed: casData?.frontendProcessed,
-      totalValue: casData?.parsedData?.summary?.total_value
+      hasCustomGoals: !!customGoals?.length,
+      formStages: {
+        personalInfo: !!(clientFormData.firstName && clientFormData.lastName),
+        incomeEmployment: !!(clientFormData.occupation && clientFormData.annualIncome),
+        financialGoals: !!(clientFormData.retirementPlanning?.targetRetirementAge),
+        assetsLiabilities: !!(clientFormData.assets),
+        investmentProfile: !!(clientFormData.investmentExperience && clientFormData.riskTolerance)
+      }
     });
     
-    // Create client record with form data
+    // Prepare comprehensive client data for 5-stage form
     const clientData = {
-      ...clientFormData,
+      // Stage 1: Personal Information
+      firstName: clientFormData.firstName,
+      lastName: clientFormData.lastName,
       email: invitation.clientEmail,
+      phoneNumber: clientFormData.phoneNumber,
+      dateOfBirth: clientFormData.dateOfBirth,
+      gender: clientFormData.gender,
+      panNumber: clientFormData.panNumber,
+      address: {
+        street: clientFormData.address?.street,
+        city: clientFormData.address?.city,
+        state: clientFormData.address?.state,
+        zipCode: clientFormData.address?.zipCode,
+        country: clientFormData.address?.country || 'India'
+      },
+      
+      // Stage 2: Income & Employment
+      occupation: clientFormData.occupation,
+      employerBusinessName: clientFormData.employerBusinessName,
+      annualIncome: clientFormData.annualIncome,
+      additionalIncome: clientFormData.additionalIncome || 0,
+      monthlyExpenses: {
+        housingRent: clientFormData.monthlyExpenses?.housingRent || 0,
+        groceriesUtilitiesFood: clientFormData.monthlyExpenses?.groceriesUtilitiesFood || 0,
+        transportation: clientFormData.monthlyExpenses?.transportation || 0,
+        education: clientFormData.monthlyExpenses?.education || 0,
+        healthcare: clientFormData.monthlyExpenses?.healthcare || 0,
+        entertainment: clientFormData.monthlyExpenses?.entertainment || 0,
+        insurancePremiums: clientFormData.monthlyExpenses?.insurancePremiums || 0,
+        loanEmis: clientFormData.monthlyExpenses?.loanEmis || 0,
+        otherExpenses: clientFormData.monthlyExpenses?.otherExpenses || 0
+      },
+      expenseNotes: clientFormData.expenseNotes,
+      annualTaxes: clientFormData.annualTaxes || 0,
+      annualVacationExpenses: clientFormData.annualVacationExpenses || 0,
+      
+      // Stage 3: Financial Goals
+      retirementPlanning: {
+        targetRetirementAge: clientFormData.retirementPlanning?.targetRetirementAge,
+        retirementCorpusTarget: clientFormData.retirementPlanning?.retirementCorpusTarget
+      },
+      majorGoals: [
+        ...(clientFormData.majorGoals || []),
+        ...(customGoals || [])
+      ].filter(goal => goal.goalName && goal.targetAmount), // Filter out empty goals
+      
+      // Stage 4: Assets & Liabilities
+      assets: {
+        cashBankSavings: clientFormData.assets?.cashBankSavings || 0,
+        realEstate: clientFormData.assets?.realEstate || 0,
+        investments: {
+          equity: {
+            mutualFunds: clientFormData.assets?.investments?.equity?.mutualFunds || 0,
+            directStocks: clientFormData.assets?.investments?.equity?.directStocks || 0
+          },
+          fixedIncome: {
+            ppf: clientFormData.assets?.investments?.fixedIncome?.ppf || 0,
+            epf: clientFormData.assets?.investments?.fixedIncome?.epf || 0,
+            nps: clientFormData.assets?.investments?.fixedIncome?.nps || 0,
+            fixedDeposits: clientFormData.assets?.investments?.fixedIncome?.fixedDeposits || 0,
+            bondsDebentures: clientFormData.assets?.investments?.fixedIncome?.bondsDebentures || 0,
+            nsc: clientFormData.assets?.investments?.fixedIncome?.nsc || 0
+          },
+          other: {
+            ulip: clientFormData.assets?.investments?.other?.ulip || 0,
+            otherInvestments: clientFormData.assets?.investments?.other?.otherInvestments || 0
+          }
+        }
+      },
+      liabilities: {
+        loans: clientFormData.liabilities?.loans || 0,
+        creditCardDebt: clientFormData.liabilities?.creditCardDebt || 0
+      },
+      
+      // Stage 5: Investment Profile
+      investmentExperience: clientFormData.investmentExperience,
+      riskTolerance: clientFormData.riskTolerance,
+      investmentGoals: clientFormData.investmentGoals || [],
+      monthlySavingsTarget: clientFormData.monthlySavingsTarget,
+      
+      // System fields
       advisor: invitation.advisor,
-      status: 'onboarding'
+      status: 'active', // Mark as active since comprehensive onboarding is complete
+      
+      // Form progress tracking
+      formProgress: {
+        step1Completed: true,
+        step2Completed: true,
+        step3Completed: true,
+        step4Completed: true,
+        step5Completed: true,
+        currentStep: 5,
+        lastSavedAt: new Date()
+      }
     };
     
-    // Process frontend-generated CAS data if available
+    // Process frontend-generated CAS data if available (KEEP EXISTING CAS LOGIC)
     if (casData && casData.frontendProcessed && casData.parsedData) {
-      console.log('🔧 PROCESSING FRONTEND CAS DATA:', {
+      FormLogger.logOnboardingEvent('CAS_DATA_PROCESSING', token, {
         fileName: casData.fileName,
         fileSize: casData.fileSize,
         status: casData.status,
@@ -779,37 +1040,40 @@ const submitClientOnboardingForm = async (req, res) => {
         mutualFunds: casData.parsedData.mutual_funds?.length || 0
       });
       
-      // Structure CAS data according to our schema
+      // Structure CAS data according to schema (KEEP EXISTING CAS LOGIC)
       clientData.casData = {
         casFile: {
           fileName: casData.fileName,
           uploadDate: new Date(),
           fileSize: casData.fileSize,
-          // Note: No filePath since this is frontend processed
           frontendProcessed: true
         },
         parsedData: casData.parsedData,
-        casStatus: 'parsed', // Frontend successfully parsed
+        casStatus: 'parsed',
         lastParsedAt: new Date(),
         processingHistory: [{
           action: 'frontend_processing',
           timestamp: new Date(),
           status: 'success',
-          details: 'CAS processed in frontend during onboarding',
+          details: 'CAS processed in frontend during enhanced onboarding',
           eventId: casData.processingTrackingId || 'frontend_processing'
         }]
       };
       
-      console.log('✅ FRONTEND CAS DATA INTEGRATED:', {
+      FormLogger.logOnboardingEvent('CAS_DATA_INTEGRATED', token, {
         totalValue: clientData.casData.parsedData.summary?.total_value,
         investorName: clientData.casData.parsedData.investor?.name,
         investorPAN: clientData.casData.parsedData.investor?.pan ? '***MASKED***' : 'Not found'
       });
     }
     
-    // Create and save client
+    // Create and save client with comprehensive data
     const client = new Client(clientData);
     await client.save();
+    
+    // Calculate final metrics
+    const calculatedFinancials = client.calculatedFinancials;
+    const completionPercentage = calculateProfileCompletion(client);
     
     // Mark invitation as completed
     await invitation.markAsCompleted(client._id);
@@ -817,43 +1081,180 @@ const submitClientOnboardingForm = async (req, res) => {
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration);
     
-    console.log('🎉 CLIENT ONBOARDING COMPLETED WITH FRONTEND CAS:', {
-      token,
+    FormLogger.logOnboardingEvent('ENHANCED_ONBOARDING_COMPLETED', token, {
       clientId: client._id,
       clientEmail: client.email,
+      completionPercentage,
       hasCasData: !!client.casData,
       casStatus: client.casData?.casStatus,
-      portfolioValue: client.casData?.parsedData?.summary?.total_value || 0
+      portfolioValue: client.casData?.parsedData?.summary?.total_value || 0,
+      calculatedFinancials,
+      duration: `${duration}ms`,
+      formStages: {
+        personalInfo: !!client.firstName,
+        incomeEmployment: !!client.occupation,
+        financialGoals: !!client.retirementPlanning?.targetRetirementAge,
+        assetsLiabilities: !!(client.assets?.cashBankSavings !== undefined),
+        investmentProfile: !!client.investmentExperience,
+        casUpload: !!client.casData
+      }
     });
-    
-    logger.info(`Client onboarding completed successfully for token: ${token}, client: ${client._id}`);
     
     res.json({
       success: true,
-      message: 'Client onboarding completed successfully',
+      message: 'Enhanced client onboarding completed successfully! All 5 stages processed.',
       data: {
         clientId: client._id,
         status: client.status,
+        completionPercentage,
         hasCasData: !!client.casData,
-        portfolioValue: client.casData?.parsedData?.summary?.total_value || 0
+        portfolioValue: client.casData?.parsedData?.summary?.total_value || 0,
+        calculatedFinancials,
+        summary: {
+          personalInfoComplete: !!client.firstName,
+          financialProfileComplete: !!client.occupation,
+          goalsComplete: !!client.retirementPlanning?.targetRetirementAge,
+          assetsComplete: !!(client.assets?.cashBankSavings !== undefined),
+          investmentProfileComplete: !!client.investmentExperience,
+          casDataAvailable: !!client.casData
+        }
       }
     });
     
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('ENHANCED_ONBOARDING_ERROR', error, { token });
     logApi.error(method, url, error);
-    
-    logger.error(`Client onboarding form submission failed for token: ${token} - ${error.message}`);
     
     res.status(500).json({
       success: false,
-      message: 'Failed to complete onboarding',
+      message: 'Failed to complete enhanced onboarding',
       error: error.message
     });
   }
 };
 
-// CAS Upload function
+// Save draft functionality - NEW
+const saveClientFormDraft = async (req, res) => {
+  const startTime = Date.now();
+  const { token } = req.params;
+  const { stepNumber, stepData } = req.body;
+  
+  try {
+    FormLogger.logOnboardingEvent('DRAFT_SAVE_REQUEST', token, {
+      stepNumber,
+      hasData: !!stepData
+    });
+    
+    const invitation = await ClientInvitation.findOne({ token });
+    
+    if (!invitation || invitation.isExpired) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invalid or expired invitation'
+      });
+    }
+    
+    // Find or create draft client record
+    let client = await Client.findOne({ 
+      email: invitation.clientEmail, 
+      advisor: invitation.advisor 
+    });
+    
+    if (!client) {
+      // Create basic client record for draft saving
+      client = new Client({
+        firstName: invitation.clientFirstName || 'Draft',
+        lastName: invitation.clientLastName || 'Client',
+        email: invitation.clientEmail,
+        advisor: invitation.advisor,
+        status: 'onboarding'
+      });
+      await client.save();
+    }
+    
+    // Save draft data
+    await client.saveDraft(stepData, stepNumber);
+    
+    const duration = Date.now() - startTime;
+    
+    FormLogger.logOnboardingEvent('DRAFT_SAVE_SUCCESS', token, {
+      stepNumber,
+      clientId: client._id,
+      duration: `${duration}ms`
+    });
+    
+    res.json({
+      success: true,
+      message: `Step ${stepNumber} draft saved successfully`,
+      data: {
+        stepNumber,
+        savedAt: new Date()
+      }
+    });
+    
+  } catch (error) {
+    FormLogger.logError('DRAFT_SAVE_ERROR', error, { token, stepNumber });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save draft',
+      error: error.message
+    });
+  }
+};
+
+// Get draft functionality - NEW
+const getClientFormDraft = async (req, res) => {
+  const { token } = req.params;
+  const { stepNumber } = req.query;
+  
+  try {
+    const invitation = await ClientInvitation.findOne({ token });
+    
+    if (!invitation || invitation.isExpired) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invalid or expired invitation'
+      });
+    }
+    
+    const client = await Client.findOne({ 
+      email: invitation.clientEmail, 
+      advisor: invitation.advisor 
+    });
+    
+    if (!client) {
+      return res.json({
+        success: true,
+        data: {
+          draftData: {},
+          currentStep: 1
+        }
+      });
+    }
+    
+    const draftData = stepNumber ? client.getDraft(stepNumber) : client.draftData;
+    
+    res.json({
+      success: true,
+      data: {
+        draftData,
+        currentStep: client.formProgress?.currentStep || 1,
+        lastSavedAt: client.formProgress?.lastSavedAt
+      }
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve draft',
+      error: error.message
+    });
+  }
+};
+
+// CAS Upload function - ENHANCED (KEEP EXISTING CAS LOGIC)
 const uploadClientCAS = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
@@ -866,7 +1267,6 @@ const uploadClientCAS = async (req, res) => {
     if (req.params.token) {
       isOnboarding = true;
       
-      // Find the invitation to get client info
       const invitation = await ClientInvitation.findOne({ token: req.params.token });
       if (!invitation) {
         return res.status(404).json({
@@ -884,14 +1284,12 @@ const uploadClientCAS = async (req, res) => {
       
       advisorId = invitation.advisor;
       
-      // Find or create client record
       let client = await Client.findOne({ 
         email: invitation.clientEmail, 
         advisor: advisorId 
       });
       
       if (!client) {
-        // Create a basic client record for CAS upload
         client = new Client({
           firstName: invitation.clientFirstName || 'Client',
           lastName: invitation.clientLastName || '',
@@ -910,7 +1308,9 @@ const uploadClientCAS = async (req, res) => {
       logDetailedError('CAS Upload', new Error('No CAS file uploaded'), { clientId, advisorId });
       return res.status(400).json({ success: false, message: 'No CAS file uploaded' });
     }
-    CASLogger.logClientEvent('CAS_UPLOAD_RECEIVED', clientId, { fileName: req.file.originalname });
+    
+    FormLogger.logEvent('CAS_UPLOAD_RECEIVED', { clientId, fileName: req.file.originalname });
+    
     // Find client
     const client = await Client.findOne({ _id: clientId, advisor: advisorId });
     if (!client) {
@@ -918,6 +1318,7 @@ const uploadClientCAS = async (req, res) => {
       logDetailedError('CAS Upload', new Error('Client not found'), { clientId, advisorId });
       return res.status(404).json({ success: false, message: 'Client not found' });
     }
+    
     // Encrypt password if provided
     let encryptedPassword = null;
     let ivHex = null;
@@ -931,6 +1332,7 @@ const uploadClientCAS = async (req, res) => {
         return res.status(500).json({ success: false, message: 'Failed to encrypt CAS password' });
       }
     }
+    
     // Update client with CAS file information
     const casData = {
       casFile: {
@@ -945,16 +1347,21 @@ const uploadClientCAS = async (req, res) => {
       parseError: null,
       lastParsedAt: null
     };
+    
     // Remove old CAS file if exists
     if (client.casData?.casFile?.filePath) {
       const oldFilePath = client.casData.casFile.filePath;
       if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
     }
+    
     client.casData = casData;
     await client.save();
-    CASLogger.logClientEvent('CAS_FILE_UPLOADED', clientId);
+    
+    FormLogger.logEvent('CAS_FILE_UPLOADED', { clientId });
+    
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration, advisorId);
+    
     res.json({
       success: true,
       message: 'CAS file uploaded successfully',
@@ -974,44 +1381,45 @@ const uploadClientCAS = async (req, res) => {
   }
 };
 
-// Parse CAS file
+// KEEP ALL OTHER EXISTING CAS FUNCTIONS AS-IS
 const parseClientCAS = async (req, res) => {
   const startTime = Date.now();
   const { method, url } = req;
   const advisorId = req.advisor.id;
   const { id: clientId } = req.params;
+  
   try {
-    CASLogger.logClientEvent('CAS_PARSE_REQUEST', clientId);
+    FormLogger.logEvent('CAS_PARSE_REQUEST', { clientId });
+    
     const client = await Client.findOne({ _id: clientId, advisor: advisorId });
     if (!client) {
       logDetailedError('CAS Parse', new Error('Client not found'), { clientId, advisorId });
       return res.status(404).json({ success: false, message: 'Client not found' });
     }
+    
     if (!client.casData?.casFile?.filePath) {
       logDetailedError('CAS Parse', new Error('No CAS file uploaded'), { clientId, advisorId });
       return res.status(400).json({ success: false, message: 'No CAS file uploaded. Please upload a CAS file first.' });
     }
+    
     if (!fs.existsSync(client.casData.casFile.filePath)) {
       logDetailedError('CAS Parse', new Error('CAS file not found'), { clientId, advisorId });
       return res.status(400).json({ success: false, message: 'CAS file not found. Please upload the file again.' });
     }
+    
     client.casData.casStatus = 'parsing';
     await client.save();
+    
     try {
       // Decrypt password if exists
       let password = '';
       if (client.casData.casFile.password && client.casData.casFile.iv) {
         try {
           password = decryptText(client.casData.casFile.password, client.casData.casFile.iv);
-          // Enhanced password validation
           if (!password || password.trim() === '') {
             throw new Error('Decrypted password is empty');
           }
-          
-          CASLogger.logClientEvent('CAS_PASSWORD_DECRYPTED', clientId, {
-            passwordLength: password.length,
-            hasPassword: true
-          });
+          FormLogger.logEvent('CAS_PASSWORD_DECRYPTED', { clientId });
         } catch (error) {
           logDetailedError('CAS Password Decryption', error, { clientId, advisorId });
           client.casData.casStatus = 'error';
@@ -1023,11 +1431,11 @@ const parseClientCAS = async (req, res) => {
           });
         }
       } else {
-        CASLogger.logClientEvent('CAS_NO_PASSWORD_PROVIDED', clientId, {
-          hasPassword: false
-        });
+        FormLogger.logEvent('CAS_NO_PASSWORD_PROVIDED', { clientId });
       }
-      CASLogger.logClientEvent('CAS_PDF_PARSING_STARTED', clientId);
+      
+      FormLogger.logEvent('CAS_PDF_PARSING_STARTED', { clientId });
+      
       // Parse the CAS file
       const parser = new CASParser();
       let parsedData;
@@ -1047,20 +1455,26 @@ const parseClientCAS = async (req, res) => {
         await client.save();
         return res.status(400).json({ success: false, message: 'Failed to parse CAS file', error: parseError.message });
       }
-      // Log extracted data (truncate if too large)
-      CASLogger.logClientEvent('CAS_DATA_EXTRACTED', clientId, { parsedData: JSON.stringify(parsedData).slice(0, 2000) });
+      
+      FormLogger.logEvent('CAS_DATA_EXTRACTED', { clientId });
+      
       client.casData.parsedData = parsedData;
       client.casData.casStatus = 'parsed';
       client.casData.parseError = null;
       client.casData.lastParsedAt = new Date();
+      
       // Update PAN if not set and available in CAS
       if (!client.panNumber && parsedData.investorInfo?.pan) {
         client.panNumber = parsedData.investorInfo.pan;
       }
+      
       await client.save();
-      CASLogger.logClientEvent('CAS_PARSED_DATA_SAVED', clientId);
+      
+      FormLogger.logEvent('CAS_PARSED_DATA_SAVED', { clientId });
+      
       const duration = Date.now() - startTime;
       logApi.response(method, url, 200, duration, advisorId);
+      
       res.json({
         success: true,
         message: 'CAS file parsed successfully',
@@ -1097,7 +1511,7 @@ const getClientCASData = async (req, res) => {
   const { id: clientId } = req.params;
   
   try {
-    logger.info(`CAS data request for client: ${clientId}`);
+    FormLogger.logEvent('CAS_DATA_REQUEST', { clientId });
     
     const client = await Client.findOne({ _id: clientId, advisor: advisorId });
     
@@ -1118,7 +1532,7 @@ const getClientCASData = async (req, res) => {
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration, advisorId);
     
-    logger.info(`CAS data retrieved successfully for client: ${clientId}`);
+    FormLogger.logEvent('CAS_DATA_SUCCESS', { clientId });
     
     res.json({
       success: true,
@@ -1137,9 +1551,8 @@ const getClientCASData = async (req, res) => {
     
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('CAS_DATA_ERROR', error, { clientId });
     logApi.error(method, url, error, advisorId);
-    
-    logger.error(`CAS data retrieval failed for client: ${clientId} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -1157,7 +1570,7 @@ const deleteClientCAS = async (req, res) => {
   const { id: clientId } = req.params;
   
   try {
-    logger.info(`CAS deletion request for client: ${clientId}`);
+    FormLogger.logEvent('CAS_DELETE_REQUEST', { clientId });
     
     const client = await Client.findOne({ _id: clientId, advisor: advisorId });
     
@@ -1194,7 +1607,7 @@ const deleteClientCAS = async (req, res) => {
     const duration = Date.now() - startTime;
     logApi.response(method, url, 200, duration, advisorId);
     
-    logger.info(`CAS data deleted successfully for client: ${clientId}`);
+    FormLogger.logEvent('CAS_DELETE_SUCCESS', { clientId });
     
     res.json({
       success: true,
@@ -1203,9 +1616,8 @@ const deleteClientCAS = async (req, res) => {
     
   } catch (error) {
     const duration = Date.now() - startTime;
+    FormLogger.logError('CAS_DELETE_ERROR', error, { clientId });
     logApi.error(method, url, error, advisorId);
-    
-    logger.error(`CAS deletion failed for client: ${clientId} - ${error.message}`);
     
     res.status(500).json({
       success: false,
@@ -1215,18 +1627,340 @@ const deleteClientCAS = async (req, res) => {
   }
 };
 
+// Get dashboard statistics - NEW
+const getDashboardStats = async (req, res) => {
+  const startTime = Date.now();
+  const advisorId = req.advisor.id;
+  
+  try {
+    FormLogger.logEvent('DASHBOARD_STATS_REQUEST', { advisorId });
+    
+    // Get basic counts
+    const totalClients = await Client.countDocuments({ advisor: advisorId });
+    const activeClients = await Client.countDocuments({ advisor: advisorId, status: 'active' });
+    const onboardingClients = await Client.countDocuments({ advisor: advisorId, status: 'onboarding' });
+    
+    // Get clients with CAS data
+    const clientsWithCAS = await Client.countDocuments({
+      advisor: advisorId,
+      'casData.casStatus': 'parsed'
+    });
+    
+    // Get recent activity (last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recentClients = await Client.countDocuments({
+      advisor: advisorId,
+      createdAt: { $gte: sevenDaysAgo }
+    });
+    
+    // Get pending invitations
+    const pendingInvitations = await ClientInvitation.countDocuments({
+      advisor: advisorId,
+      status: { $in: ['sent', 'opened'] },
+      expiresAt: { $gt: new Date() }
+    });
+    
+    // Calculate completion rates
+    const clients = await Client.find({ advisor: advisorId });
+    const completionRates = clients.map(client => calculateProfileCompletion(client));
+    const avgCompletionRate = completionRates.length > 0 
+      ? Math.round(completionRates.reduce((sum, rate) => sum + rate, 0) / completionRates.length)
+      : 0;
+    
+    // Calculate total portfolio value from CAS data
+    const clientsWithPortfolio = await Client.find({
+      advisor: advisorId,
+      'casData.casStatus': 'parsed',
+      'casData.parsedData.summary.total_value': { $exists: true }
+    });
+    
+    const totalPortfolioValue = clientsWithPortfolio.reduce((sum, client) => {
+      return sum + (client.casData?.parsedData?.summary?.total_value || 0);
+    }, 0);
+    
+    // Get financial health distribution
+    const clientsWithFinancials = clients.filter(client => client.annualIncome);
+    const financialHealthStats = {
+      healthyClients: 0,
+      atRiskClients: 0,
+      needsAttentionClients: 0
+    };
+    
+    clientsWithFinancials.forEach(client => {
+      const financials = client.calculatedFinancials;
+      const savingsRate = financials.monthlyIncome > 0 
+        ? (financials.monthlySavings / financials.monthlyIncome) * 100 
+        : 0;
+      
+      if (savingsRate >= 20) {
+        financialHealthStats.healthyClients++;
+      } else if (savingsRate >= 10) {
+        financialHealthStats.atRiskClients++;
+      } else {
+        financialHealthStats.needsAttentionClients++;
+      }
+    });
+    
+    const duration = Date.now() - startTime;
+    
+    FormLogger.logEvent('DASHBOARD_STATS_SUCCESS', {
+      advisorId,
+      totalClients,
+      activeClients,
+      clientsWithCAS,
+      totalPortfolioValue,
+      avgCompletionRate,
+      duration: `${duration}ms`
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        clientCounts: {
+          total: totalClients,
+          active: activeClients,
+          onboarding: onboardingClients,
+          withCAS: clientsWithCAS
+        },
+        recentActivity: {
+          newClientsLast7Days: recentClients,
+          pendingInvitations
+        },
+        completionMetrics: {
+          averageCompletionRate: avgCompletionRate,
+          fullyCompletedProfiles: completionRates.filter(rate => rate === 100).length
+        },
+        portfolioMetrics: {
+          totalPortfolioValue,
+          clientsWithPortfolio: clientsWithPortfolio.length,
+          averagePortfolioValue: clientsWithPortfolio.length > 0 
+            ? Math.round(totalPortfolioValue / clientsWithPortfolio.length) 
+            : 0
+        },
+        financialHealth: financialHealthStats,
+        systemHealth: {
+          casUploadRate: totalClients > 0 ? Math.round((clientsWithCAS / totalClients) * 100) : 0,
+          profileCompletionRate: avgCompletionRate
+        }
+      }
+    });
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    FormLogger.logError('DASHBOARD_STATS_ERROR', error, { advisorId });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve dashboard statistics',
+      error: error.message
+    });
+  }
+};
+
+// Get client financial summary - NEW
+const getClientFinancialSummary = async (req, res) => {
+  const advisorId = req.advisor.id;
+  const { id: clientId } = req.params;
+  
+  try {
+    FormLogger.logEvent('CLIENT_FINANCIAL_SUMMARY_REQUEST', { advisorId, clientId });
+    
+    const client = await Client.findOne({ _id: clientId, advisor: advisorId });
+    
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+    
+    // Calculate comprehensive financial summary
+    const calculatedFinancials = client.calculatedFinancials;
+    const portfolioSummary = client.casSummary;
+    const assetAllocation = client.getAssetAllocation();
+    
+    // Calculate goal progress
+    const goalProgress = client.majorGoals?.map(goal => {
+      const yearsToGoal = goal.targetYear - new Date().getFullYear();
+      const monthsToGoal = yearsToGoal * 12;
+      const requiredMonthlySavings = monthsToGoal > 0 ? goal.targetAmount / monthsToGoal : 0;
+      
+      return {
+        ...goal,
+        yearsToGoal,
+        monthsToGoal,
+        requiredMonthlySavings: Math.round(requiredMonthlySavings),
+        feasibilityScore: calculatedFinancials.monthlySavings > 0 
+          ? Math.min(100, Math.round((calculatedFinancials.monthlySavings / requiredMonthlySavings) * 100))
+          : 0
+      };
+    }) || [];
+    
+    // Financial health score
+    const healthMetrics = {
+      savingsRate: calculatedFinancials.monthlyIncome > 0 
+        ? Math.round((calculatedFinancials.monthlySavings / calculatedFinancials.monthlyIncome) * 100)
+        : 0,
+      debtToIncomeRatio: calculatedFinancials.monthlyIncome > 0
+        ? Math.round((calculatedFinancials.totalLiabilities / (calculatedFinancials.monthlyIncome * 12)) * 100)
+        : 0,
+      emergencyFundMonths: calculatedFinancials.totalMonthlyExpenses > 0
+        ? Math.round((client.assets?.cashBankSavings || 0) / calculatedFinancials.totalMonthlyExpenses)
+        : 0
+    };
+    
+    // Calculate overall financial health score
+    let healthScore = 0;
+    if (healthMetrics.savingsRate >= 20) healthScore += 40;
+    else if (healthMetrics.savingsRate >= 10) healthScore += 25;
+    else if (healthMetrics.savingsRate >= 5) healthScore += 15;
+    
+    if (healthMetrics.debtToIncomeRatio <= 30) healthScore += 30;
+    else if (healthMetrics.debtToIncomeRatio <= 50) healthScore += 20;
+    else if (healthMetrics.debtToIncomeRatio <= 70) healthScore += 10;
+    
+    if (healthMetrics.emergencyFundMonths >= 6) healthScore += 30;
+    else if (healthMetrics.emergencyFundMonths >= 3) healthScore += 20;
+    else if (healthMetrics.emergencyFundMonths >= 1) healthScore += 10;
+    
+    FormLogger.logEvent('CLIENT_FINANCIAL_SUMMARY_SUCCESS', {
+      advisorId,
+      clientId,
+      healthScore,
+      savingsRate: healthMetrics.savingsRate,
+      portfolioValue: portfolioSummary?.totalValue || 0
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        basicInfo: {
+          clientId: client._id,
+          name: `${client.firstName} ${client.lastName}`,
+          email: client.email,
+          completionPercentage: calculateProfileCompletion(client)
+        },
+        calculatedFinancials,
+        portfolioSummary,
+        assetAllocation,
+        goalProgress,
+        healthMetrics: {
+          ...healthMetrics,
+          overallHealthScore: healthScore,
+          healthCategory: healthScore >= 80 ? 'Excellent' :
+                          healthScore >= 60 ? 'Good' :
+                          healthScore >= 40 ? 'Fair' : 'Needs Improvement'
+        },
+        recommendations: generateFinancialRecommendations(client, calculatedFinancials, healthMetrics)
+      }
+    });
+    
+  } catch (error) {
+    FormLogger.logError('CLIENT_FINANCIAL_SUMMARY_ERROR', error, { advisorId, clientId });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve financial summary',
+      error: error.message
+    });
+  }
+};
+
+// Generate financial recommendations - NEW HELPER FUNCTION
+const generateFinancialRecommendations = (client, financials, healthMetrics) => {
+  const recommendations = [];
+  
+  // Savings rate recommendations
+  if (healthMetrics.savingsRate < 10) {
+    recommendations.push({
+      type: 'critical',
+      category: 'savings',
+      title: 'Increase Savings Rate',
+      description: `Current savings rate is ${healthMetrics.savingsRate}%. Aim for at least 10-20% of income.`,
+      action: 'Review monthly expenses and identify areas to cut back.'
+    });
+  } else if (healthMetrics.savingsRate < 20) {
+    recommendations.push({
+      type: 'improvement',
+      category: 'savings',
+      title: 'Optimize Savings Rate',
+      description: `Good start with ${healthMetrics.savingsRate}% savings rate. Target 20% for financial security.`,
+      action: 'Consider automating savings and exploring higher-yield savings options.'
+    });
+  }
+  
+  // Emergency fund recommendations
+  if (healthMetrics.emergencyFundMonths < 3) {
+    recommendations.push({
+      type: 'critical',
+      category: 'emergency_fund',
+      title: 'Build Emergency Fund',
+      description: `Current emergency fund covers ${healthMetrics.emergencyFundMonths} months. Target 3-6 months.`,
+      action: 'Prioritize building emergency fund before other investments.'
+    });
+  }
+  
+  // Debt recommendations
+  if (healthMetrics.debtToIncomeRatio > 50) {
+    recommendations.push({
+      type: 'critical',
+      category: 'debt',
+      title: 'Reduce Debt Burden',
+      description: `Debt-to-income ratio is ${healthMetrics.debtToIncomeRatio}%. This is high and needs attention.`,
+      action: 'Focus on debt repayment strategy, consider debt consolidation.'
+    });
+  }
+  
+  // Investment recommendations
+  if (client.investmentExperience === 'Beginner' && financials.monthlySavings > 0) {
+    recommendations.push({
+      type: 'opportunity',
+      category: 'investment',
+      title: 'Start Investment Journey',
+      description: 'With positive monthly savings, consider starting systematic investments.',
+      action: 'Begin with SIPs in diversified mutual funds based on risk tolerance.'
+    });
+  }
+  
+  // Goal-specific recommendations
+  if (client.majorGoals && client.majorGoals.length > 0) {
+    const highPriorityGoals = client.majorGoals.filter(goal => goal.priority === 'High' || goal.priority === 'Critical');
+    if (highPriorityGoals.length > 0) {
+      recommendations.push({
+        type: 'planning',
+        category: 'goals',
+        title: 'Prioritize High-Priority Goals',
+        description: `You have ${highPriorityGoals.length} high-priority goals requiring focused planning.`,
+        action: 'Create dedicated investment strategies for each high-priority goal.'
+      });
+    }
+  }
+  
+  return recommendations;
+};
+
 module.exports = {
+  // Enhanced client management
   getClients,
   getClientById,
   sendClientInvitation,
   getClientInvitations,
   updateClient,
   deleteClient,
+  
+  // Enhanced onboarding
   getClientOnboardingForm,
   submitClientOnboardingForm,
-  // Add new CAS-related exports
+  saveClientFormDraft,
+  getClientFormDraft,
+  
+  // Enhanced CAS functionality (keeping existing logic)
   uploadClientCAS,
   parseClientCAS,
   getClientCASData,
-  deleteClientCAS
+  deleteClientCAS,
+  
+  // New dashboard and analytics
+  getDashboardStats,
+  getClientFinancialSummary
 };

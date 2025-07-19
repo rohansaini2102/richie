@@ -27,7 +27,7 @@ const {
 const { OnboardingCASController, upload } = require('../controllers/OnboardingCASController');
 
 // Import middleware
-const { auth, logAPIUsage, requirePermission } = require('../middleware/auth');
+const auth = require('../middleware/auth');
 const { logger } = require('../utils/logger');
 const { casEventLogger } = require('../utils/casEventLogger');
 
@@ -108,22 +108,22 @@ const handleMulterError = (error, req, res, next) => {
 // ============================================================================
 
 // Enhanced Client Management Routes
-router.get('/manage', auth, logAPIUsage, getClients);
-router.get('/manage/invitations', auth, logAPIUsage, getClientInvitations);
-router.post('/manage/invitations', auth, logAPIUsage, sendClientInvitation);
-router.get('/manage/:id', auth, logAPIUsage, getClientById);
-router.put('/manage/:id', auth, logAPIUsage, updateClient);
-router.delete('/manage/:id', auth, logAPIUsage, deleteClient);
+router.get('/manage', auth, getClients);
+router.get('/manage/invitations', auth, getClientInvitations);
+router.post('/manage/invitations', auth, sendClientInvitation);
+router.get('/manage/:id', auth, getClientById);
+router.put('/manage/:id', auth, updateClient);
+router.delete('/manage/:id', auth, deleteClient);
 
 // NEW: Enhanced Dashboard and Analytics Routes
-router.get('/manage/dashboard/stats', auth, logAPIUsage, getDashboardStats);
-router.get('/manage/:id/financial-summary', auth, logAPIUsage, getClientFinancialSummary);
+router.get('/manage/dashboard/stats', auth, getDashboardStats);
+router.get('/manage/:id/financial-summary', auth, getClientFinancialSummary);
 
 // Enhanced CAS Management Routes for existing clients
-router.post('/manage/:id/cas/upload', auth, logAPIUsage, casUpload.single('casFile'), handleMulterError, uploadClientCAS);
-router.post('/manage/:id/cas/parse', auth, logAPIUsage, parseClientCAS);
-router.get('/manage/:id/cas', auth, logAPIUsage, getClientCASData);
-router.delete('/manage/:id/cas', auth, logAPIUsage, deleteClientCAS);
+router.post('/manage/:id/cas/upload', auth, casUpload.single('casFile'), handleMulterError, uploadClientCAS);
+router.post('/manage/:id/cas/parse', auth, parseClientCAS);
+router.get('/manage/:id/cas', auth, getClientCASData);
+router.delete('/manage/:id/cas', auth, deleteClientCAS);
 
 // ============================================================================
 // PUBLIC ROUTES (Enhanced 5-Stage Client onboarding - no authentication required)
