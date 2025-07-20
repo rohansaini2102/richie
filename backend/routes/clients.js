@@ -131,7 +131,6 @@ router.delete('/manage/:id/cas', auth, deleteClientCAS);
 
 // Enhanced Client Onboarding Routes
 router.get('/onboarding/:token', getClientOnboardingForm);
-router.post('/onboarding/:token', submitClientOnboardingForm);
 
 // NEW: Draft Management Routes for 5-Stage Form
 router.post('/onboarding/:token/draft', saveClientFormDraft);
@@ -423,56 +422,47 @@ if (process.env.NODE_ENV === 'development') {
 // ENHANCED FORM VALIDATION MIDDLEWARE
 // ============================================================================
 
-// Middleware to validate 5-stage form data
+// Middleware to validate essential form data
 const validateEnhancedFormData = (req, res, next) => {
   try {
     const formData = req.body;
     const errors = [];
     
-    // Stage 1 validation
-    if (!formData.firstName || !formData.lastName || !formData.email) {
-      errors.push('Stage 1: First name, last name, and email are required');
+    // Essential fields validation (flexible for different form structures)
+    if (!formData.firstName || formData.firstName.trim() === '') {
+      errors.push('First name is required');
     }
     
-    if (formData.email && !/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(formData.email)) {
-      errors.push('Stage 1: Invalid email format');
+    if (!formData.lastName || formData.lastName.trim() === '') {
+      errors.push('Last name is required');
     }
     
-    if (formData.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNumber)) {
-      errors.push('Stage 1: Invalid PAN number format');
+    if (!formData.email || formData.email.trim() === '') {
+      errors.push('Email is required');
+    } else if (!/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(formData.email)) {
+      errors.push('Invalid email format');
     }
     
-    // Stage 2 validation
-    if (!formData.occupation || !formData.annualIncome) {
-      errors.push('Stage 2: Occupation and annual income are required');
+    // Optional validations (only if data is provided)
+    if (formData.panNumber && formData.panNumber.trim() !== '' && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNumber)) {
+      errors.push('Invalid PAN number format');
     }
     
-    if (formData.annualIncome && (isNaN(formData.annualIncome) || formData.annualIncome < 0)) {
-      errors.push('Stage 2: Annual income must be a positive number');
+    if (formData.annualIncome && formData.annualIncome !== '' && (isNaN(formData.annualIncome) || Number(formData.annualIncome) < 0)) {
+      errors.push('Annual income must be a positive number');
     }
     
-    // Stage 3 validation
-    if (!formData.retirementPlanning?.targetRetirementAge) {
-      errors.push('Stage 3: Target retirement age is required');
-    }
-    
-    if (formData.retirementPlanning?.targetRetirementAge && 
-        (formData.retirementPlanning.targetRetirementAge < 50 || formData.retirementPlanning.targetRetirementAge > 80)) {
-      errors.push('Stage 3: Retirement age must be between 50 and 80');
-    }
-    
-    // Stage 4 validation (basic check for at least some asset/liability info)
-    const hasAssetInfo = formData.assets && Object.values(formData.assets).some(value => value !== undefined && value !== '');
-    const hasLiabilityInfo = formData.liabilities && Object.values(formData.liabilities).some(value => value !== undefined && value !== '');
-    
-    if (!hasAssetInfo && !hasLiabilityInfo) {
-      errors.push('Stage 4: Please provide at least some asset or liability information');
-    }
-    
-    // Stage 5 validation
-    if (!formData.investmentExperience || !formData.riskTolerance) {
-      errors.push('Stage 5: Investment experience and risk tolerance are required');
-    }
+    // Log form data for debugging (excluding sensitive info)
+    console.log('🔍 FORM VALIDATION DEBUG:', {
+      hasFirstName: !!formData.firstName,
+      hasLastName: !!formData.lastName,
+      hasEmail: !!formData.email,
+      hasIncomeType: !!formData.incomeType,
+      hasInvestmentExperience: !!formData.investmentExperience,
+      investmentExperienceValue: formData.investmentExperience,
+      formDataKeys: Object.keys(formData),
+      errors: errors
+    });
     
     if (errors.length > 0) {
       return res.status(400).json({

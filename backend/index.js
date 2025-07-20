@@ -105,6 +105,24 @@ app.get('/', (req, res) => {
   res.json(healthStatus);
 });
 
+// Debug middleware for body parsing issues
+app.use('/api/clients/onboarding', (req, res, next) => {
+  console.log('🔍 BODY DEBUG MIDDLEWARE:', {
+    method: req.method,
+    url: req.url,
+    headers: {
+      'content-type': req.headers['content-type'],
+      'content-length': req.headers['content-length']
+    },
+    bodyExists: !!req.body,
+    bodyType: typeof req.body,
+    bodyKeys: req.body ? Object.keys(req.body) : 'N/A',
+    bodySize: req.body ? JSON.stringify(req.body).length : 0,
+    rawBodyPreview: req.body ? JSON.stringify(req.body).substring(0, 200) + '...' : 'NULL'
+  });
+  next();
+});
+
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/clients', require('./routes/clients'));

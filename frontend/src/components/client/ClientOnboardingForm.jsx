@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { clientAPI } from '../../services/api';
 import { FrontendCASParser } from '../../utils/casParser';
+import RequiredFieldsChecklist from './RequiredFieldsChecklist';
 import { 
   User, 
   Mail, 
@@ -33,7 +34,9 @@ import {
   PiggyBank,
   Calculator,
   Plus,
-  Trash2
+  Trash2,
+  HelpCircle,
+  ListChecks
 } from 'lucide-react';
 
 // Indian States for dropdown
@@ -64,6 +67,14 @@ function ClientOnboardingForm() {
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [savingDraft, setSavingDraft] = useState(false);
+  
+  // Enhanced form state for new 7-step structure
+  const [showExpenseBreakdown, setShowExpenseBreakdown] = useState(false);
+  const [showManualCasEntry, setShowManualCasEntry] = useState(false);
+  const [hasCAS, setHasCAS] = useState(false);
+  const [selectedLoanTypes, setSelectedLoanTypes] = useState({});
+  const [selectedInvestmentTypes, setSelectedInvestmentTypes] = useState({});
+  const [selectedInsuranceTypes, setSelectedInsuranceTypes] = useState({});
 
   // CAS Upload State - PRESERVED FROM ORIGINAL
   const [casFile, setCasFile] = useState(null);
@@ -80,6 +91,9 @@ function ClientOnboardingForm() {
   // Form tracking
   const [formStartTime, setFormStartTime] = useState(null);
   const [stepTimes, setStepTimes] = useState({});
+
+  // UI State for debugging and help
+  const [showRequiredFieldsChecklist, setShowRequiredFieldsChecklist] = useState(false);
 
   const {
     register,
@@ -110,6 +124,7 @@ function ClientOnboardingForm() {
       },
       // Step 2 defaults
       occupation: '',
+      incomeType: '',
       employerBusinessName: '',
       annualIncome: '',
       additionalIncome: '',
@@ -248,54 +263,74 @@ function ClientOnboardingForm() {
 
   // Calculate financial summaries in real-time
   const calculateFinancialSummary = () => {
+    // Get income from current form structure - convert annual to monthly
     const annualIncome = parseFloat(watchedValues.annualIncome) || 0;
     const additionalIncome = parseFloat(watchedValues.additionalIncome) || 0;
     const monthlyIncome = (annualIncome + additionalIncome) / 12;
     
-    const expenses = watchedValues.monthlyExpenses || {};
-    const totalMonthlyExpenses = Object.values(expenses)
-      .reduce((sum, expense) => sum + (parseFloat(expense) || 0), 0);
+    // Get expenses from current form structure
+    const totalMonthlyExpenses = parseFloat(watchedValues.totalMonthlyExpenses) || 0;
     
-    const monthlySavings = monthlyIncome - totalMonthlyExpenses;
+    // Calculate breakdown expenses if available (multiple possible structures)
+    let breakdownTotal = 0;
+    
+    // Check for individual expense fields
+    const individualExpenses = [
+      'housingRent', 'foodGroceries', 'transportation', 'utilities', 
+      'entertainment', 'healthcare', 'otherExpenses'
+    ];
+    individualExpenses.forEach(field => {
+      breakdownTotal += parseFloat(watchedValues[field]) || 0;
+    });
+    
+    // Check for nested monthlyExpenses structure
+    const monthlyExpenses = watchedValues.monthlyExpenses || {};
+    Object.values(monthlyExpenses).forEach(expense => {
+      breakdownTotal += parseFloat(expense) || 0;
+    });
+    
+    // Use breakdown total if it's greater than the main total (more detailed)
+    const finalExpenses = breakdownTotal > totalMonthlyExpenses ? breakdownTotal : totalMonthlyExpenses;
+    
+    const monthlySavings = monthlyIncome - finalExpenses;
     
     return {
       monthlyIncome: Math.round(monthlyIncome),
-      totalMonthlyExpenses: Math.round(totalMonthlyExpenses),
+      totalMonthlyExpenses: Math.round(finalExpenses),
       monthlySavings: Math.round(monthlySavings)
     };
   };
 
-  // Calculate assets & liabilities summary
+  // Calculate assets & liabilities summary from CAS data and manual investments
   const calculateAssetsLiabilities = () => {
-    const assets = watchedValues.assets || {};
+    let totalAssets = 0;
+    let totalLiabilities = 0;
     
-    const cashBank = parseFloat(assets.cashBankSavings) || 0;
-    const realEstate = parseFloat(assets.realEstate) || 0;
+    // Calculate assets from CAS data if available
+    if (casData && casData.summary) {
+      totalAssets += casData.summary.total_value || 0;
+    }
     
-    const equity = assets.investments?.equity || {};
-    const mutualFunds = parseFloat(equity.mutualFunds) || 0;
-    const directStocks = parseFloat(equity.directStocks) || 0;
+    // Add manual investment entries if available
+    const investmentFields = [
+      'mutualFundValue', 'stockValue', 'ppfBalance', 'epfBalance', 
+      'npsBalance', 'elssValue', 'fdValue', 'otherInvestmentValue'
+    ];
     
-    const fixedIncome = assets.investments?.fixedIncome || {};
-    const ppf = parseFloat(fixedIncome.ppf) || 0;
-    const epf = parseFloat(fixedIncome.epf) || 0;
-    const nps = parseFloat(fixedIncome.nps) || 0;
-    const fixedDeposits = parseFloat(fixedIncome.fixedDeposits) || 0;
-    const bondsDebentures = parseFloat(fixedIncome.bondsDebentures) || 0;
-    const nsc = parseFloat(fixedIncome.nsc) || 0;
+    investmentFields.forEach(field => {
+      totalAssets += parseFloat(watchedValues[field]) || 0;
+    });
     
-    const other = assets.investments?.other || {};
-    const ulip = parseFloat(other.ulip) || 0;
-    const otherInvestments = parseFloat(other.otherInvestments) || 0;
+    // Calculate liabilities from debt information (Step 5 data)
+    const debtFields = [
+      'homeLoanAmount', 'personalLoanAmount', 'carLoanAmount', 
+      'educationLoanAmount', 'goldLoanAmount', 'creditCardDebt',
+      'businessLoanAmount', 'otherLoanAmount'
+    ];
     
-    const totalAssets = cashBank + realEstate + mutualFunds + directStocks + 
-                       ppf + epf + nps + fixedDeposits + bondsDebentures + nsc + 
-                       ulip + otherInvestments;
-    
-    const liabilities = watchedValues.liabilities || {};
-    const loans = parseFloat(liabilities.loans) || 0;
-    const creditCardDebt = parseFloat(liabilities.creditCardDebt) || 0;
-    const totalLiabilities = loans + creditCardDebt;
+    debtFields.forEach(field => {
+      totalLiabilities += parseFloat(watchedValues[field]) || 0;
+    });
     
     const netWorth = totalAssets - totalLiabilities;
     
@@ -336,11 +371,33 @@ function ClientOnboardingForm() {
   const nextStep = async () => {
     const isValid = await trigger();
     if (isValid) {
-      if (currentStep < 5) {
+      if (currentStep < 7) {
         setCurrentStep(currentStep + 1);
       }
     } else {
-      toast.error('Please fill in all required fields before proceeding');
+      // Show more helpful error message
+      const currentStepName = {
+        1: 'Personal Information',
+        2: 'Income & Employment', 
+        3: 'Retirement Planning',
+        4: 'Investments & CAS',
+        5: 'Debts & Liabilities',
+        6: 'Insurance Coverage',
+        7: 'Goals & Risk Profile'
+      }[currentStep];
+      
+      toast.error(
+        `Please complete all required fields in "${currentStepName}" before proceeding.\n\nLook for red error messages under the fields.`,
+        { duration: 6000 }
+      );
+      
+      // Scroll to first error field
+      setTimeout(() => {
+        const firstError = document.querySelector('.text-red-600');
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
     }
   };
 
@@ -350,19 +407,114 @@ function ClientOnboardingForm() {
     }
   };
 
-  // Add custom goal
+  // Add custom goal with unique ID
   const addCustomGoal = () => {
-    setCustomGoals([...customGoals, {
+    const newGoal = {
+      id: Date.now().toString(), // Simple unique ID
       goalName: '',
       targetAmount: '',
       targetYear: '',
       priority: 'Medium'
-    }]);
+    };
+    setCustomGoals([...customGoals, newGoal]);
   };
 
-  // Remove custom goal
-  const removeCustomGoal = (index) => {
-    setCustomGoals(customGoals.filter((_, i) => i !== index));
+  // Remove custom goal by ID (for new structure)
+  const removeCustomGoal = (goalId) => {
+    if (typeof goalId === 'number') {
+      // Handle legacy index-based removal
+      setCustomGoals(customGoals.filter((_, i) => i !== goalId));
+    } else {
+      // Handle ID-based removal for new structure
+      setCustomGoals(customGoals.filter(goal => goal.id !== goalId));
+    }
+  };
+
+  // Enhanced CAS file upload handler for new Step 4
+  const handleCasFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      console.log('📁 CAS FILE SELECTED:', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        lastModified: new Date(file.lastModified).toISOString(),
+        token
+      });
+
+      if (file.type !== 'application/pdf') {
+        toast.error('Please upload a PDF file only');
+        console.log('❌ CAS FILE INVALID TYPE:', { fileName: file.name, type: file.type, token });
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File size must be less than 10MB');
+        console.log('❌ CAS FILE TOO LARGE:', { fileName: file.name, size: file.size, token });
+        return;
+      }
+      setCasFile(file);
+      setCasUploadStatus('uploaded');
+      toast.success('CAS file uploaded successfully! Click "Extract Data" to process.');
+    }
+  };
+
+  // Enhanced CAS data extraction handler for new Step 4
+  const handleCasExtraction = async () => {
+    if (!casFile) {
+      toast.error('Please upload a CAS file first');
+      return;
+    }
+
+    setCasUploadStatus('parsing');
+    setCasParsingProgress(0);
+    
+    try {
+      console.log('🔄 STARTING CAS EXTRACTION:', {
+        fileName: casFile.name,
+        fileSize: casFile.size,
+        hasPassword: !!casPassword,
+        token
+      });
+
+      // Initialize progress
+      setCasParsingProgress(10);
+      
+      // Use existing FrontendCASParser
+      const parser = new FrontendCASParser();
+      
+      // Progress updates
+      setCasParsingProgress(30);
+      
+      const extractedData = await parser.parseCAS(casFile, casPassword, (progress) => {
+        setCasParsingProgress(30 + (progress * 0.6)); // 30% to 90%
+      });
+      
+      setCasParsingProgress(100);
+      
+      if (extractedData && Object.keys(extractedData).length > 0) {
+        setCasData(extractedData);
+        setCasUploadStatus('completed');
+        toast.success('CAS data extracted successfully! Review the details below.');
+        
+        console.log('✅ CAS EXTRACTION SUCCESSFUL:', {
+          fileName: casFile.name,
+          extractedItems: Object.keys(extractedData).length,
+          token
+        });
+      } else {
+        throw new Error('No data could be extracted from the CAS file');
+      }
+    } catch (error) {
+      console.error('❌ CAS EXTRACTION FAILED:', {
+        fileName: casFile.name,
+        error: error.message,
+        token
+      });
+      
+      setCasUploadStatus('error');
+      setCasParsingProgress(0);
+      toast.error(`Failed to extract CAS data: ${error.message}`);
+    }
   };
 
   // Enhanced CAS File Upload Handlers - PRESERVED FROM ORIGINAL
@@ -491,6 +643,40 @@ function ClientOnboardingForm() {
 
   // Final form submission
   const onSubmit = async (data) => {
+    // Validate required fields before submission
+    const requiredFields = ['firstName', 'lastName', 'email', 'incomeType', 'investmentExperience', 'riskTolerance', 'monthlyInvestmentCapacity'];
+    const missingFields = requiredFields.filter(field => !data[field]);
+    
+    if (missingFields.length > 0) {
+      // Show detailed error message with field names
+      const fieldLabels = {
+        firstName: 'First Name',
+        lastName: 'Last Name', 
+        email: 'Email Address',
+        incomeType: 'Income Type (Step 2)',
+        investmentExperience: 'Investment Experience (Step 7)',
+        riskTolerance: 'Risk Tolerance (Step 7)',
+        monthlyInvestmentCapacity: 'Monthly Investment Capacity (Step 7)'
+      };
+      
+      const missingFieldLabels = missingFields.map(field => fieldLabels[field] || field);
+      
+      toast.error(
+        `Cannot submit form. Missing required fields:\n• ${missingFieldLabels.join('\n• ')}\n\nTip: Complete all 7 steps and fill the required fields in Step 7.`,
+        { duration: 8000 }
+      );
+      
+      // Show the required fields checklist to help user
+      setShowRequiredFieldsChecklist(true);
+      
+      // Scroll to the first error
+      const firstError = document.querySelector('.text-red-600');
+      if (firstError) {
+        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+    
     const submissionStartTime = new Date();
     const submissionTrackingId = `FORM_SUBMIT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -526,9 +712,203 @@ function ClientOnboardingForm() {
     });
     
     try {
+      // Transform flat form data to nested structure expected by backend/database
+      const transformFormData = (formData) => {
+        return {
+          // Step 1: Personal Information (already correct structure)
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phoneNumber: formData.phoneNumber,
+          dateOfBirth: formData.dateOfBirth,
+          panNumber: formData.panNumber,
+          maritalStatus: formData.maritalStatus,
+          numberOfDependents: formData.numberOfDependents || 0,
+          gender: formData.gender,
+          address: formData.address,
+          occupation: formData.occupation,
+          employerBusinessName: formData.employerBusinessName,
+
+          // Step 2: Income & Expenses
+          totalMonthlyIncome: formData.totalMonthlyIncome,
+          incomeType: formData.incomeType,
+          totalMonthlyExpenses: formData.totalMonthlyExpenses,
+          expenseBreakdown: {
+            showBreakdown: formData.showExpenseBreakdown || false,
+            housingRent: formData.housingRent || 0,
+            foodGroceries: formData.foodGroceries || 0,
+            transportation: formData.transportation || 0,
+            utilities: formData.utilities || 0,
+            entertainment: formData.entertainment || 0,
+            healthcare: formData.healthcare || 0,
+            otherExpenses: formData.otherExpenses || 0
+          },
+
+          // Step 3: Retirement Planning
+          retirementAge: formData.retirementAge || 60,
+          hasRetirementCorpus: formData.hasRetirementCorpus || false,
+          currentRetirementCorpus: formData.currentRetirementCorpus || 0,
+          targetRetirementCorpus: formData.targetRetirementCorpus || 0,
+
+          // Step 4: Investments (Transform flat fields to nested structure)
+          investments: {
+            equity: {
+              mutualFunds: formData.mutualFundsTotalValue || 0,
+              directStocks: formData.directStocksTotalValue || 0
+            },
+            fixedIncome: {
+              ppf: formData.ppfCurrentBalance || 0,
+              epf: formData.epfCurrentBalance || 0,
+              nps: formData.npsCurrentBalance || 0,
+              fixedDeposits: formData.fixedDepositsTotalValue || 0,
+              bondsDebentures: 0, // Not in current form
+              nsc: 0 // Not in current form
+            },
+            other: {
+              ulip: 0, // Not in current form
+              otherInvestments: formData.otherInvestmentsTotalValue || 0
+            }
+          },
+
+          // Additional investment details (for calculations)
+          mutualFundsMonthlyInvestment: formData.mutualFundsMonthlyInvestment || 0,
+          ppfAnnualContribution: formData.ppfAnnualContribution || 0,
+
+          // Step 5: Debts & Liabilities (Transform to nested structure)
+          debtsAndLiabilities: {
+            homeLoan: {
+              hasLoan: selectedLoanTypes.homeLoan || false,
+              outstandingAmount: formData.homeLoanOutstanding || 0,
+              monthlyEMI: formData.homeLoanEMI || 0,
+              interestRate: formData.homeLoanInterestRate || 0,
+              remainingTenure: formData.homeLoanTenure || 0
+            },
+            personalLoan: {
+              hasLoan: selectedLoanTypes.personalLoan || false,
+              outstandingAmount: formData.personalLoanOutstanding || 0,
+              monthlyEMI: formData.personalLoanEMI || 0,
+              interestRate: formData.personalLoanInterestRate || 0
+            },
+            carLoan: {
+              hasLoan: selectedLoanTypes.carLoan || false,
+              outstandingAmount: formData.carLoanOutstanding || 0,
+              monthlyEMI: formData.carLoanEMI || 0,
+              interestRate: formData.carLoanInterestRate || 0
+            },
+            educationLoan: {
+              hasLoan: selectedLoanTypes.educationLoan || false,
+              outstandingAmount: formData.educationLoanOutstanding || 0,
+              monthlyEMI: formData.educationLoanEMI || 0,
+              interestRate: formData.educationLoanInterestRate || 0
+            },
+            goldLoan: {
+              hasLoan: selectedLoanTypes.goldLoan || false,
+              outstandingAmount: formData.goldLoanOutstanding || 0,
+              monthlyEMI: formData.goldLoanEMI || 0,
+              interestRate: formData.goldLoanInterestRate || 0
+            },
+            businessLoan: {
+              hasLoan: selectedLoanTypes.businessLoan || false,
+              outstandingAmount: formData.businessLoanOutstanding || 0,
+              monthlyEMI: formData.businessLoanEMI || 0,
+              interestRate: formData.businessLoanInterestRate || 0
+            },
+            creditCards: {
+              hasDebt: selectedLoanTypes.creditCards || false,
+              totalOutstanding: formData.creditCardOutstanding || 0,
+              monthlyPayment: formData.creditCardMonthlyPayment || 0,
+              averageInterestRate: formData.creditCardInterestRate || 36
+            },
+            otherLoans: {
+              hasLoan: selectedLoanTypes.otherLoans || false,
+              loanType: formData.otherLoanType || '',
+              outstandingAmount: formData.otherLoanOutstanding || 0,
+              monthlyEMI: formData.otherLoanEMI || 0,
+              interestRate: formData.otherLoanInterestRate || 0
+            }
+          },
+
+          // Step 6: Insurance Coverage (Transform to nested structure)
+          insuranceCoverage: {
+            lifeInsurance: {
+              hasInsurance: selectedInsuranceTypes.lifeInsurance || false,
+              totalCoverAmount: formData.lifeInsuranceCoverAmount || 0,
+              annualPremium: formData.lifeInsuranceAnnualPremium || 0,
+              insuranceType: formData.lifeInsuranceType || 'Term Life'
+            },
+            healthInsurance: {
+              hasInsurance: selectedInsuranceTypes.healthInsurance || false,
+              totalCoverAmount: formData.healthInsuranceCoverAmount || 0,
+              annualPremium: formData.healthInsuranceAnnualPremium || 0,
+              familyMembers: formData.healthInsuranceFamilyMembers || 1
+            },
+            vehicleInsurance: {
+              hasInsurance: selectedInsuranceTypes.vehicleInsurance || false,
+              annualPremium: formData.vehicleInsuranceAnnualPremium || 0
+            },
+            otherInsurance: {
+              hasInsurance: selectedInsuranceTypes.otherInsurance || false,
+              insuranceTypes: formData.otherInsuranceTypes || '',
+              annualPremium: formData.otherInsuranceAnnualPremium || 0
+            }
+          },
+
+          // Step 7: Financial Goals & Risk Profile
+          financialGoals: {
+            emergencyFund: {
+              priority: formData.emergencyFundPriority || 'High',
+              targetAmount: formData.emergencyFundTarget || 0
+            },
+            childEducation: {
+              isApplicable: formData.childEducationApplicable || false,
+              targetAmount: formData.childEducationTarget || 0,
+              targetYear: formData.childEducationYear || null
+            },
+            homePurchase: {
+              isApplicable: formData.homePurchaseApplicable || false,
+              targetAmount: formData.homePurchaseTarget || 0,
+              targetYear: formData.homePurchaseYear || null
+            }
+          },
+
+          // Risk Profile
+          investmentExperience: formData.investmentExperience,
+          riskTolerance: formData.riskTolerance,
+          monthlyInvestmentCapacity: formData.monthlyInvestmentCapacity || 0,
+
+          // Legacy fields for compatibility
+          monthlySavingsTarget: formData.monthlySavingsTarget,
+          investmentGoals: formData.investmentGoals || [],
+          investmentHorizon: formData.investmentHorizon || '',
+          
+          // Additional fields that might be in form
+          annualIncome: formData.annualIncome || (formData.totalMonthlyIncome * 12),
+          additionalIncome: formData.additionalIncome || 0,
+          
+          // Keep any other fields that might be in the form data
+          ...Object.keys(formData).reduce((acc, key) => {
+            if (!['firstName', 'lastName', 'email', 'phoneNumber', 'dateOfBirth', 'panNumber', 
+                  'maritalStatus', 'numberOfDependents', 'gender', 'address', 'occupation', 
+                  'employerBusinessName', 'totalMonthlyIncome', 'incomeType', 'totalMonthlyExpenses',
+                  'retirementAge', 'hasRetirementCorpus', 'currentRetirementCorpus', 'targetRetirementCorpus',
+                  'investmentExperience', 'riskTolerance', 'monthlyInvestmentCapacity'].includes(key) &&
+                !key.includes('Loan') && !key.includes('Insurance') && !key.includes('mutual') && 
+                !key.includes('ppf') && !key.includes('epf') && !key.includes('nps') && 
+                !key.includes('creditCard') && !key.includes('emergencyFund') && 
+                !key.includes('childEducation') && !key.includes('homePurchase')) {
+              acc[key] = formData[key];
+            }
+            return acc;
+          }, {})
+        };
+      };
+
+      // Transform the form data
+      const transformedData = transformFormData(data);
+
       // Include all form data with CAS data
       const submitData = {
-        ...data,
+        ...transformedData,
         customGoals,
         casData: casData ? {
           fileName: casFile?.name,
@@ -675,7 +1055,7 @@ function ClientOnboardingForm() {
     <div className="mb-8">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
-          {[1, 2, 3, 4, 5].map((step) => (
+          {[1, 2, 3, 4, 5, 6, 7].map((step) => (
             <div
               key={step}
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -690,28 +1070,41 @@ function ClientOnboardingForm() {
             </div>
           ))}
         </div>
-        <div className="text-sm text-gray-600">
-          Step {currentStep} of 5
+        <div className="flex items-center space-x-3">
+          <div className="text-sm text-gray-600">
+            Step {currentStep} of 7
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowRequiredFieldsChecklist(true)}
+            className="flex items-center px-3 py-1 text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors text-sm"
+            title="View required fields checklist"
+          >
+            <ListChecks className="h-4 w-4 mr-1" />
+            Help
+          </button>
         </div>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-2">
         <div
           className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-          style={{ width: `${(currentStep / 5) * 100}%` }}
+          style={{ width: `${(currentStep / 7) * 100}%` }}
         ></div>
       </div>
       <div className="flex justify-between text-xs text-gray-500 mt-2">
         <span>Personal Info</span>
         <span>Income & Employment</span>
-        <span>Financial Goals</span>
-        <span>Assets & Liabilities</span>
-        <span>CAS Upload</span>
+        <span>Retirement</span>
+        <span>Investments</span>
+        <span>Debts</span>
+        <span>Insurance</span>
+        <span>Goals & Risk</span>
       </div>
     </div>
   );
 
   // Step content render functions
-  const renderStep1 = () => (
+  const renderStep1_PersonalInfo = () => (
     <div className="space-y-6">
       <div className="text-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Personal Information</h2>
@@ -843,7 +1236,26 @@ function ClientOnboardingForm() {
             })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="ABCDE1234F"
-            style={{ textTransform: 'uppercase' }}
+            maxLength="10"
+            onChange={(e) => {
+              // Convert to uppercase and remove any non-alphanumeric characters
+              let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+              // Limit to 10 characters and validate format
+              if (value.length <= 10) {
+                setValue('panNumber', value);
+                // Clear any existing errors if format is becoming valid
+                if (value.length === 10 && /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(value)) {
+                  trigger('panNumber');
+                }
+              }
+            }}
+            onBlur={(e) => {
+              // Additional cleanup on blur
+              const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+              setValue('panNumber', value);
+              // Trigger validation
+              trigger('panNumber');
+            }}
           />
           {errors.panNumber && (
             <p className="mt-1 text-sm text-red-600">{errors.panNumber.message}</p>
@@ -924,7 +1336,7 @@ function ClientOnboardingForm() {
     </div>
   );
 
-  const renderStep2 = () => {
+  const renderStep2_IncomeExpenses = () => {
     const financialSummary = calculateFinancialSummary();
     
     return (
@@ -1015,20 +1427,156 @@ function ClientOnboardingForm() {
           </div>
         </div>
 
-        {/* Monthly Expense Breakdown */}
+        {/* Enhanced Total Monthly Expenses */}
         <div className="space-y-4">
           <h3 className="text-md font-medium text-gray-900 flex items-center">
             <Calculator className="h-4 w-4 mr-2" />
-            Detailed Monthly Expense Breakdown
+            Monthly Expenses
           </h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Housing/Rent (per month) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Total Monthly Expenses (₹) *</label>
+              <input
+                type="number"
+                {...register('totalMonthlyExpenses', { 
+                  required: 'Total monthly expenses is required',
+                  min: { value: 0, message: 'Expenses must be positive' }
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter total monthly expenses"
+              />
+              <p className="text-xs text-gray-500 mt-1">Include rent, food, transport, bills, etc.</p>
+              {errors.totalMonthlyExpenses && (
+                <p className="mt-1 text-sm text-red-600">{errors.totalMonthlyExpenses.message}</p>
+              )}
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Income Type *</label>
+              <select
+                {...register('incomeType', { required: 'Income type is required' })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select income type</option>
+                <option value="Salaried">Salaried</option>
+                <option value="Business">Business</option>
+                <option value="Freelance">Freelance</option>
+                <option value="Mixed">Mixed</option>
+              </select>
+              {errors.incomeType && (
+                <p className="mt-1 text-sm text-red-600">{errors.incomeType.message}</p>
+              )}
+            </div>
+          </div>
+          
+          {/* Optional Expense Breakdown Toggle */}
+          <div className="mt-4">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={showExpenseBreakdown}
+                onChange={(e) => setShowExpenseBreakdown(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-700">Want to provide detailed expense breakdown? (Optional)</span>
+            </label>
+          </div>
+          
+          {/* Conditional Expense Breakdown */}
+          {showExpenseBreakdown && (
+            <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <h4 className="text-sm font-medium text-gray-900 mb-4">Detailed Expense Breakdown</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Housing/Rent (₹)</label>
+                  <input
+                    type="number"
+                    {...register('housingRent', {
+                      min: { value: 0, message: 'Amount must be positive' }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Housing/Rent expenses"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Food & Groceries (₹)</label>
+                  <input
+                    type="number"
+                    {...register('foodGroceries', {
+                      min: { value: 0, message: 'Amount must be positive' }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Food & groceries"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Transportation (₹)</label>
+                  <input
+                    type="number"
+                    {...register('transportation', {
+                      min: { value: 0, message: 'Amount must be positive' }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Transport costs"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Bills & Utilities (₹)</label>
+                  <input
+                    type="number"
+                    {...register('utilities', {
+                      min: { value: 0, message: 'Amount must be positive' }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Bills & utilities"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Entertainment & Lifestyle (₹)</label>
+                  <input
+                    type="number"
+                    {...register('entertainment', {
+                      min: { value: 0, message: 'Amount must be positive' }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Entertainment & lifestyle"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Healthcare (₹)</label>
+                  <input
+                    type="number"
+                    {...register('healthcare', {
+                      min: { value: 0, message: 'Amount must be positive' }
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Healthcare expenses"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Legacy Expense Fields - Keep for compatibility but hide */}
+        <div className="hidden">
+          <h3 className="text-md font-medium text-gray-900 flex items-center">
+            <Calculator className="h-4 w-4 mr-2" />
+            Legacy Expense Breakdown (Hidden)
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Housing/Rent (per month)</label>
               <input
                 type="number"
                 {...register('monthlyExpenses.housingRent', { 
-                  required: 'Housing/Rent expense is required',
                   min: { value: 0, message: 'Amount must be positive' }
                 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1040,11 +1588,10 @@ function ClientOnboardingForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Groceries, Utilities & Food (per month) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Groceries, Utilities & Food (per month)</label>
               <input
                 type="number"
                 {...register('monthlyExpenses.groceriesUtilitiesFood', { 
-                  required: 'Groceries, Utilities & Food expense is required',
                   min: { value: 0, message: 'Amount must be positive' }
                 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1056,11 +1603,10 @@ function ClientOnboardingForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Transportation (per month) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Transportation (per month)</label>
               <input
                 type="number"
                 {...register('monthlyExpenses.transportation', { 
-                  required: 'Transportation expense is required',
                   min: { value: 0, message: 'Amount must be positive' }
                 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1270,561 +1816,723 @@ function ClientOnboardingForm() {
     );
   };
 
-  const renderStep3 = () => (
+  const renderStep3_RetirementPlanning = () => (
     <div className="space-y-6">
       <div className="text-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Financial Goals</h2>
-        <p className="text-gray-600">Define your financial aspirations and targets</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Retirement Planning</h2>
+        <p className="text-gray-600">Plan for your golden years with smart retirement strategies</p>
       </div>
 
-      {/* Retirement Planning */}
+      {/* Enhanced Retirement Planning */}
       <div className="space-y-4">
         <h3 className="text-md font-medium text-gray-900 flex items-center">
           <Clock className="h-4 w-4 mr-2" />
           Retirement Planning
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Current Age</label>
+            <input
+              type="number"
+              {...register('currentAge')}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none"
+              placeholder="Auto-calculated from DOB"
+            />
+            <p className="text-xs text-gray-500 mt-1">Calculated from your date of birth</p>
+          </div>
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Target Retirement Age *</label>
             <input
               type="number"
-              {...register('retirementPlanning.targetRetirementAge', { 
-                required: 'Target retirement age is required',
-                min: { value: 50, message: 'Retirement age should be at least 50' },
-                max: { value: 80, message: 'Retirement age should not exceed 80' }
+              {...register('retirementAge', { 
+                required: 'Retirement age is required',
+                min: { value: 45, message: 'Retirement age should be at least 45' },
+                max: { value: 75, message: 'Retirement age should not exceed 75' }
               })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g., 60"
+              defaultValue="60"
             />
-            {errors.retirementPlanning?.targetRetirementAge && (
-              <p className="mt-1 text-sm text-red-600">{errors.retirementPlanning.targetRetirementAge.message}</p>
+            {errors.retirementAge && (
+              <p className="mt-1 text-sm text-red-600">{errors.retirementAge.message}</p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Retirement Corpus Target (₹) *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Years to Retirement</label>
             <input
-              type="number"
-              {...register('retirementPlanning.retirementCorpusTarget', { 
-                required: 'Retirement corpus target is required',
-                min: { value: 1000000, message: 'Minimum corpus should be ₹10 lakhs' }
-              })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., 50000000 (5 crores)"
+              type="text"
+              readOnly
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none"
+              placeholder="Auto-calculated"
             />
-            {errors.retirementPlanning?.retirementCorpusTarget && (
-              <p className="mt-1 text-sm text-red-600">{errors.retirementPlanning.retirementCorpusTarget.message}</p>
-            )}
+            <p className="text-xs text-gray-500 mt-1">Retirement age minus current age</p>
           </div>
+        </div>
+        
+        {/* Existing Retirement Savings */}
+        <div className="mt-6">
+          <label className="flex items-center space-x-2 mb-4">
+            <input
+              type="checkbox"
+              {...register('hasRetirementCorpus')}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <span className="text-sm font-medium text-gray-700">Do you have existing retirement savings?</span>
+          </label>
+          
+          {watch('hasRetirementCorpus') && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Current Retirement Corpus (₹)</label>
+                <input
+                  type="number"
+                  {...register('currentRetirementCorpus', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Current retirement savings"
+                />
+                <p className="text-xs text-gray-500 mt-1">PPF, EPF, NPS, retirement-focused investments</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Target Retirement Corpus (₹)</label>
+                <input
+                  type="number"
+                  {...register('targetRetirementCorpus', {
+                    min: { value: 1000000, message: 'Minimum corpus should be ₹10 lakhs' }
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="How much do you need?"
+                />
+                <p className="text-xs text-gray-500 mt-1">Suggested: 25x annual expenses</p>
+              </div>
+            </div>
+          )}
+          
+          {!watch('hasRetirementCorpus') && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Target Retirement Corpus (₹)</label>
+              <input
+                type="number"
+                {...register('targetRetirementCorpus', {
+                  min: { value: 1000000, message: 'Minimum corpus should be ₹10 lakhs' }
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="How much do you need for retirement?"
+              />
+              <p className="text-xs text-gray-500 mt-1">Suggested: 25x your current annual expenses</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Other Major Goals */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-md font-medium text-gray-900 flex items-center">
-            <Target className="h-4 w-4 mr-2" />
-            Other Major Goals
-          </h3>
-          <button
-            type="button"
-            onClick={addCustomGoal}
-            className="flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Add Another Goal
-          </button>
-        </div>
-
-        {/* Pre-defined Goals */}
-        <div className="space-y-4">
-          {/* Child's Education */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-3">Child's Education</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (₹)</label>
-                <input
-                  type="number"
-                  {...register('majorGoals.0.targetAmount', {
-                    min: { value: 0, message: 'Amount must be positive' }
-                  })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Target amount"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Target Year</label>
-                <input
-                  type="number"
-                  {...register('majorGoals.0.targetYear', {
-                    min: { value: 2024, message: 'Year cannot be in the past' }
-                  })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 2035"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
-                <select
-                  {...register('majorGoals.0.priority')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                  <option value="Critical">Critical</option>
-                </select>
-              </div>
-            </div>
+      {/* Retirement Information Summary */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-6">
+        <h3 className="text-md font-medium text-blue-900 mb-4 flex items-center">
+          <Target className="h-4 w-4 mr-2" />
+          Retirement Summary
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div>
+            <p className="text-blue-700"><strong>Years to Retirement:</strong> Auto-calculated</p>
+            <p className="text-blue-700"><strong>Monthly Investment Needed:</strong> Auto-calculated</p>
           </div>
-
-          {/* Home Purchase */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-3">Home Purchase</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (₹)</label>
-                <input
-                  type="number"
-                  {...register('majorGoals.1.targetAmount', {
-                    min: { value: 0, message: 'Amount must be positive' }
-                  })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Target amount"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Target Year</label>
-                <input
-                  type="number"
-                  {...register('majorGoals.1.targetYear', {
-                    min: { value: 2024, message: 'Year cannot be in the past' }
-                  })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 2030"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
-                <select
-                  {...register('majorGoals.1.priority')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                  <option value="Critical">Critical</option>
-                </select>
-              </div>
-            </div>
+          <div>
+            <p className="text-blue-700"><strong>Target Corpus:</strong> Based on your needs</p>
+            <p className="text-blue-700"><strong>Strategy:</strong> Will be suggested based on risk profile</p>
           </div>
-
-          {/* Custom Goals */}
-          {customGoals.map((goal, index) => (
-            <div key={index} className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-gray-900">Custom Goal {index + 1}</h4>
-                <button
-                  type="button"
-                  onClick={() => removeCustomGoal(index)}
-                  className="text-red-600 hover:text-red-800"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Goal Name</label>
-                  <input
-                    type="text"
-                    value={goal.goalName}
-                    onChange={(e) => {
-                      const newGoals = [...customGoals];
-                      newGoals[index].goalName = e.target.value;
-                      setCustomGoals(newGoals);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter goal name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={goal.targetAmount}
-                    onChange={(e) => {
-                      const newGoals = [...customGoals];
-                      newGoals[index].targetAmount = e.target.value;
-                      setCustomGoals(newGoals);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Target amount"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Target Year</label>
-                  <input
-                    type="number"
-                    value={goal.targetYear}
-                    onChange={(e) => {
-                      const newGoals = [...customGoals];
-                      newGoals[index].targetYear = e.target.value;
-                      setCustomGoals(newGoals);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., 2030"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
-                  <select
-                    value={goal.priority}
-                    onChange={(e) => {
-                      const newGoals = [...customGoals];
-                      newGoals[index].priority = e.target.value;
-                      setCustomGoals(newGoals);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Critical">Critical</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
   );
 
-  const renderStep4 = () => {
-    const assetsLiabilities = calculateAssetsLiabilities();
-    
-    return (
-      <div className="space-y-6">
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Assets & Liabilities</h2>
-          <p className="text-gray-600">Tell us about your current financial position</p>
-          <p className="text-sm text-gray-500 mt-1">All values to be entered in INR</p>
-        </div>
+  const renderStep4_CasAndInvestments = () => (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Investments & CAS Upload</h2>
+        <p className="text-gray-600">Upload your CAS statement or enter investment details manually</p>
+      </div>
 
-        {/* Basic Assets */}
-        <div className="space-y-4">
-          <h3 className="text-md font-medium text-gray-900 flex items-center">
-            <Home className="h-4 w-4 mr-2" />
-            Basic Assets
-          </h3>
+      {/* CAS Upload Section */}
+      <div className="space-y-4">
+        <h3 className="text-md font-medium text-gray-900 flex items-center">
+          <FileText className="h-4 w-4 mr-2" />
+          CAS (Consolidated Account Statement)
+        </h3>
+        
+        <div className="border border-gray-200 rounded-lg p-4">
+          <label className="flex items-center space-x-2 mb-4">
+            <input
+              type="checkbox"
+              checked={hasCAS}
+              onChange={(e) => setHasCAS(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <span className="text-sm font-medium text-gray-700">Do you have a CAS (Consolidated Account Statement)?</span>
+          </label>
+          <p className="text-xs text-gray-500 mb-4">CAS contains all your mutual fund, stock, bond investments</p>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Cash & Bank Savings (₹)</label>
-              <input
-                type="number"
-                {...register('assets.cashBankSavings', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Current cash and bank balance"
-              />
-              {errors.assets?.cashBankSavings && (
-                <p className="mt-1 text-sm text-red-600">{errors.assets.cashBankSavings.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Real Estate (₹)</label>
-              <input
-                type="number"
-                {...register('assets.realEstate', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Value of property owned"
-              />
-              {errors.assets?.realEstate && (
-                <p className="mt-1 text-sm text-red-600">{errors.assets.realEstate.message}</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Existing Investments - Equity */}
-        <div className="space-y-4">
-          <h3 className="text-md font-medium text-gray-900 flex items-center">
-            <TrendingUp className="h-4 w-4 mr-2" />
-            Existing Investments - Equity
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Mutual Funds (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.equity.mutualFunds', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Current value of mutual funds"
-              />
-              {errors.assets?.investments?.equity?.mutualFunds && (
-                <p className="mt-1 text-sm text-red-600">{errors.assets.investments.equity.mutualFunds.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Direct Stocks (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.equity.directStocks', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Current value of direct stocks"
-              />
-              {errors.assets?.investments?.equity?.directStocks && (
-                <p className="mt-1 text-sm text-red-600">{errors.assets.investments.equity.directStocks.message}</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Fixed Income */}
-        <div className="space-y-4">
-          <h3 className="text-md font-medium text-gray-900 flex items-center">
-            <Banknote className="h-4 w-4 mr-2" />
-            Fixed Income Investments
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">PPF (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.fixedIncome.ppf', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="PPF balance"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">EPF (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.fixedIncome.epf', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="EPF balance"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">NPS (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.fixedIncome.nps', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="NPS balance"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fixed Deposits (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.fixedIncome.fixedDeposits', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="FD value"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Bonds & Debentures (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.fixedIncome.bondsDebentures', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Bonds value"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">NSC (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.fixedIncome.nsc', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="NSC value"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Other Investments */}
-        <div className="space-y-4">
-          <h3 className="text-md font-medium text-gray-900 flex items-center">
-            <PiggyBank className="h-4 w-4 mr-2" />
-            Other Investments
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">ULIP (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.other.ulip', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="ULIP value"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Other Investments (₹)</label>
-              <input
-                type="number"
-                {...register('assets.investments.other.otherInvestments', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Other investment value"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Liabilities */}
-        <div className="space-y-4">
-          <h3 className="text-md font-medium text-gray-900 flex items-center">
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Liabilities
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Loans (₹)</label>
-              <input
-                type="number"
-                {...register('liabilities.loans', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Outstanding loan amount"
-              />
-              {errors.liabilities?.loans && (
-                <p className="mt-1 text-sm text-red-600">{errors.liabilities.loans.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Credit Card Debt (₹)</label>
-              <input
-                type="number"
-                {...register('liabilities.creditCardDebt', {
-                  min: { value: 0, message: 'Amount must be positive' }
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Credit card outstanding"
-              />
-              {errors.liabilities?.creditCardDebt && (
-                <p className="mt-1 text-sm text-red-600">{errors.liabilities.creditCardDebt.message}</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Auto-calculated Financial Summary */}
-        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6">
-          <h3 className="text-md font-medium text-gray-900 mb-4 flex items-center">
-            <Calculator className="h-4 w-4 mr-2" />
-            Auto-calculated Financial Summary
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-4 rounded-lg border border-green-200">
-              <div className="flex items-center">
-                <TrendingUp className="h-6 w-6 text-green-600 mr-2" />
+          {hasCAS && (
+            <div className="space-y-4">
+              {/* CAS Upload Interface */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-600">Total Assets</p>
-                  <p className="text-lg font-bold text-green-700">
-                    {formatCurrency(assetsLiabilities.totalAssets)}
-                  </p>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Upload CAS PDF</label>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={handleCasFileUpload}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CAS Password (if protected)</label>
+                  <input
+                    type="password"
+                    value={casPassword}
+                    onChange={(e) => setCasPassword(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter CAS password"
+                  />
                 </div>
               </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-lg border border-red-200">
-              <div className="flex items-center">
-                <AlertCircle className="h-6 w-6 text-red-600 mr-2" />
-                <div>
-                  <p className="text-sm text-gray-600">Total Liabilities</p>
-                  <p className="text-lg font-bold text-red-700">
-                    {formatCurrency(assetsLiabilities.totalLiabilities)}
-                  </p>
-                </div>
+              
+              {casFile && (
+                <button
+                  type="button"
+                  onClick={handleCasExtraction}
+                  disabled={casUploadStatus === 'parsing'}
+                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {casUploadStatus === 'parsing' ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Extracting Data...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Extract Data from CAS
+                    </>
+                  )}
+                </button>
+              )}
+              
+              {/* Manual Entry Option */}
+              <div className="mt-4">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={showManualCasEntry}
+                    onChange={(e) => setShowManualCasEntry(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm text-gray-700">CAS not working? Fill manually</span>
+                </label>
               </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-lg border border-blue-200">
-              <div className="flex items-center">
-                <BarChart3 className="h-6 w-6 text-blue-600 mr-2" />
-                <div>
-                  <p className="text-sm text-gray-600">Net Worth</p>
-                  <p className={`text-lg font-bold ${assetsLiabilities.netWorth >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
-                    {formatCurrency(assetsLiabilities.netWorth)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {assetsLiabilities.netWorth < 0 && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">
-                ⚠️ Your liabilities exceed your assets. Consider debt reduction strategies.
-              </p>
             </div>
           )}
         </div>
       </div>
-    );
-  };
 
-  const renderStep5 = () => (
+      {/* Manual Investment Entry */}
+      {(!hasCAS || showManualCasEntry) && (
+        <div className="space-y-6">
+          <h3 className="text-md font-medium text-gray-900 flex items-center">
+            <TrendingUp className="h-4 w-4 mr-2" />
+            Investment Details
+            <span className="ml-2 text-sm text-gray-500">(Enter manually or auto-filled from CAS)</span>
+          </h3>
+          
+          {/* Investment Type Selection */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Mutual Funds */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <label className="flex items-center space-x-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={selectedInvestmentTypes.mutualFunds || false}
+                  onChange={(e) => setSelectedInvestmentTypes(prev => ({...prev, mutualFunds: e.target.checked}))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">Mutual Funds</span>
+              </label>
+              
+              {selectedInvestmentTypes.mutualFunds && (
+                <div className="space-y-3">
+                  <input
+                    type="number"
+                    {...register('mutualFundsTotalValue', {
+                      min: { value: 0, message: 'Amount must be positive' }
+                    })}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Total value (₹)"
+                  />
+                  <input
+                    type="number"
+                    {...register('mutualFundsMonthlyInvestment', {
+                      min: { value: 0, message: 'Amount must be positive' }
+                    })}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Monthly SIP (₹)"
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* Direct Stocks */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <label className="flex items-center space-x-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={selectedInvestmentTypes.directStocks || false}
+                  onChange={(e) => setSelectedInvestmentTypes(prev => ({...prev, directStocks: e.target.checked}))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">Direct Stocks</span>
+              </label>
+              
+              {selectedInvestmentTypes.directStocks && (
+                <input
+                  type="number"
+                  {...register('directStocksTotalValue', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Portfolio value (₹)"
+                />
+              )}
+            </div>
+            
+            {/* PPF */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <label className="flex items-center space-x-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={selectedInvestmentTypes.ppf || false}
+                  onChange={(e) => setSelectedInvestmentTypes(prev => ({...prev, ppf: e.target.checked}))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">PPF</span>
+              </label>
+              
+              {selectedInvestmentTypes.ppf && (
+                <div className="space-y-3">
+                  <input
+                    type="number"
+                    {...register('ppfCurrentBalance', {
+                      min: { value: 0, message: 'Amount must be positive' }
+                    })}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Current balance (₹)"
+                  />
+                  <input
+                    type="number"
+                    {...register('ppfAnnualContribution', {
+                      min: { value: 0, message: 'Amount must be positive' },
+                      max: { value: 150000, message: 'PPF limit is ₹1.5L per year' }
+                    })}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Annual contribution (₹)"
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* EPF */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <label className="flex items-center space-x-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={selectedInvestmentTypes.epf || false}
+                  onChange={(e) => setSelectedInvestmentTypes(prev => ({...prev, epf: e.target.checked}))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">EPF</span>
+              </label>
+              
+              {selectedInvestmentTypes.epf && (
+                <input
+                  type="number"
+                  {...register('epfCurrentBalance', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Current balance (₹)"
+                />
+              )}
+            </div>
+          </div>
+          
+          {/* Additional Investment Types */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* NPS */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <label className="flex items-center space-x-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={selectedInvestmentTypes.nps || false}
+                  onChange={(e) => setSelectedInvestmentTypes(prev => ({...prev, nps: e.target.checked}))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">NPS</span>
+              </label>
+              
+              {selectedInvestmentTypes.nps && (
+                <input
+                  type="number"
+                  {...register('npsCurrentBalance', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Current balance (₹)"
+                />
+              )}
+            </div>
+            
+            {/* ELSS */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <label className="flex items-center space-x-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={selectedInvestmentTypes.elss || false}
+                  onChange={(e) => setSelectedInvestmentTypes(prev => ({...prev, elss: e.target.checked}))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">ELSS</span>
+              </label>
+              
+              {selectedInvestmentTypes.elss && (
+                <input
+                  type="number"
+                  {...register('elssCurrentValue', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Current value (₹)"
+                />
+              )}
+            </div>
+            
+            {/* Fixed Deposits */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <label className="flex items-center space-x-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={selectedInvestmentTypes.fixedDeposits || false}
+                  onChange={(e) => setSelectedInvestmentTypes(prev => ({...prev, fixedDeposits: e.target.checked}))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">Fixed Deposits</span>
+              </label>
+              
+              {selectedInvestmentTypes.fixedDeposits && (
+                <input
+                  type="number"
+                  {...register('fixedDepositsTotalValue', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Total FD value (₹)"
+                />
+              )}
+            </div>
+            
+            {/* Other Investments */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <label className="flex items-center space-x-2 mb-3">
+                <input
+                  type="checkbox"
+                  checked={selectedInvestmentTypes.otherInvestments || false}
+                  onChange={(e) => setSelectedInvestmentTypes(prev => ({...prev, otherInvestments: e.target.checked}))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">Other Investments</span>
+              </label>
+              
+              {selectedInvestmentTypes.otherInvestments && (
+                <input
+                  type="number"
+                  {...register('otherInvestmentsTotalValue', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Gold, real estate, bonds (₹)"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CAS Data Display */}
+      {casData && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+          <h3 className="text-md font-medium text-green-900 mb-4 flex items-center">
+            <CheckCircle className="h-4 w-4 mr-2" />
+            CAS Data Extracted Successfully
+          </h3>
+          <p className="text-sm text-green-700 mb-4">
+            Your investment data has been automatically extracted from the CAS. You can review and edit the details below.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowCasDetails(!showCasDetails)}
+            className="text-blue-600 hover:text-blue-800 text-sm"
+          >
+            {showCasDetails ? 'Hide Details' : 'View Details'}
+          </button>
+          
+          {showCasDetails && (
+            <div className="mt-4 p-4 bg-white rounded border">
+              <pre className="text-xs text-gray-600 overflow-auto">
+                {JSON.stringify(casData, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // Legacy code removed - replaced with new optimized 7-step structure
+
+  // Old renderStep4 function removed - using renderStep4_CasAndInvestments instead
+
+  const renderStep5_DebtsAndLiabilities = () => (
     <div className="space-y-6">
       <div className="text-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Investment Profile & CAS Upload</h2>
-        <p className="text-gray-600">Complete your investment profile and upload your CAS statement</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Debts & Liabilities</h2>
+        <p className="text-gray-600">Tell us about your loans and outstanding debts</p>
+        <p className="text-sm text-gray-500 mt-1">Click on loan types you have to provide details</p>
       </div>
 
-      {/* Investment Experience & Risk Tolerance */}
-      <div className="space-y-4">
+      {/* Enhanced Loan Types Grid */}
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          
+          {/* Home Loan */}
+          <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <label className="flex items-center space-x-3 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedLoanTypes.homeLoan || false}
+                onChange={(e) => setSelectedLoanTypes(prev => ({...prev, homeLoan: e.target.checked}))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <div className="flex items-center">
+                <Home className="h-5 w-5 text-blue-600 mr-2" />
+                <span className="text-sm font-medium text-gray-900">Home Loan</span>
+              </div>
+            </label>
+            
+            {selectedLoanTypes.homeLoan && (
+              <div className="space-y-3 bg-gray-50 p-3 rounded">
+                <input
+                  type="number"
+                  {...register('homeLoanOutstanding', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Outstanding amount (₹)"
+                />
+                <input
+                  type="number"
+                  {...register('homeLoanEMI', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Monthly EMI (₹)"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  {...register('homeLoanInterestRate', {
+                    min: { value: 0, message: 'Rate must be positive' },
+                    max: { value: 50, message: 'Rate seems too high' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Interest rate (%)"
+                />
+                <input
+                  type="number"
+                  {...register('homeLoanTenure', {
+                    min: { value: 0, message: 'Tenure must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Remaining years"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Personal Loan */}
+          <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <label className="flex items-center space-x-3 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedLoanTypes.personalLoan || false}
+                onChange={(e) => setSelectedLoanTypes(prev => ({...prev, personalLoan: e.target.checked}))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <div className="flex items-center">
+                <User className="h-5 w-5 text-green-600 mr-2" />
+                <span className="text-sm font-medium text-gray-900">Personal Loan</span>
+              </div>
+            </label>
+            
+            {selectedLoanTypes.personalLoan && (
+              <div className="space-y-3 bg-gray-50 p-3 rounded">
+                <input
+                  type="number"
+                  {...register('personalLoanOutstanding')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Outstanding amount (₹)"
+                />
+                <input
+                  type="number"
+                  {...register('personalLoanEMI')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Monthly EMI (₹)"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  {...register('personalLoanInterestRate')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Interest rate (%)"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Car Loan */}
+          <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <label className="flex items-center space-x-3 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedLoanTypes.carLoan || false}
+                onChange={(e) => setSelectedLoanTypes(prev => ({...prev, carLoan: e.target.checked}))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <div className="flex items-center">
+                <div className="h-5 w-5 bg-red-100 rounded-full flex items-center justify-center mr-2">
+                  <span className="text-xs text-red-600">🚗</span>
+                </div>
+                <span className="text-sm font-medium text-gray-900">Car Loan</span>
+              </div>
+            </label>
+            
+            {selectedLoanTypes.carLoan && (
+              <div className="space-y-3 bg-gray-50 p-3 rounded">
+                <input
+                  type="number"
+                  {...register('carLoanOutstanding')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Outstanding amount (₹)"
+                />
+                <input
+                  type="number"
+                  {...register('carLoanEMI')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Monthly EMI (₹)"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  {...register('carLoanInterestRate')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Interest rate (%)"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Credit Cards and Other Loans */}
+        <div className="space-y-4">
+          <div className="border border-gray-200 rounded-lg p-4">
+            <label className="flex items-center space-x-3 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedLoanTypes.creditCards || false}
+                onChange={(e) => setSelectedLoanTypes(prev => ({...prev, creditCards: e.target.checked}))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <div className="flex items-center">
+                <Banknote className="h-5 w-5 text-red-600 mr-2" />
+                <span className="text-sm font-medium text-gray-900">Credit Card Debt</span>
+              </div>
+            </label>
+            
+            {selectedLoanTypes.creditCards && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded">
+                <input
+                  type="number"
+                  {...register('creditCardOutstanding')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Total outstanding (₹)"
+                />
+                <input
+                  type="number"
+                  {...register('creditCardMonthlyPayment')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Monthly payment (₹)"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  {...register('creditCardInterestRate')}
+                  defaultValue="36"
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Avg interest rate (%)"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Debt Summary */}
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
+          <h3 className="text-md font-medium text-orange-900 mb-4 flex items-center">
+            <Calculator className="h-4 w-4 mr-2" />
+            Debt Summary (Auto-calculated)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-orange-700"><strong>Total Monthly EMIs:</strong> Auto-calculated</p>
+              <p className="text-orange-700"><strong>Total Outstanding:</strong> Sum of all debts</p>
+            </div>
+            <div>
+              <p className="text-orange-700"><strong>Debt-to-Income Ratio:</strong> EMIs ÷ Monthly Income</p>
+              <p className="text-orange-700"><strong>Weighted Avg Rate:</strong> Calculated automatically</p>
+            </div>
+            <div>
+              <p className="text-orange-700"><strong>Priority:</strong> Highest rate debts first</p>
+              <p className="text-orange-700"><strong>Strategy:</strong> Will be suggested</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Legacy content - temporarily hidden */}
+      <div className="hidden">
         <h3 className="text-md font-medium text-gray-900 flex items-center">
           <Target className="h-4 w-4 mr-2" />
-          Investment Profile
+          Old Investment Profile Section
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Investment Experience *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Investment Experience</label>
             <select
-              {...register('investmentExperience', { required: 'Investment experience is required' })}
+              {...register('investmentExperience_legacy')}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select experience level</option>
@@ -1838,9 +2546,9 @@ function ClientOnboardingForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Risk Tolerance *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Risk Tolerance</label>
             <select
-              {...register('riskTolerance', { required: 'Risk tolerance is required' })}
+              {...register('riskTolerance_legacy')}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select risk tolerance</option>
@@ -1849,8 +2557,8 @@ function ClientOnboardingForm() {
               <option value="Aggressive">Aggressive</option>
               <option value="Very Aggressive">Very Aggressive</option>
             </select>
-            {errors.riskTolerance && (
-              <p className="mt-1 text-sm text-red-600">{errors.riskTolerance.message}</p>
+            {errors.riskTolerance_legacy && (
+              <p className="mt-1 text-sm text-red-600">{errors.riskTolerance_legacy.message}</p>
             )}
           </div>
 
@@ -2019,6 +2727,486 @@ function ClientOnboardingForm() {
     </div>
   );
 
+  const renderStep6_InsuranceOptional = () => (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Insurance Coverage</h2>
+        <p className="text-gray-600">Tell us about your insurance policies (optional but recommended)</p>
+        <p className="text-sm text-gray-500 mt-1">Click on insurance types you have to provide details</p>
+      </div>
+
+      {/* Insurance Types Grid */}
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* Life Insurance */}
+          <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <label className="flex items-center space-x-3 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedInsuranceTypes.lifeInsurance || false}
+                onChange={(e) => setSelectedInsuranceTypes(prev => ({...prev, lifeInsurance: e.target.checked}))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <div className="flex items-center">
+                <div className="h-5 w-5 bg-blue-100 rounded-full flex items-center justify-center mr-2">
+                  <span className="text-xs text-blue-600">🛡️</span>
+                </div>
+                <span className="text-sm font-medium text-gray-900">Life Insurance</span>
+              </div>
+            </label>
+            
+            {selectedInsuranceTypes.lifeInsurance && (
+              <div className="space-y-3 bg-gray-50 p-3 rounded">
+                <input
+                  type="number"
+                  {...register('lifeInsuranceCoverAmount', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Total cover amount (₹)"
+                />
+                <input
+                  type="number"
+                  {...register('lifeInsuranceAnnualPremium', {
+                    min: { value: 0, message: 'Amount must be positive' }
+                  })}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Annual premium (₹)"
+                />
+                <select
+                  {...register('lifeInsuranceType')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Insurance type</option>
+                  <option value="Term Life">Term Life</option>
+                  <option value="Whole Life">Whole Life</option>
+                  <option value="ULIP">ULIP</option>
+                  <option value="Endowment">Endowment</option>
+                  <option value="Mixed">Mixed</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Health Insurance */}
+          <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <label className="flex items-center space-x-3 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedInsuranceTypes.healthInsurance || false}
+                onChange={(e) => setSelectedInsuranceTypes(prev => ({...prev, healthInsurance: e.target.checked}))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <div className="flex items-center">
+                <div className="h-5 w-5 bg-green-100 rounded-full flex items-center justify-center mr-2">
+                  <span className="text-xs text-green-600">🏥</span>
+                </div>
+                <span className="text-sm font-medium text-gray-900">Health Insurance</span>
+              </div>
+            </label>
+            
+            {selectedInsuranceTypes.healthInsurance && (
+              <div className="space-y-3 bg-gray-50 p-3 rounded">
+                <input
+                  type="number"
+                  {...register('healthInsuranceCoverAmount')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Total cover amount (₹)"
+                />
+                <input
+                  type="number"
+                  {...register('healthInsuranceAnnualPremium')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Annual premium (₹)"
+                />
+                <input
+                  type="number"
+                  {...register('healthInsuranceFamilyMembers')}
+                  defaultValue="1"
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Family members covered"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Vehicle Insurance */}
+          <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <label className="flex items-center space-x-3 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedInsuranceTypes.vehicleInsurance || false}
+                onChange={(e) => setSelectedInsuranceTypes(prev => ({...prev, vehicleInsurance: e.target.checked}))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <div className="flex items-center">
+                <div className="h-5 w-5 bg-red-100 rounded-full flex items-center justify-center mr-2">
+                  <span className="text-xs text-red-600">🚗</span>
+                </div>
+                <span className="text-sm font-medium text-gray-900">Vehicle Insurance</span>
+              </div>
+            </label>
+            
+            {selectedInsuranceTypes.vehicleInsurance && (
+              <div className="space-y-3 bg-gray-50 p-3 rounded">
+                <input
+                  type="number"
+                  {...register('vehicleInsuranceAnnualPremium')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Annual premium (₹)"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Other Insurance */}
+          <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <label className="flex items-center space-x-3 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedInsuranceTypes.otherInsurance || false}
+                onChange={(e) => setSelectedInsuranceTypes(prev => ({...prev, otherInsurance: e.target.checked}))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <div className="flex items-center">
+                <Plus className="h-5 w-5 text-gray-600 mr-2" />
+                <span className="text-sm font-medium text-gray-900">Other Insurance</span>
+              </div>
+            </label>
+            
+            {selectedInsuranceTypes.otherInsurance && (
+              <div className="space-y-3 bg-gray-50 p-3 rounded">
+                <input
+                  type="text"
+                  {...register('otherInsuranceTypes')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Type (Travel, Home, etc.)"
+                />
+                <input
+                  type="number"
+                  {...register('otherInsuranceAnnualPremium')}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Annual premium (₹)"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Insurance Summary */}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+          <h3 className="text-md font-medium text-green-900 mb-4 flex items-center">
+            <CheckCircle className="h-4 w-4 mr-2" />
+            Insurance Summary (Auto-calculated)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-green-700"><strong>Total Annual Premiums:</strong> Auto-calculated</p>
+              <p className="text-green-700"><strong>Total Coverage:</strong> Sum of all covers</p>
+            </div>
+            <div>
+              <p className="text-green-700"><strong>Coverage Adequacy:</strong> Recommended vs Current</p>
+              <p className="text-green-700"><strong>Premium-to-Income:</strong> Premiums ÷ Annual Income</p>
+            </div>
+            <div>
+              <p className="text-green-700"><strong>Gaps Identified:</strong> Based on profile</p>
+              <p className="text-green-700"><strong>Recommendations:</strong> Will be provided</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Optional Skip Message */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-700">
+            <strong>Note:</strong> Insurance details are optional but help us provide comprehensive financial planning. 
+            You can always add this information later in your profile.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderStep7_GoalsAndRiskProfile = () => (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Goals & Risk Profile</h2>
+        <p className="text-gray-600">Complete your financial profile with goals and investment preferences</p>
+      </div>
+
+      {/* Financial Goals Section */}
+      <div className="space-y-6">
+        <h3 className="text-md font-medium text-gray-900 flex items-center">
+          <Target className="h-4 w-4 mr-2" />
+          Financial Goals
+        </h3>
+
+        {/* Emergency Fund */}
+        <div className="border border-gray-200 rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Fund Priority</label>
+              <select
+                {...register('emergencyFundPriority')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                defaultValue="High"
+              >
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+                <option value="Not Applicable">Not Applicable</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Target Emergency Fund (₹)</label>
+              <input
+                type="number"
+                {...register('emergencyFundTarget')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Suggested: 6x monthly expenses"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Child Education */}
+        <div className="border border-gray-200 rounded-lg p-4">
+          <label className="flex items-center space-x-2 mb-4">
+            <input
+              type="checkbox"
+              {...register('hasChildEducationGoal')}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <span className="text-sm font-medium text-gray-700">Child's Education Goal</span>
+          </label>
+          
+          {watch('hasChildEducationGoal') && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Target Amount (₹)</label>
+                <input
+                  type="number"
+                  {...register('childEducationTarget')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., 2500000"
+                  defaultValue="2500000"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Target Year</label>
+                <input
+                  type="number"
+                  {...register('childEducationTargetYear')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., 2035"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Home Purchase */}
+        <div className="border border-gray-200 rounded-lg p-4">
+          <label className="flex items-center space-x-2 mb-4">
+            <input
+              type="checkbox"
+              {...register('hasHomePurchaseGoal')}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <span className="text-sm font-medium text-gray-700">Home Purchase Goal</span>
+          </label>
+          
+          {watch('hasHomePurchaseGoal') && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Target Amount (₹)</label>
+                <input
+                  type="number"
+                  {...register('homePurchaseTarget')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Home purchase amount"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Target Year</label>
+                <input
+                  type="number"
+                  {...register('homePurchaseTargetYear')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., 2030"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Custom Goals */}
+        <div className="border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-sm font-medium text-gray-900">Custom Goals</h4>
+            <button
+              type="button"
+              onClick={addCustomGoal}
+              className="flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Goal
+            </button>
+          </div>
+          
+          {customGoals.map((goal, index) => (
+            <div key={goal.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded mb-3">
+              <input
+                type="text"
+                {...register(`customGoals.${index}.goalName`)}
+                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Goal name"
+              />
+              <input
+                type="number"
+                {...register(`customGoals.${index}.targetAmount`)}
+                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Target amount (₹)"
+              />
+              <input
+                type="number"
+                {...register(`customGoals.${index}.targetYear`)}
+                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Target year"
+              />
+              <div className="flex items-center space-x-2">
+                <select
+                  {...register(`customGoals.${index}.priority`)}
+                  className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Low">Low</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removeCustomGoal(goal.id)}
+                  className="text-red-600 hover:text-red-800"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Risk Profile Section */}
+      <div className="space-y-6">
+        <h3 className="text-md font-medium text-gray-900 flex items-center">
+          <TrendingUp className="h-4 w-4 mr-2" />
+          Investment Risk Profile
+        </h3>
+        
+        {/* Required Fields Notice */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Important:</strong> All fields marked with * are required to complete your profile. Please fill in your investment experience, risk tolerance, and monthly investment capacity before submitting.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Investment Experience *</label>
+            <select
+              {...register('investmentExperience', { required: 'Investment experience is required' })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select experience level</option>
+              <option value="Beginner">Beginner (0-2 years)</option>
+              <option value="Intermediate">Intermediate (2-5 years)</option>
+              <option value="Advanced">Experienced (5-10 years)</option>
+              <option value="Expert">Expert (10+ years)</option>
+            </select>
+            {errors.investmentExperience && (
+              <p className="mt-1 text-sm text-red-600">{errors.investmentExperience.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Risk Tolerance *</label>
+            <select
+              {...register('riskTolerance', { required: 'Risk tolerance is required' })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select risk tolerance</option>
+              <option value="Conservative">Conservative - Low risk, stable returns</option>
+              <option value="Moderate">Moderate - Balanced risk and returns</option>
+              <option value="Aggressive">Aggressive - High risk, high returns</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">Conservative: Low risk, stable returns | Moderate: Balanced | Aggressive: High risk, high returns</p>
+            {errors.riskTolerance && (
+              <p className="mt-1 text-sm text-red-600">{errors.riskTolerance.message}</p>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Monthly Investment Capacity (₹) *</label>
+          <input
+            type="number"
+            {...register('monthlyInvestmentCapacity', { 
+              required: 'Monthly investment capacity is required',
+              min: { value: 0, message: 'Amount must be positive' }
+            })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="How much can you invest monthly?"
+          />
+          <p className="text-xs text-gray-500 mt-1">Suggested: Income - Expenses - EMIs = Available for investment</p>
+          {errors.monthlyInvestmentCapacity && (
+            <p className="mt-1 text-sm text-red-600">{errors.monthlyInvestmentCapacity.message}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Final Summary */}
+      <div className="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-6">
+        <h3 className="text-md font-medium text-green-900 mb-4 flex items-center">
+          <CheckCircle className="h-4 w-4 mr-2" />
+          Ready to Complete Your Financial Profile!
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
+          <div>
+            <p className="text-green-700"><strong>Profile Completion:</strong> Almost done!</p>
+            <p className="text-green-700"><strong>Next Steps:</strong> Review and submit</p>
+          </div>
+          <div>
+            <p className="text-green-700"><strong>Personalized Advice:</strong> Based on your profile</p>
+            <p className="text-green-700"><strong>Action Plan:</strong> Custom recommendations</p>
+          </div>
+        </div>
+        
+        {/* Submission Checklist */}
+        <div className="bg-white p-3 rounded border border-green-300">
+          <h4 className="text-sm font-medium text-green-800 mb-2">Before you submit, make sure:</h4>
+          <div className="text-xs text-green-700 space-y-1">
+            <div className="flex items-center">
+              <CheckCircle className="h-3 w-3 mr-2" />
+              <span>All required fields above are filled (marked with *)</span>
+            </div>
+            <div className="flex items-center">
+              <CheckCircle className="h-3 w-3 mr-2" />
+              <span>Your contact information is correct</span>
+            </div>
+            <div className="flex items-center">
+              <CheckCircle className="h-3 w-3 mr-2" />
+              <span>Your income and expense information is accurate</span>
+            </div>
+            <div className="flex items-center">
+              <HelpCircle className="h-3 w-3 mr-2" />
+              <span className="flex-1">Need help? Click the "Help" button above to see all required fields</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   // Navigation buttons
   const NavigationButtons = () => (
     <div className="flex items-center justify-between pt-6 border-t border-gray-200">
@@ -2058,7 +3246,7 @@ function ClientOnboardingForm() {
 
       <div>
         {/* Next/Submit Button */}
-        {currentStep < 5 ? (
+        {currentStep < 7 ? (
           <button
             type="button"
             onClick={nextStep}
@@ -2157,11 +3345,13 @@ function ClientOnboardingForm() {
           <form onSubmit={handleSubmit(onSubmit)} className="p-6">
             {/* Step Content */}
             <div className="min-h-[600px]">
-              {currentStep === 1 && renderStep1()}
-              {currentStep === 2 && renderStep2()}
-              {currentStep === 3 && renderStep3()}
-              {currentStep === 4 && renderStep4()}
-              {currentStep === 5 && renderStep5()}
+              {currentStep === 1 && renderStep1_PersonalInfo()}
+              {currentStep === 2 && renderStep2_IncomeExpenses()}
+              {currentStep === 3 && renderStep3_RetirementPlanning()}
+              {currentStep === 4 && renderStep4_CasAndInvestments()}
+              {currentStep === 5 && renderStep5_DebtsAndLiabilities()}
+              {currentStep === 6 && renderStep6_InsuranceOptional()}
+              {currentStep === 7 && renderStep7_GoalsAndRiskProfile()}
             </div>
 
             {/* Navigation */}
@@ -2175,7 +3365,7 @@ function ClientOnboardingForm() {
             <h3 className="text-white font-bold mb-2">🔍 Enhanced Debug Information</h3>
             <div className="space-y-1">
               <div>Token: {token}</div>
-              <div>Current Step: {currentStep}/5</div>
+              <div>Current Step: {currentStep}/7</div>
               <div>Form Start Time: {formStartTime?.toISOString()}</div>
               <div>CAS Status: {casUploadStatus}</div>
               <div>CAS Tracking ID: {casTrackingId || 'Not assigned'}</div>
@@ -2186,8 +3376,85 @@ function ClientOnboardingForm() {
               <div>Custom Goals: {customGoals.length}</div>
               <div>Financial Summary: Income={calculateFinancialSummary().monthlyIncome}, Expenses={calculateFinancialSummary().totalMonthlyExpenses}, Savings={calculateFinancialSummary().monthlySavings}</div>
               <div>Assets Summary: Total={calculateAssetsLiabilities().totalAssets}, Liabilities={calculateAssetsLiabilities().totalLiabilities}, Net Worth={calculateAssetsLiabilities().netWorth}</div>
+              
+              {/* Form Validation Debug */}
+              <div className="border-t border-gray-600 pt-2 mt-2">
+                <h4 className="text-yellow-400 font-bold">📋 Form Validation Debug</h4>
+                <div>Critical Fields Status:</div>
+                <div className="ml-2">
+                  <div>• firstName: {getValues().firstName ? '✅' : '❌'} "{getValues().firstName}"</div>
+                  <div>• lastName: {getValues().lastName ? '✅' : '❌'} "{getValues().lastName}"</div>
+                  <div>• email: {getValues().email ? '✅' : '❌'} "{getValues().email}"</div>
+                  <div>• incomeType: {getValues().incomeType ? '✅' : '❌'} "{getValues().incomeType}"</div>
+                  <div>• investmentExperience: {getValues().investmentExperience ? '✅' : '❌'} "{getValues().investmentExperience}"</div>
+                  <div>• riskTolerance: {getValues().riskTolerance ? '✅' : '❌'} "{getValues().riskTolerance}"</div>
+                  <div>• monthlyInvestmentCapacity: {getValues().monthlyInvestmentCapacity ? '✅' : '❌'} "{getValues().monthlyInvestmentCapacity}"</div>
+                </div>
+                <div>Validation Errors: {Object.keys(errors).length > 0 ? `${Object.keys(errors).length} error(s): ${Object.keys(errors).join(', ')}` : 'None'}</div>
+              </div>
+              
+              {/* Quick Actions */}
+              <div className="border-t border-gray-600 pt-2 mt-2">
+                <h4 className="text-yellow-400 font-bold">🔧 Quick Actions</h4>
+                <div className="flex space-x-2 mt-1">
+                  <button
+                    onClick={() => setShowRequiredFieldsChecklist(true)}
+                    className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                  >
+                    Show Checklist
+                  </button>
+                  <button
+                    onClick={() => {
+                      const formValues = getValues();
+                      // Create a safe copy without circular references
+                      const safeValues = {};
+                      Object.keys(formValues).forEach(key => {
+                        const value = formValues[key];
+                        if (typeof value === 'object' && value !== null) {
+                          safeValues[key] = JSON.stringify(value);
+                        } else {
+                          safeValues[key] = value;
+                        }
+                      });
+                      console.log('Current form values:', safeValues);
+                    }}
+                    className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                  >
+                    Log Form Values
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Create a safe copy of errors without circular references
+                      const safeErrors = {};
+                      Object.keys(errors).forEach(key => {
+                        const error = errors[key];
+                        if (error && typeof error === 'object') {
+                          safeErrors[key] = error.message || 'Error present';
+                        } else {
+                          safeErrors[key] = error;
+                        }
+                      });
+                      console.log('Form errors:', safeErrors);
+                    }}
+                    className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                  >
+                    Log Errors
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
+        )}
+
+        {/* Required Fields Checklist Modal */}
+        {showRequiredFieldsChecklist && (
+          <RequiredFieldsChecklist
+            formValues={getValues()}
+            errors={errors}
+            currentStep={currentStep}
+            onClose={() => setShowRequiredFieldsChecklist(false)}
+            isVisible={showRequiredFieldsChecklist}
+          />
         )}
       </div>
     </div>

@@ -30,6 +30,23 @@ const clientSchema = new mongoose.Schema({
   dateOfBirth: {
     type: Date
   },
+  panNumber: {
+    type: String,
+    trim: true,
+    uppercase: true,
+    match: [/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Please enter a valid PAN number']
+  },
+  maritalStatus: {
+    type: String,
+    enum: ['Single', 'Married', 'Divorced', 'Widowed', ''],
+    default: 'Single'
+  },
+  numberOfDependents: {
+    type: Number,
+    min: [0, 'Number of dependents cannot be negative'],
+    max: [10, 'Number of dependents cannot exceed 10'],
+    default: 0
+  },
   gender: {
     type: String,
     enum: ['male', 'female', 'other', ''],
@@ -78,7 +95,60 @@ const clientSchema = new mongoose.Schema({
     maxlength: [150, 'Employer/Business name cannot exceed 150 characters']
   },
   
-  // Income Details
+  // Enhanced Income Details for Step 2
+  totalMonthlyIncome: {
+    type: Number,
+    min: [10000, 'Monthly income must be at least ₹10,000']
+  },
+  incomeType: {
+    type: String,
+    enum: ['Salaried', 'Business', 'Freelance', 'Mixed'],
+    required: true
+  },
+  totalMonthlyExpenses: {
+    type: Number,
+    min: [0, 'Monthly expenses cannot be negative']
+  },
+  
+  // Optional detailed expense breakdown
+  expenseBreakdown: {
+    showBreakdown: {
+      type: Boolean,
+      default: false
+    },
+    housingRent: {
+      type: Number,
+      min: [0, 'Housing/Rent cannot be negative'],
+      default: 0
+    },
+    foodGroceries: {
+      type: Number,
+      min: [0, 'Food & groceries cannot be negative'],
+      default: 0
+    },
+    transportation: {
+      type: Number,
+      min: [0, 'Transportation cannot be negative'],
+      default: 0
+    },
+    utilities: {
+      type: Number,
+      min: [0, 'Bills & utilities cannot be negative'],
+      default: 0
+    },
+    entertainment: {
+      type: Number,
+      min: [0, 'Entertainment & lifestyle cannot be negative'],
+      default: 0
+    },
+    healthcare: {
+      type: Number,
+      min: [0, 'Healthcare cannot be negative'],
+      default: 0
+    }
+  },
+  
+  // Legacy fields for compatibility
   annualIncome: {
     type: Number,
     min: [0, 'Annual income cannot be negative']
@@ -156,16 +226,31 @@ const clientSchema = new mongoose.Schema({
     default: 0
   },
 
-  // Financial Goals - Enhanced Structure
+  // Enhanced Retirement Planning - Step 3
   retirementPlanning: {
-    targetRetirementAge: {
+    currentAge: {
       type: Number,
-      min: [18, 'Retirement age must be at least 18'],
-      max: [100, 'Retirement age cannot exceed 100']
+      min: [18, 'Age must be at least 18'],
+      max: [80, 'Age cannot exceed 80']
     },
-    retirementCorpusTarget: {
+    retirementAge: {
       type: Number,
-      min: [0, 'Retirement corpus target cannot be negative']
+      min: [45, 'Retirement age must be at least 45'],
+      max: [75, 'Retirement age cannot exceed 75'],
+      default: 60
+    },
+    hasRetirementCorpus: {
+      type: Boolean,
+      default: false
+    },
+    currentRetirementCorpus: {
+      type: Number,
+      min: [0, 'Current retirement corpus cannot be negative'],
+      default: 0
+    },
+    targetRetirementCorpus: {
+      type: Number,
+      min: [1000000, 'Minimum corpus should be ₹10 lakhs']
     }
   },
   
@@ -274,7 +359,157 @@ const clientSchema = new mongoose.Schema({
     }
   },
   
-  // Liabilities
+  // Enhanced Debts & Liabilities - Step 5
+  debtsAndLiabilities: {
+    // Home Loan
+    homeLoan: {
+      hasLoan: { type: Boolean, default: false },
+      outstandingAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 },
+      monthlyEMI: { type: Number, min: [0, 'EMI cannot be negative'], default: 0 },
+      interestRate: { type: Number, min: [0, 'Rate cannot be negative'], max: [100, 'Rate too high'], default: 0 },
+      remainingTenure: { type: Number, min: [0, 'Tenure cannot be negative'], default: 0 }
+    },
+    
+    // Personal Loan
+    personalLoan: {
+      hasLoan: { type: Boolean, default: false },
+      outstandingAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 },
+      monthlyEMI: { type: Number, min: [0, 'EMI cannot be negative'], default: 0 },
+      interestRate: { type: Number, min: [0, 'Rate cannot be negative'], max: [100, 'Rate too high'], default: 0 }
+    },
+    
+    // Car Loan
+    carLoan: {
+      hasLoan: { type: Boolean, default: false },
+      outstandingAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 },
+      monthlyEMI: { type: Number, min: [0, 'EMI cannot be negative'], default: 0 },
+      interestRate: { type: Number, min: [0, 'Rate cannot be negative'], max: [100, 'Rate too high'], default: 0 }
+    },
+    
+    // Education Loan
+    educationLoan: {
+      hasLoan: { type: Boolean, default: false },
+      outstandingAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 },
+      monthlyEMI: { type: Number, min: [0, 'EMI cannot be negative'], default: 0 },
+      interestRate: { type: Number, min: [0, 'Rate cannot be negative'], max: [100, 'Rate too high'], default: 0 }
+    },
+    
+    // Gold Loan
+    goldLoan: {
+      hasLoan: { type: Boolean, default: false },
+      outstandingAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 },
+      monthlyEMI: { type: Number, min: [0, 'EMI cannot be negative'], default: 0 },
+      interestRate: { type: Number, min: [0, 'Rate cannot be negative'], max: [100, 'Rate too high'], default: 0 }
+    },
+    
+    // Business Loan
+    businessLoan: {
+      hasLoan: { type: Boolean, default: false },
+      outstandingAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 },
+      monthlyEMI: { type: Number, min: [0, 'EMI cannot be negative'], default: 0 },
+      interestRate: { type: Number, min: [0, 'Rate cannot be negative'], max: [100, 'Rate too high'], default: 0 }
+    },
+    
+    // Credit Cards
+    creditCards: {
+      hasDebt: { type: Boolean, default: false },
+      totalOutstanding: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 },
+      monthlyPayment: { type: Number, min: [0, 'Payment cannot be negative'], default: 0 },
+      averageInterestRate: { type: Number, min: [0, 'Rate cannot be negative'], max: [50, 'Rate too high'], default: 36 }
+    },
+    
+    // Other Loans
+    otherLoans: {
+      hasLoan: { type: Boolean, default: false },
+      loanType: { type: String, trim: true, maxlength: [100, 'Loan type too long'] },
+      outstandingAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 },
+      monthlyEMI: { type: Number, min: [0, 'EMI cannot be negative'], default: 0 },
+      interestRate: { type: Number, min: [0, 'Rate cannot be negative'], max: [100, 'Rate too high'], default: 0 }
+    }
+  },
+
+  // Enhanced Insurance Coverage - Step 6
+  insuranceCoverage: {
+    // Life Insurance
+    lifeInsurance: {
+      hasInsurance: { type: Boolean, default: false },
+      totalCoverAmount: { type: Number, min: [0, 'Cover amount cannot be negative'], default: 0 },
+      annualPremium: { type: Number, min: [0, 'Premium cannot be negative'], default: 0 },
+      insuranceType: { type: String, enum: ['Term Life', 'Whole Life', 'ULIP', 'Endowment', 'Mixed', ''], default: 'Term Life' }
+    },
+    
+    // Health Insurance
+    healthInsurance: {
+      hasInsurance: { type: Boolean, default: false },
+      totalCoverAmount: { type: Number, min: [0, 'Cover amount cannot be negative'], default: 0 },
+      annualPremium: { type: Number, min: [0, 'Premium cannot be negative'], default: 0 },
+      familyMembers: { type: Number, min: [1, 'At least 1 member'], max: [10, 'Too many members'], default: 1 }
+    },
+    
+    // Vehicle Insurance
+    vehicleInsurance: {
+      hasInsurance: { type: Boolean, default: false },
+      annualPremium: { type: Number, min: [0, 'Premium cannot be negative'], default: 0 }
+    },
+    
+    // Other Insurance
+    otherInsurance: {
+      hasInsurance: { type: Boolean, default: false },
+      insuranceTypes: { type: String, trim: true, maxlength: [200, 'Insurance types too long'] },
+      annualPremium: { type: Number, min: [0, 'Premium cannot be negative'], default: 0 }
+    }
+  },
+
+  // Enhanced Financial Goals - Step 7
+  enhancedFinancialGoals: {
+    // Emergency Fund
+    emergencyFund: {
+      priority: { type: String, enum: ['High', 'Medium', 'Low', 'Not Applicable'], default: 'High' },
+      targetAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 }
+    },
+    
+    // Child Education
+    childEducation: {
+      isApplicable: { type: Boolean, default: false },
+      targetAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 2500000 },
+      targetYear: { type: Number, min: [2024, 'Year cannot be in the past'] }
+    },
+    
+    // Home Purchase
+    homePurchase: {
+      isApplicable: { type: Boolean, default: false },
+      targetAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 0 },
+      targetYear: { type: Number, min: [2024, 'Year cannot be in the past'] }
+    },
+    
+    // Custom Goals
+    customGoals: [{
+      goalName: { type: String, trim: true, maxlength: [100, 'Goal name too long'] },
+      targetAmount: { type: Number, min: [0, 'Amount cannot be negative'] },
+      targetYear: { type: Number, min: [2024, 'Year cannot be in the past'] },
+      priority: { type: String, enum: ['High', 'Medium', 'Low'], default: 'Medium' }
+    }]
+  },
+
+  // Enhanced Risk Profile
+  enhancedRiskProfile: {
+    investmentExperience: { 
+      type: String, 
+      enum: ['Beginner (0-2 years)', 'Intermediate (2-5 years)', 'Experienced (5-10 years)', 'Expert (10+ years)', ''], 
+      required: false 
+    },
+    riskTolerance: { 
+      type: String, 
+      enum: ['Conservative', 'Moderate', 'Aggressive', ''], 
+      required: false 
+    },
+    monthlyInvestmentCapacity: { 
+      type: Number, 
+      min: [0, 'Investment capacity cannot be negative']
+    }
+  },
+  
+  // Legacy Liabilities for compatibility
   liabilities: {
     loans: {
       type: Number,
@@ -288,33 +523,20 @@ const clientSchema = new mongoose.Schema({
     }
   },
 
-  // Form Progress Tracking
+  // Enhanced Form Progress Tracking - 7 Steps
   formProgress: {
-    step1Completed: {
-      type: Boolean,
-      default: false
-    },
-    step2Completed: {
-      type: Boolean,
-      default: false
-    },
-    step3Completed: {
-      type: Boolean,
-      default: false
-    },
-    step4Completed: {
-      type: Boolean,
-      default: false
-    },
-    step5Completed: {
-      type: Boolean,
-      default: false
-    },
+    step1Completed: { type: Boolean, default: false },
+    step2Completed: { type: Boolean, default: false },
+    step3Completed: { type: Boolean, default: false },
+    step4Completed: { type: Boolean, default: false },
+    step5Completed: { type: Boolean, default: false },
+    step6Completed: { type: Boolean, default: false },
+    step7Completed: { type: Boolean, default: false },
     currentStep: {
       type: Number,
       default: 1,
       min: 1,
-      max: 5
+      max: 7
     },
     lastSavedAt: {
       type: Date,
@@ -359,13 +581,7 @@ const clientSchema = new mongoose.Schema({
     default: ''
   },
   
-  // KYC Information
-  panNumber: {
-    type: String,
-    trim: true,
-    uppercase: true,
-    match: [/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Please enter a valid PAN number']
-  },
+  // KYC Information (panNumber is already defined in personal info section)
   aadharNumber: {
     type: String,
     trim: true,
@@ -695,7 +911,7 @@ const clientSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0,
-    max: 5
+    max: 7
   },
   lastActiveDate: {
     type: Date,

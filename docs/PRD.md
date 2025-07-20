@@ -4,14 +4,16 @@
 ## 1. Executive Summary
 
 ### 1.1 Product Overview
-RICHIEAT is a modern web-based platform for financial advisors to manage client relationships, built with React (Vite), Tailwind CSS, and the MERN stack. The platform streamlines advisor registration, client onboarding, and portfolio management through an intuitive dashboard interface.
+RICHIEAT is a modern web-based platform for financial advisors to manage client relationships, built with React 19.1.0 (Vite 7.0), Tailwind CSS 4.1.11, and the MERN stack. The platform includes advisor registration, client onboarding, CAS file parsing, and comprehensive logging. Core features are implemented with a focus on SEBI compliance for Indian financial advisors.
 
 ### 1.2 Core Objectives
-- Fast, responsive SPA using Vite's development environment
-- Modern UI with Tailwind CSS utility-first approach
-- Seamless advisor-client relationship management
-- Secure document handling and financial planning
+- Fast, responsive SPA using Vite 7.0 development environment
+- Clean UI with Tailwind CSS 4.1.11 utility-first approach
+- Comprehensive advisor-client relationship management
+- CAS file parsing and financial data extraction
+- Secure document handling with multiple PDF parser support
 - SEBI compliance and regulatory adherence
+- Enhanced logging and monitoring system
 
 ### 1.3 Target Audience
 - **Primary:** SEBI-registered financial advisors in India
@@ -22,33 +24,33 @@ RICHIEAT is a modern web-based platform for financial advisors to manage client 
 ### 2.1 Frontend Stack
 ```javascript
 // Frontend Technologies
-- Build Tool: Vite 5.0+
-- Framework: React 18+ (JavaScript)
-- Styling: Tailwind CSS 3.4+
-- UI Components: Shadcn/UI + Radix UI
-- Routing: React Router v6
-- State Management: Context API + useReducer
+- Build Tool: Vite 7.0.0
+- Framework: React 19.1.0 (JavaScript)
+- Styling: Tailwind CSS 4.1.11
+- UI Components: Custom HTML elements with Tailwind CSS
+- Routing: React Router v7.6.3
+- State Management: Context API
 - HTTP Client: Axios
 - Form Handling: React Hook Form
-- Component Variants: Class Variance Authority (CVA)
-- Icons: Heroicons / Lucide React
-- Charts: Recharts / Chart.js
-- Date Handling: date-fns
-- Animations: Framer Motion
+- Icons: Lucide React
+- PDF Handling: pdfjs-dist
+- Notifications: React Hot Toast
 ```
 
 ### 2.2 Backend Stack
 ```javascript
 // Backend Technologies
-- Runtime: Node.js 20 LTS
-- Framework: Express.js 4.18+
-- Database: MongoDB 6.0+
-- ODM: Mongoose 8.0+
+- Runtime: Node.js (Latest LTS)
+- Framework: Express.js 5.1.0
+- Database: MongoDB Atlas (Cloud)
+- ODM: Mongoose 8.16.1
 - Authentication: JWT + bcrypt
-- File Upload: Multer + AWS S3
-- Email: Nodemailer
-- Validation: Joi / Express Validator
-- CORS: cors middleware
+- File Upload: Multer (Local Storage)
+- Email: Nodemailer with Gmail SMTP
+- Validation: Express Validator + Joi
+- Security: Helmet, Express Rate Limit, XSS protection
+- PDF Processing: Multiple parsers (pdf-parse, pdf2json, pdfreader)
+- Logging: Winston + Morgan
 - Environment: dotenv
 ```
 
@@ -109,157 +111,122 @@ export default defineConfig({
 
 ### 2.5 Tailwind Configuration
 ```javascript
-// tailwind.config.js
+// tailwind.config.js - Current Basic Configuration
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{js,jsx}",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {
-      colors: {
-        primary: {
-          50: '#eff6ff',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-        },
-        secondary: {
-          500: '#10b981',
-          600: '#059669',
-        }
-      },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-      },
-    },
+    extend: {},
   },
-  plugins: [
-    require('@tailwindcss/forms'),
-    require('@tailwindcss/typography'),
-  ],
+  plugins: [],
 }
 ```
 
 ## 3. Component Architecture
 
-### 3.1 Core Components Structure
+### 3.1 Actual Components Structure
 ```javascript
-// Component hierarchy
+// Current component hierarchy
 src/components/
-├── common/
-│   ├── Button.jsx
-│   ├── Input.jsx
-│   ├── Select.jsx
-│   ├── Modal.jsx
-│   ├── Toast.jsx
-│   ├── Spinner.jsx
-│   └── Card.jsx
 ├── layout/
 │   ├── Header.jsx
 │   ├── Sidebar.jsx
-│   ├── Footer.jsx
-│   └── Layout.jsx
-├── auth/
-│   ├── LoginForm.jsx
-│   ├── RegisterForm.jsx
-│   ├── ForgotPassword.jsx
-│   └── ProtectedRoute.jsx
-├── dashboard/
-│   ├── DashboardStats.jsx
+│   └── DashboardLayout.jsx
+├── client/
+│   ├── ClientCard.jsx
+│   ├── ClientDetailView.jsx
 │   ├── ClientList.jsx
-│   ├── RecentActivity.jsx
-│   └── QuickActions.jsx
-└── client/
-    ├── ClientCard.jsx
-    ├── ClientDetails.jsx
-    ├── AddClientModal.jsx
-    └── OnboardingForm.jsx
+│   └── ClientOnboardingForm.jsx
+├── dashboard/
+│   ├── MetricCard.jsx
+│   └── ActionCard.jsx
+├── modals/
+│   └── AddClientModal.jsx
+├── Dashboard.jsx
+├── Login.jsx
+├── Signup.jsx
+├── AdvisorProfile.jsx
+├── ClientsPage.jsx
+├── AdminLogin.jsx
+├── AdminDashboard.jsx
+├── Home.jsx
+└── ProtectedRoute.jsx
 ```
 
-### 3.2 Shadcn/UI Integration
+### 3.2 Component Implementation
 ```javascript
-// Using Shadcn/UI Button Component
-import { Button } from "@/components/ui/button"
-
-// Basic Usage Examples
-<Button variant="default">Default Button</Button>
-<Button variant="secondary">Secondary Button</Button>
-<Button variant="destructive">Delete</Button>
-<Button variant="outline">Outline Button</Button>
-<Button variant="ghost">Ghost Button</Button>
-<Button variant="link">Link Button</Button>
-
-// Size Variants
-<Button size="sm">Small</Button>
-<Button size="default">Default</Button>
-<Button size="lg">Large</Button>
-<Button size="icon">⚙️</Button>
-
-// RICHIEAT Specific Examples
-<Button variant="default">Register as Advisor</Button>
-<Button variant="outline">Add Client</Button>
-<Button variant="secondary">Save Profile</Button>
-<Button variant="destructive">Delete Client</Button>
-```
-
-### 3.3 Shadcn/UI Configuration
-```javascript
-// components.json - Shadcn/UI Configuration
-{
-  "style": "default",
-  "rsc": false,
-  "tsx": false,
-  "tailwind": {
-    "config": "tailwind.config.js",
-    "css": "src/index.css",
-    "baseColor": "neutral",
-    "cssVariables": true
-  },
-  "aliases": {
-    "components": "@/components",
-    "utils": "@/lib/utils"
-  }
-}
-```
-
-### 3.4 Custom Button Component (Alternative)
-```javascript
-// Custom Button.jsx - Alternative implementation
-import { Button as ShadcnButton } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-
-const Button = ({ 
-  children, 
-  variant = 'default', 
-  size = 'default', 
-  loading = false,
-  disabled = false,
-  onClick,
-  className = '',
-  ...props 
-}) => {
+// Using standard HTML elements with Tailwind CSS
+// Example: Dashboard Action Cards
+const ActionCard = ({ icon: Icon, title, description, buttonText, onClick }) => {
   return (
-    <ShadcnButton
-      variant={variant}
-      size={size}
-      disabled={disabled || loading}
-      onClick={onClick}
-      className={cn(className)}
-      {...props}
-    >
-      {loading && (
-        <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
-      )}
-      {children}
-    </ShadcnButton>
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mb-4">
+        <Icon className="w-6 h-6 text-blue-600" />
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
+      <p className="text-gray-600 mb-4">{description}</p>
+      <button 
+        onClick={onClick}
+        className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+      >
+        {buttonText}
+      </button>
+    </div>
   )
 }
+```
 
-export default Button
+### 3.3 Styling Approach
+```javascript
+// Using Tailwind CSS classes directly
+// Example: MetricCard Component
+const MetricCard = ({ title, value, change, changeType }) => {
+  return (
+    <div className="bg-white overflow-hidden shadow rounded-lg">
+      <div className="p-5">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
+              {/* Icon goes here */}
+            </div>
+          </div>
+          <div className="ml-5 w-0 flex-1">
+            <dl>
+              <dt className="text-sm font-medium text-gray-500 truncate">
+                {title}
+              </dt>
+              <dd className="text-lg font-semibold text-gray-900">
+                {value}
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+### 3.4 Actual Button Implementation
+```javascript
+// Standard HTML button elements with Tailwind CSS
+// Example from AddClientModal.jsx
+const buttonStyles = {
+  primary: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500",
+  secondary: "bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400",
+  danger: "bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+}
+
+// Usage in components
+<button 
+  type="submit"
+  className={buttonStyles.primary}
+  disabled={loading}
+>
+  {loading ? 'Loading...' : 'Send Invitation'}
+</button>
 ```
 
 ## 4. Feature Implementation
@@ -858,14 +825,98 @@ const AddClientModal = ({ open, onClose, onSuccess }) => {
 export default AddClientModal
 ```
 
-## 5. API Service Layer
+## 5. CAS Parsing System
 
-### 5.1 Axios Configuration
+### 5.1 CAS Parser Implementation
 ```javascript
-// services/api.js
+// backend/services/cas-parser/index.js
+const CASParser = {
+  // Supported formats: CDSL, NSDL, CAMS, Karvy
+  supportedFormats: ['CDSL', 'NSDL', 'CAMS', 'KARVY'],
+  
+  async parseFile(filePath, password = null) {
+    // Auto-detect format and parse accordingly
+    const format = await this.detectFormat(filePath)
+    const parser = this.getParser(format)
+    return await parser.parse(filePath, password)
+  },
+  
+  // Individual parsers for each format
+  parsers: {
+    cdsl: require('./parsers/cdsl-parser'),
+    nsdl: require('./parsers/nsdl-parser'),
+    cams: require('./parsers/cams-parser'),
+    karvy: require('./parsers/karvy-parser')
+  }
+}
+```
+
+### 5.2 OnboardingCASController
+```javascript
+// Enhanced CAS handling during client onboarding
+class OnboardingCASController {
+  // Upload CAS file with structured logging
+  static async uploadCAS(req, res) {
+    const { token } = req.params
+    const eventId = `EVT_${Date.now()}`
+    
+    try {
+      const invitation = await ClientInvitation.findOne({ token })
+      if (!invitation) {
+        return res.status(404).json({
+          success: false,
+          message: 'Invalid or expired invitation token'
+        })
+      }
+      
+      // Store file info temporarily in invitation
+      invitation.casUploadData = {
+        fileName: req.file.filename,
+        filePath: req.file.path,
+        fileSize: req.file.size,
+        uploadedAt: new Date(),
+        eventId
+      }
+      
+      await invitation.save()
+      
+      casEventLogger.logEvent('CAS_ONBOARDING_UPLOAD_SUCCESS', {
+        eventId,
+        token,
+        fileName: req.file.filename,
+        fileSize: req.file.size
+      })
+      
+      res.json({
+        success: true,
+        message: 'CAS file uploaded successfully',
+        data: {
+          fileName: req.file.filename,
+          fileSize: req.file.size,
+          uploadedAt: new Date(),
+          eventId
+        }
+      })
+    } catch (error) {
+      casEventLogger.logError('CAS_ONBOARDING_UPLOAD_FAILED', error, { eventId, token })
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload CAS file',
+        error: error.message
+      })
+    }
+  }
+}
+```
+
+## 6. API Service Layer
+
+### 6.1 Axios Configuration
+```javascript
+// frontend/src/services/api.js
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const API_BASE_URL = 'http://localhost:5000/api' // Direct connection (no proxy)
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -874,26 +925,24 @@ const api = axios.create({
   },
 })
 
-// Request interceptor
+// Request interceptor for auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('authToken')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
-  (error) => {
-    return Promise.reject(error)
-  }
+  (error) => Promise.reject(error)
 )
 
-// Response interceptor
+// Response interceptor for auth errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
+      localStorage.removeItem('authToken')
       window.location.href = '/login'
     }
     return Promise.reject(error)
@@ -903,42 +952,56 @@ api.interceptors.response.use(
 export default api
 ```
 
-### 5.2 API Service Methods
+### 6.2 API Service Methods (Actual Implementation)
 ```javascript
-// services/authService.js
-import api from './api'
-
-export const authService = {
-  login: (credentials) => api.post('/auth/login', credentials),
-  register: (userData) => api.post('/auth/register', userData),
-  logout: () => api.post('/auth/logout'),
-  verifyEmail: (token) => api.post('/auth/verify-email', { token }),
-  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
-  resetPassword: (token, password) => api.post('/auth/reset-password', { token, password }),
-}
-
-// services/advisorService.js
-export const advisorService = {
-  getProfile: () => api.get('/advisor/profile'),
-  updateProfile: (data) => api.put('/advisor/profile', data),
-  getDashboard: () => api.get('/advisor/dashboard'),
-  uploadPicture: (file) => {
-    const formData = new FormData()
-    formData.append('picture', file)
-    return api.post('/advisor/upload-picture', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+// frontend/src/services/api.js - Current API methods
+const API = {
+  // Authentication
+  auth: {
+    login: (credentials) => api.post('/auth/login', credentials),
+    register: (userData) => api.post('/auth/register', userData),
+    logout: () => api.post('/auth/logout'),
+    getProfile: () => api.get('/auth/profile'),
+    updateProfile: (data) => api.put('/auth/profile', data)
   },
+  
+  // Client Management
+  clients: {
+    getAll: () => api.get('/clients/manage'),
+    getById: (id) => api.get(`/clients/manage/${id}`),
+    invite: (data) => api.post('/clients/manage/invitations', data),
+    getInvitations: () => api.get('/clients/manage/invitations'),
+    update: (id, data) => api.put(`/clients/manage/${id}`, data),
+    delete: (id) => api.delete(`/clients/manage/${id}`)
+  },
+  
+  // CAS Operations
+  cas: {
+    uploadOnboardingCAS: (token, formData) => 
+      api.post(`/clients/onboarding/${token}/cas/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }),
+    parseOnboardingCAS: (token) => 
+      api.post(`/clients/onboarding/${token}/cas/parse`),
+    // New structured endpoints
+    uploadStructuredCAS: (token, formData) => 
+      api.post(`/clients/onboarding/${token}/cas/upload-structured`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }),
+    parseStructuredCAS: (token) => 
+      api.post(`/clients/onboarding/${token}/cas/parse-structured`),
+    getCASStatus: (token) => 
+      api.get(`/clients/onboarding/${token}/cas/status`)
+  },
+  
+  // Onboarding
+  onboarding: {
+    getForm: (token) => api.get(`/clients/onboarding/${token}`),
+    submitForm: (token, data) => api.post(`/clients/onboarding/${token}`, data)
+  }
 }
 
-// services/clientService.js
-export const clientService = {
-  getAll: (params) => api.get('/clients', { params }),
-  getById: (id) => api.get(`/clients/${id}`),
-  invite: (data) => api.post('/clients/invite', data),
-  update: (id, data) => api.put(`/clients/${id}`, data),
-  delete: (id) => api.delete(`/clients/${id}`),
-}
+export default API
 ```
 
 ## 6. State Management
@@ -1062,47 +1125,62 @@ export default App
 
 ## 8. Backend Models
 
-### 8.1 Mongoose Schemas
+### 8.1 Actual Mongoose Schemas
 ```javascript
-// models/Advisor.js
+// models/Advisor.js - Current Implementation
 const mongoose = require('mongoose')
 const bcrypt = require('bcryptjs')
 
 const advisorSchema = new mongoose.Schema({
   firstName: {
     type: String,
-    required: true,
-    trim: true
+    required: [true, 'First name is required'],
+    trim: true,
+    maxlength: [50, 'First name cannot exceed 50 characters']
   },
   lastName: {
     type: String,
-    trim: true
+    required: [true, 'Last name is required'],
+    trim: true,
+    maxlength: [50, 'Last name cannot exceed 50 characters']
   },
   email: {
     type: String,
-    required: true,
+    required: [true, 'Email is required'],
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
   },
   password: {
     type: String,
-    required: true
+    required: [true, 'Password is required'],
+    minlength: [8, 'Password must be at least 8 characters long'],
+    select: false
   },
-  isEmailVerified: {
-    type: Boolean,
-    default: false
+  firmName: String,
+  phoneNumber: String,
+  sebiRegNumber: String,
+  revenueModel: {
+    type: String,
+    enum: ['Fee-Only', 'Commission-Based', 'Fee + Commission', ''],
+    default: ''
   },
-  professionalDetails: {
-    ppmName: String,
-    phoneNumber: String,
-    sebiRegNumber: String,
-    ppbNumber: String,
-    arnNumber: String,
-    address: String,
-    experience: Number
+  // Additional professional fields
+  arnNumber: String,
+  euinNumber: String,
+  ppbNumber: String,
+  educationalQualifications: [String],
+  professionalExperience: Number,
+  specializations: [String],
+  businessAddress: {
+    street: String,
+    city: String,
+    state: String,
+    pincode: String,
+    country: { type: String, default: 'India' }
   },
-  profilePicture: String,
+  isEmailVerified: { type: Boolean, default: false },
   status: {
     type: String,
     enum: ['active', 'inactive', 'suspended'],
@@ -1112,9 +1190,10 @@ const advisorSchema = new mongoose.Schema({
   timestamps: true
 })
 
+// Enhanced middleware with logging
 advisorSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next()
-  this.password = await bcrypt.hash(this.password, 10)
+  this.password = await bcrypt.hash(this.password, 12)
   next()
 })
 
@@ -1156,26 +1235,31 @@ describe('Button Component', () => {
 
 ## 10. Deployment Configuration
 
-### 10.1 Environment Variables
+### 10.1 Environment Variables (Current Implementation)
 ```bash
-# .env.example
-# Frontend
-VITE_API_URL=http://localhost:5000/api
-VITE_GOOGLE_CLIENT_ID=your_google_client_id
-
+# .env.example - Actual Configuration
 # Backend
-NODE_ENV=production
+NODE_ENV=development
 PORT=5000
-MONGODB_URI=mongodb://localhost:27017/richieat
+MONGODB_URI=
 JWT_SECRET=your_jwt_secret_key
-JWT_REFRESH_SECRET=your_refresh_secret_key
+
+# Email Configuration (Gmail SMTP)
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your_email@gmail.com
-EMAIL_PASS=your_email_password
-AWS_ACCESS_KEY_ID=your_aws_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret
-AWS_BUCKET_NAME=richieat-assets
+EMAIL_PASS=your_app_password
+
+# File Upload (Local Storage)
+UPLOAD_PATH=./uploads
+MAX_FILE_SIZE=10485760
+
+# Security
+RATE_LIMIT_WINDOW=900000
+RATE_LIMIT_MAX=5
+
+# Logging
+LOG_LEVEL=info
 ```
 
 ### 10.2 Docker Configuration
@@ -1261,7 +1345,7 @@ app.post('/api/auth/login', loginLimiter, loginController)
 
 ---
 
-**Document Version:** 2.0  
-**Technology Stack:** JavaScript + React (Vite) + Tailwind CSS + MERN  
-**Last Updated:** [Current Date]  
-**Status:** Implementation Ready
+**Document Version:** 3.0  
+**Technology Stack:** JavaScript + React 19.1.0 (Vite 7.0) + Tailwind CSS 4.1.11 + MERN  
+**Last Updated:** 2025-01-20  
+**Status:** 90% Complete - Core Features Implemented

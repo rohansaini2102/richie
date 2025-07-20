@@ -1,0 +1,738 @@
+{
+  "NOTE": "This file represents the original planned data structure. The actual implementation uses direct MongoDB schema fields instead of the nested optimizedClientForm structure.",
+  "actualImplementation": "Client data is stored directly in MongoDB using schema fields like client.firstName, client.debtsAndLiabilities, etc.",
+  "originalPlan_optimizedClientForm": {
+    "step1_personalInfo": {
+      "required": {
+        "firstName": {
+          "type": "text",
+          "validation": "required, min 2 chars",
+          "placeholder": "Enter first name"
+        },
+        "lastName": {
+          "type": "text", 
+          "validation": "required, min 2 chars",
+          "placeholder": "Enter last name"
+        },
+        "email": {
+          "type": "email",
+          "validation": "required, valid email",
+          "placeholder": "your.email@example.com"
+        },
+        "phoneNumber": {
+          "type": "tel",
+          "validation": "required, 10 digits",
+          "placeholder": "+91 9876543210"
+        },
+        "dateOfBirth": {
+          "type": "date",
+          "validation": "required, age 18-80",
+          "placeholder": "DD/MM/YYYY"
+        },
+        "panNumber": {
+          "type": "text",
+          "validation": "required, PAN format",
+          "placeholder": "ABCDE1234F"
+        }
+      },
+      "optional": {
+        "maritalStatus": {
+          "type": "select",
+          "options": ["Single", "Married", "Divorced", "Widowed"],
+          "default": "Single"
+        },
+        "numberOfDependents": {
+          "type": "number",
+          "min": 0,
+          "max": 10,
+          "placeholder": "Number of dependents"
+        }
+      }
+    },
+
+    "step2_incomeAndExpenses": {
+      "income": {
+        "totalMonthlyIncome": {
+          "type": "number",
+          "validation": "required",
+          "placeholder": "Total monthly income (₹)",
+          "min": 10000,
+          "description": "Include salary, business, rental, freelance - all sources"
+        },
+        "incomeType": {
+          "type": "select",
+          "options": ["Salaried", "Business", "Freelance", "Mixed"],
+          "required": true
+        }
+      },
+
+      "expenses": {
+        "totalMonthlyExpenses": {
+          "type": "number",
+          "validation": "required",
+          "placeholder": "Total monthly expenses (₹)",
+          "description": "All expenses including rent, food, transport, bills"
+        },
+        "expenseBreakdown": {
+          "showBreakdown": {
+            "type": "boolean",
+            "label": "Want to provide expense breakdown?",
+            "default": false
+          },
+          "details": {
+            "showIf": "showBreakdown = true",
+            "housingRent": {
+              "type": "number",
+              "placeholder": "Housing/Rent (₹)"
+            },
+            "foodGroceries": {
+              "type": "number", 
+              "placeholder": "Food & groceries (₹)"
+            },
+            "transportation": {
+              "type": "number",
+              "placeholder": "Transport costs (₹)"
+            },
+            "utilities": {
+              "type": "number",
+              "placeholder": "Bills & utilities (₹)"
+            },
+            "entertainment": {
+              "type": "number",
+              "placeholder": "Entertainment & lifestyle (₹)"
+            },
+            "healthcare": {
+              "type": "number", 
+              "placeholder": "Healthcare (₹)"
+            },
+            "otherExpenses": {
+              "type": "number",
+              "placeholder": "Other expenses (₹)"
+            }
+          }
+        }
+      }
+    },
+
+    "step3_retirementPlanning": {
+      "currentAge": {
+        "type": "number",
+        "calculation": "auto from dateOfBirth",
+        "readonly": true
+      },
+      "retirementAge": {
+        "type": "number",
+        "validation": "required",
+        "placeholder": "At what age do you want to retire?",
+        "min": 45,
+        "max": 75,
+        "default": 60
+      },
+      "hasRetirementCorpus": {
+        "type": "boolean",
+        "label": "Do you have existing retirement savings?",
+        "default": false
+      },
+      "currentRetirementCorpus": {
+        "type": "number",
+        "placeholder": "Current retirement corpus (₹)",
+        "showIf": "hasRetirementCorpus = true",
+        "description": "PPF, EPF, NPS, retirement-focused investments"
+      },
+      "targetRetirementCorpus": {
+        "type": "number",
+        "placeholder": "Target retirement corpus (₹)",
+        "description": "How much do you need for retirement?",
+        "smartDefault": "monthlyExpenses * 12 * 25"
+      }
+    },
+
+    "step4_casAndInvestments": {
+      "casSection": {
+        "hasCAS": {
+          "type": "boolean",
+          "label": "Do you have a CAS (Consolidated Account Statement)?",
+          "default": false,
+          "description": "CAS contains all your mutual fund, stock, bond investments"
+        },
+        "casUpload": {
+          "showIf": "hasCAS = true",
+          "casFile": {
+            "type": "file",
+            "accept": ".pdf",
+            "placeholder": "Upload CAS PDF file"
+          },
+          "casPassword": {
+            "type": "password",
+            "placeholder": "CAS password (if protected)"
+          },
+          "extractButton": {
+            "type": "button",
+            "label": "Extract Data from CAS",
+            "action": "parseCASData"
+          }
+        },
+        "manualEntry": {
+          "showManualEntry": {
+            "type": "boolean",
+            "label": "CAS not working? Fill manually",
+            "default": false,
+            "showIf": "hasCAS = true"
+          }
+        }
+      },
+
+      "investmentData": {
+        "description": "This data will be auto-filled from CAS or can be entered manually",
+        "showIf": "hasCAS = false OR showManualEntry = true",
+        
+        "mutualFunds": {
+          "hasMutualFunds": {"type": "boolean", "default": false},
+          "totalValue": {
+            "type": "number",
+            "placeholder": "Total mutual fund value (₹)",
+            "showIf": "hasMutualFunds = true"
+          },
+          "monthlyInvestment": {
+            "type": "number",
+            "placeholder": "Monthly SIP amount (₹)",
+            "showIf": "hasMutualFunds = true"
+          }
+        },
+
+        "directStocks": {
+          "hasStocks": {"type": "boolean", "default": false},
+          "totalValue": {
+            "type": "number",
+            "placeholder": "Total stock portfolio value (₹)",
+            "showIf": "hasStocks = true"
+          }
+        },
+
+        "ppf": {
+          "hasPPF": {"type": "boolean", "default": false},
+          "currentBalance": {
+            "type": "number",
+            "placeholder": "Current PPF balance (₹)",
+            "showIf": "hasPPF = true"
+          },
+          "annualContribution": {
+            "type": "number",
+            "placeholder": "Annual PPF contribution (₹)",
+            "showIf": "hasPPF = true",
+            "max": 150000
+          }
+        },
+
+        "epf": {
+          "hasEPF": {"type": "boolean", "default": false},
+          "currentBalance": {
+            "type": "number", 
+            "placeholder": "Current EPF balance (₹)",
+            "showIf": "hasEPF = true"
+          }
+        },
+
+        "nps": {
+          "hasNPS": {"type": "boolean", "default": false},
+          "currentBalance": {
+            "type": "number",
+            "placeholder": "Current NPS balance (₹)",
+            "showIf": "hasNPS = true"
+          }
+        },
+
+        "elss": {
+          "hasELSS": {"type": "boolean", "default": false},
+          "currentValue": {
+            "type": "number",
+            "placeholder": "ELSS investment value (₹)",
+            "showIf": "hasELSS = true"
+          }
+        },
+
+        "fixedDeposits": {
+          "hasFDs": {"type": "boolean", "default": false},
+          "totalValue": {
+            "type": "number",
+            "placeholder": "Total FD value (₹)",
+            "showIf": "hasFDs = true"
+          }
+        },
+
+        "otherInvestments": {
+          "hasOthers": {"type": "boolean", "default": false},
+          "totalValue": {
+            "type": "number",
+            "placeholder": "Other investments value (₹)",
+            "showIf": "hasOthers = true",
+            "description": "Gold, real estate, bonds, etc."
+          }
+        }
+      }
+    },
+
+    "step5_debtsAndLiabilities": {
+      "description": "Click on loan types you have to provide details",
+      
+      "homeLoan": {
+        "hasHomeLoan": {
+          "type": "boolean", 
+          "label": "Home Loan",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasHomeLoan = true",
+          "outstandingAmount": {
+            "type": "number",
+            "placeholder": "Outstanding amount (₹)",
+            "validation": "required"
+          },
+          "monthlyEMI": {
+            "type": "number", 
+            "placeholder": "Monthly EMI (₹)",
+            "validation": "required"
+          },
+          "interestRate": {
+            "type": "number",
+            "placeholder": "Interest rate (%)",
+            "step": 0.1,
+            "validation": "required"
+          },
+          "remainingTenure": {
+            "type": "number",
+            "placeholder": "Remaining years",
+            "validation": "required"
+          }
+        }
+      },
+
+      "personalLoan": {
+        "hasPersonalLoan": {
+          "type": "boolean",
+          "label": "Personal Loan", 
+          "default": false
+        },
+        "details": {
+          "showIf": "hasPersonalLoan = true",
+          "outstandingAmount": {
+            "type": "number",
+            "placeholder": "Outstanding amount (₹)"
+          },
+          "monthlyEMI": {
+            "type": "number",
+            "placeholder": "Monthly EMI (₹)"
+          },
+          "interestRate": {
+            "type": "number", 
+            "placeholder": "Interest rate (%)",
+            "step": 0.1
+          }
+        }
+      },
+
+      "carLoan": {
+        "hasCarLoan": {
+          "type": "boolean",
+          "label": "Car Loan",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasCarLoan = true",
+          "outstandingAmount": {
+            "type": "number",
+            "placeholder": "Outstanding amount (₹)"
+          },
+          "monthlyEMI": {
+            "type": "number",
+            "placeholder": "Monthly EMI (₹)"
+          },
+          "interestRate": {
+            "type": "number",
+            "placeholder": "Interest rate (%)",
+            "step": 0.1
+          }
+        }
+      },
+
+      "educationLoan": {
+        "hasEducationLoan": {
+          "type": "boolean",
+          "label": "Education Loan",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasEducationLoan = true",
+          "outstandingAmount": {
+            "type": "number",
+            "placeholder": "Outstanding amount (₹)"
+          },
+          "monthlyEMI": {
+            "type": "number",
+            "placeholder": "Monthly EMI (₹)"
+          },
+          "interestRate": {
+            "type": "number",
+            "placeholder": "Interest rate (%)",
+            "step": 0.1
+          }
+        }
+      },
+
+      "goldLoan": {
+        "hasGoldLoan": {
+          "type": "boolean",
+          "label": "Gold Loan",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasGoldLoan = true",
+          "outstandingAmount": {
+            "type": "number",
+            "placeholder": "Outstanding amount (₹)"
+          },
+          "monthlyEMI": {
+            "type": "number",
+            "placeholder": "Monthly EMI (₹)"
+          },
+          "interestRate": {
+            "type": "number",
+            "placeholder": "Interest rate (%)",
+            "step": 0.1
+          }
+        }
+      },
+
+      "creditCards": {
+        "hasCreditCards": {
+          "type": "boolean",
+          "label": "Credit Card Debt",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasCreditCards = true",
+          "totalOutstanding": {
+            "type": "number",
+            "placeholder": "Total credit card outstanding (₹)"
+          },
+          "averageInterestRate": {
+            "type": "number",
+            "placeholder": "Average interest rate (%)",
+            "default": 36,
+            "step": 0.1
+          },
+          "monthlyPayment": {
+            "type": "number",
+            "placeholder": "Monthly payment (₹)"
+          }
+        }
+      },
+
+      "businessLoan": {
+        "hasBusinessLoan": {
+          "type": "boolean",
+          "label": "Business Loan",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasBusinessLoan = true",
+          "outstandingAmount": {
+            "type": "number",
+            "placeholder": "Outstanding amount (₹)"
+          },
+          "monthlyEMI": {
+            "type": "number",
+            "placeholder": "Monthly EMI (₹)"
+          },
+          "interestRate": {
+            "type": "number",
+            "placeholder": "Interest rate (%)",
+            "step": 0.1
+          }
+        }
+      },
+
+      "otherLoans": {
+        "hasOtherLoans": {
+          "type": "boolean",
+          "label": "Other Loans",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasOtherLoans = true",
+          "loanType": {
+            "type": "text",
+            "placeholder": "Loan type"
+          },
+          "outstandingAmount": {
+            "type": "number",
+            "placeholder": "Outstanding amount (₹)"
+          },
+          "monthlyEMI": {
+            "type": "number",
+            "placeholder": "Monthly EMI (₹)"
+          },
+          "interestRate": {
+            "type": "number",
+            "placeholder": "Interest rate (%)",
+            "step": 0.1
+          }
+        }
+      }
+    },
+
+    "step6_insuranceOptional": {
+      "description": "Insurance coverage details (optional but recommended)",
+
+      "lifeInsurance": {
+        "hasLifeInsurance": {
+          "type": "boolean",
+          "label": "Life Insurance",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasLifeInsurance = true",
+          "totalCoverAmount": {
+            "type": "number",
+            "placeholder": "Total life cover amount (₹)",
+            "smartDefault": "totalMonthlyIncome * 12 * 10"
+          },
+          "annualPremium": {
+            "type": "number",
+            "placeholder": "Total annual premium (₹)"
+          },
+          "insuranceType": {
+            "type": "select",
+            "options": ["Term Life", "Whole Life", "ULIP", "Endowment", "Mixed"],
+            "default": "Term Life"
+          }
+        }
+      },
+
+      "healthInsurance": {
+        "hasHealthInsurance": {
+          "type": "boolean",
+          "label": "Health Insurance",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasHealthInsurance = true",
+          "totalCoverAmount": {
+            "type": "number",
+            "placeholder": "Total health cover amount (₹)"
+          },
+          "annualPremium": {
+            "type": "number", 
+            "placeholder": "Total annual premium (₹)"
+          },
+          "familyMembers": {
+            "type": "number",
+            "placeholder": "Number of members covered",
+            "default": 1
+          }
+        }
+      },
+
+      "vehicleInsurance": {
+        "hasVehicleInsurance": {
+          "type": "boolean",
+          "label": "Vehicle Insurance",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasVehicleInsurance = true",
+          "annualPremium": {
+            "type": "number",
+            "placeholder": "Total annual premium (₹)"
+          }
+        }
+      },
+
+      "otherInsurance": {
+        "hasOtherInsurance": {
+          "type": "boolean",
+          "label": "Other Insurance",
+          "default": false
+        },
+        "details": {
+          "showIf": "hasOtherInsurance = true",
+          "insuranceTypes": {
+            "type": "text",
+            "placeholder": "Type of insurance (Travel, Home, etc.)"
+          },
+          "annualPremium": {
+            "type": "number",
+            "placeholder": "Total annual premium (₹)"
+          }
+        }
+      }
+    },
+
+    "step7_goalsAndRiskProfile": {
+      "financialGoals": {
+        "description": "What are your main financial goals?",
+        "emergencyFund": {
+          "priority": {
+            "type": "select",
+            "options": ["High", "Medium", "Low", "Not Applicable"],
+            "default": "High"
+          },
+          "targetAmount": {
+            "type": "number",
+            "placeholder": "Emergency fund target (₹)",
+            "smartDefault": "totalMonthlyExpenses * 6"
+          }
+        },
+        "childEducation": {
+          "isApplicable": {
+            "type": "boolean",
+            "label": "Child's Education",
+            "default": false
+          },
+          "details": {
+            "showIf": "isApplicable = true",
+            "targetAmount": {
+              "type": "number",
+              "placeholder": "Education fund target (₹)",
+              "smartDefault": 2500000
+            },
+            "targetYear": {
+              "type": "number",
+              "placeholder": "Target year"
+            }
+          }
+        },
+        "homePurchase": {
+          "isApplicable": {
+            "type": "boolean",
+            "label": "Home Purchase",
+            "default": false
+          },
+          "details": {
+            "showIf": "isApplicable = true",
+            "targetAmount": {
+              "type": "number",
+              "placeholder": "Home purchase target (₹)"
+            },
+            "targetYear": {
+              "type": "number",
+              "placeholder": "Target year"
+            }
+          }
+        },
+        "customGoals": {
+          "type": "array",
+          "addMoreButton": "Add Custom Goal",
+          "template": {
+            "goalName": {
+              "type": "text",
+              "placeholder": "Goal name"
+            },
+            "targetAmount": {
+              "type": "number",
+              "placeholder": "Target amount (₹)"
+            },
+            "targetYear": {
+              "type": "number",
+              "placeholder": "Target year"
+            },
+            "priority": {
+              "type": "select",
+              "options": ["High", "Medium", "Low"]
+            }
+          }
+        }
+      },
+
+      "riskProfile": {
+        "investmentExperience": {
+          "type": "select",
+          "options": ["Beginner (0-2 years)", "Intermediate (2-5 years)", "Experienced (5-10 years)", "Expert (10+ years)"],
+          "required": true
+        },
+        "riskTolerance": {
+          "type": "select",
+          "options": ["Conservative", "Moderate", "Aggressive"],
+          "required": true,
+          "description": "Conservative: Low risk, stable returns | Moderate: Balanced | Aggressive: High risk, high returns"
+        },
+        "monthlyInvestmentCapacity": {
+          "type": "number",
+          "placeholder": "How much can you invest monthly? (₹)",
+          "validation": "required",
+          "calculation": "totalMonthlyIncome - totalMonthlyExpenses - totalEMIs"
+        }
+      }
+    }
+  },
+
+  "calculatedFields": {
+    "totalMonthlyEMIs": "sum of all loan EMIs",
+    "totalAnnualInsurancePremiums": "sum of all insurance premiums",
+    "totalInvestmentValue": "sum of all current investments",
+    "totalDebtAmount": "sum of all outstanding debts",
+    "monthlySurplus": "totalMonthlyIncome - totalMonthlyExpenses - totalMonthlyEMIs",
+    "netWorth": "totalInvestmentValue - totalDebtAmount",
+    "debtToIncomeRatio": "totalMonthlyEMIs / totalMonthlyIncome",
+    "savingsRate": "monthlySurplus / totalMonthlyIncome",
+    "yearsToRetirement": "retirementAge - currentAge"
+  },
+
+  "smartDefaults": {
+    "emergencyFund": "totalMonthlyExpenses * 6",
+    "lifeInsuranceCover": "totalMonthlyIncome * 12 * 10",
+    "retirementCorpus": "totalMonthlyExpenses * 12 * 25",
+    "childEducationFund": 2500000,
+    "riskProfileByAge": {
+      "20-30": "Aggressive",
+      "30-40": "Moderate", 
+      "40-50": "Moderate",
+      "50+": "Conservative"
+    }
+  },
+
+  "casParser": {
+    "supportedData": [
+      "mutualFunds",
+      "directStocks", 
+      "ppf",
+      "epf",
+      "nps",
+      "elss",
+      "bonds",
+      "debentures"
+    ],
+    "extractionFields": {
+      "mutualFunds": ["fundName", "folioNumber", "currentValue", "units"],
+      "stocks": ["stockSymbol", "quantity", "currentValue"],
+      "ppf": ["accountNumber", "currentBalance"],
+      "epf": ["uanNumber", "currentBalance"],
+      "nps": ["pranNumber", "currentBalance"]
+    },
+    "fallbackOption": "manualEntry"
+  },
+
+  "validationRules": {
+    "panNumber": "^[A-Z]{5}[0-9]{4}[A-Z]{1}$",
+    "phoneNumber": "^[0-9]{10}$",
+    "email": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+    "interestRate": "min: 0, max: 50",
+    "age": "min: 18, max: 80"
+  },
+
+  "formFlow": {
+    "totalSteps": 7,
+    "stepTitles": [
+      "Personal Information",
+      "Income & Expenses", 
+      "Retirement Planning",
+      "Investments & CAS",
+      "Debts & Liabilities",
+      "Insurance Coverage",
+      "Goals & Risk Profile"
+    ],
+    "estimatedTime": "10-15 minutes",
+    "saveProgress": true,
+    "skipOptionalSections": true
+  }
+}

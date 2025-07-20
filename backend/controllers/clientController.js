@@ -919,6 +919,173 @@ const submitClientOnboardingForm = async (req, res) => {
     // Extract enhanced form data and CAS data
     const { casData, customGoals, ...clientFormData } = req.body;
     
+    // DETAILED DEBUG LOGGING - Raw form data analysis
+    console.log('\n🔍 DETAILED FORM SUBMISSION DEBUG START');
+    console.log('=' .repeat(80));
+    console.log(`📧 Email: ${invitation.clientEmail}`);
+    console.log(`🎫 Token: ${token}`);
+    console.log(`📊 Raw form data keys: ${Object.keys(clientFormData).length} fields`);
+    console.log(`📋 Form data keys: ${Object.keys(clientFormData).join(', ')}`);
+    
+    // Log specific problematic fields
+    console.log('\n💰 DEBT FIELDS ANALYSIS:');
+    console.log(`carLoanEMI: "${clientFormData.carLoanEMI}" (type: ${typeof clientFormData.carLoanEMI})`);
+    console.log(`carLoanInterestRate: "${clientFormData.carLoanInterestRate}" (type: ${typeof clientFormData.carLoanInterestRate})`);
+    console.log(`carLoanOutstanding: "${clientFormData.carLoanOutstanding}" (type: ${typeof clientFormData.carLoanOutstanding})`);
+    console.log(`homeLoanEMI: "${clientFormData.homeLoanEMI}" (type: ${typeof clientFormData.homeLoanEMI})`);
+    console.log(`personalLoanEMI: "${clientFormData.personalLoanEMI}" (type: ${typeof clientFormData.personalLoanEMI})`);
+    
+    console.log('\n📍 ADDRESS FIELD ANALYSIS:');
+    console.log(`address: "${clientFormData.address}" (type: ${typeof clientFormData.address})`);
+    if (typeof clientFormData.address === 'string') {
+      console.log(`Address string length: ${clientFormData.address.length}`);
+    }
+    
+    console.log('\n💼 INVESTMENT FIELDS ANALYSIS:');
+    console.log(`mutualFundsTotalValue: "${clientFormData.mutualFundsTotalValue}" (type: ${typeof clientFormData.mutualFundsTotalValue})`);
+    console.log(`directStocksTotalValue: "${clientFormData.directStocksTotalValue}" (type: ${typeof clientFormData.directStocksTotalValue})`);
+    
+    console.log('\n🛡️ INSURANCE FIELDS ANALYSIS:');
+    console.log(`lifeInsuranceCoverAmount: "${clientFormData.lifeInsuranceCoverAmount}" (type: ${typeof clientFormData.lifeInsuranceCoverAmount})`);
+    console.log(`healthInsuranceCoverAmount: "${clientFormData.healthInsuranceCoverAmount}" (type: ${typeof clientFormData.healthInsuranceCoverAmount})`);
+    
+    // Parse JSON string fields from frontend
+    console.log('\n📝 STARTING JSON PARSING...');
+    try {
+      if (typeof clientFormData.address === 'string') {
+        clientFormData.address = JSON.parse(clientFormData.address);
+      }
+      if (typeof clientFormData.assets === 'string') {
+        clientFormData.assets = JSON.parse(clientFormData.assets);
+      }
+      if (typeof clientFormData.liabilities === 'string') {
+        clientFormData.liabilities = JSON.parse(clientFormData.liabilities);
+      }
+      if (typeof clientFormData.monthlyExpenses === 'string') {
+        clientFormData.monthlyExpenses = JSON.parse(clientFormData.monthlyExpenses);
+      }
+      if (typeof clientFormData.retirementPlanning === 'string') {
+        clientFormData.retirementPlanning = JSON.parse(clientFormData.retirementPlanning);
+      }
+      if (typeof clientFormData.majorGoals === 'string') {
+        clientFormData.majorGoals = JSON.parse(clientFormData.majorGoals);
+      }
+      if (typeof clientFormData.investmentGoals === 'string') {
+        clientFormData.investmentGoals = JSON.parse(clientFormData.investmentGoals);
+      }
+    } catch (parseError) {
+      FormLogger.logError('FORM_DATA_PARSE_ERROR', parseError, { token });
+      console.log('❌ JSON Parse Error:', parseError.message);
+      console.log('❌ Parse Error Stack:', parseError.stack);
+    }
+    
+    console.log('✅ JSON PARSING COMPLETED');
+    
+    // Map individual debt fields to debtsAndLiabilities structure
+    console.log('\n🏦 MAPPING DEBT FIELDS...');
+    if (!clientFormData.debtsAndLiabilities) {
+      console.log('📝 Creating debtsAndLiabilities structure from individual fields');
+      clientFormData.debtsAndLiabilities = {
+        homeLoan: {
+          hasLoan: !!(clientFormData.homeLoanEMI || clientFormData.homeLoanOutstanding),
+          outstandingAmount: parseFloat(clientFormData.homeLoanOutstanding) || 0,
+          monthlyEMI: parseFloat(clientFormData.homeLoanEMI) || 0,
+          interestRate: parseFloat(clientFormData.homeLoanInterestRate) || 0,
+          remainingTenure: parseFloat(clientFormData.homeLoanTenure) || 0
+        },
+        carLoan: {
+          hasLoan: !!(clientFormData.carLoanEMI || clientFormData.carLoanOutstanding),
+          outstandingAmount: parseFloat(clientFormData.carLoanOutstanding) || 0,
+          monthlyEMI: parseFloat(clientFormData.carLoanEMI) || 0,
+          interestRate: parseFloat(clientFormData.carLoanInterestRate) || 0
+        },
+        personalLoan: {
+          hasLoan: !!(clientFormData.personalLoanEMI || clientFormData.personalLoanOutstanding),
+          outstandingAmount: parseFloat(clientFormData.personalLoanOutstanding) || 0,
+          monthlyEMI: parseFloat(clientFormData.personalLoanEMI) || 0,
+          interestRate: parseFloat(clientFormData.personalLoanInterestRate) || 0
+        }
+      };
+      
+      // Log the created debtsAndLiabilities structure
+      console.log('🔍 Created debtsAndLiabilities:');
+      console.log('  homeLoan:', JSON.stringify(clientFormData.debtsAndLiabilities.homeLoan, null, 2));
+      console.log('  carLoan:', JSON.stringify(clientFormData.debtsAndLiabilities.carLoan, null, 2));
+      console.log('  personalLoan:', JSON.stringify(clientFormData.debtsAndLiabilities.personalLoan, null, 2));
+      
+      // Specific analysis of car loan interest rate
+      console.log(`\n🚗 CAR LOAN INTEREST RATE DETAILED ANALYSIS:`);
+      console.log(`  Raw value: "${clientFormData.carLoanInterestRate}"`);
+      console.log(`  Parsed value: ${parseFloat(clientFormData.carLoanInterestRate)}`);
+      console.log(`  Final value: ${clientFormData.debtsAndLiabilities.carLoan.interestRate}`);
+      console.log(`  Is NaN: ${isNaN(parseFloat(clientFormData.carLoanInterestRate))}`);
+      console.log(`  Type after parse: ${typeof clientFormData.debtsAndLiabilities.carLoan.interestRate}`);
+    } else {
+      console.log('📋 debtsAndLiabilities already exists:', JSON.stringify(clientFormData.debtsAndLiabilities, null, 2));
+    }
+    
+    // Map individual investment fields to investments structure
+    if (!clientFormData.investments) {
+      clientFormData.investments = {
+        equity: {
+          mutualFunds: parseFloat(clientFormData.mutualFundsTotalValue) || 0,
+          directStocks: parseFloat(clientFormData.directStocksTotalValue) || 0
+        },
+        fixedIncome: {
+          ppf: parseFloat(clientFormData.ppfCurrentBalance) || 0,
+          epf: parseFloat(clientFormData.epfCurrentBalance) || 0,
+          nps: parseFloat(clientFormData.npsCurrentBalance) || 0,
+          fixedDeposits: parseFloat(clientFormData.fixedDepositsTotalValue) || 0,
+          bondsDebentures: 0, // Not in current form
+          nsc: 0 // Not in current form
+        },
+        other: {
+          ulip: parseFloat(clientFormData.elssCurrentValue) || 0,
+          otherInvestments: 0 // Not in current form
+        }
+      };
+    }
+    
+    // Map individual insurance fields to insuranceCoverage structure
+    if (!clientFormData.insuranceCoverage) {
+      clientFormData.insuranceCoverage = {
+        lifeInsurance: {
+          hasCoverage: !!(clientFormData.lifeInsuranceCoverAmount || clientFormData.lifeInsuranceAnnualPremium),
+          coverageAmount: parseFloat(clientFormData.lifeInsuranceCoverAmount) || 0,
+          annualPremium: parseFloat(clientFormData.lifeInsuranceAnnualPremium) || 0,
+          insuranceType: clientFormData.lifeInsuranceType || ''
+        },
+        healthInsurance: {
+          hasCoverage: !!(clientFormData.healthInsuranceCoverAmount || clientFormData.healthInsuranceAnnualPremium),
+          coverageAmount: parseFloat(clientFormData.healthInsuranceCoverAmount) || 0,
+          annualPremium: parseFloat(clientFormData.healthInsuranceAnnualPremium) || 0,
+          familyMembers: parseInt(clientFormData.healthInsuranceFamilyMembers) || 1
+        },
+        vehicleInsurance: {
+          hasCoverage: !!(clientFormData.vehicleInsuranceAnnualPremium),
+          annualPremium: parseFloat(clientFormData.vehicleInsuranceAnnualPremium) || 0
+        }
+      };
+    }
+    
+    // Map financial goals
+    if (!clientFormData.financialGoals) {
+      clientFormData.financialGoals = {
+        emergencyFund: {
+          priority: clientFormData.emergencyFundPriority || 'Medium',
+          targetAmount: parseFloat(clientFormData.emergencyFundTarget) || 0
+        },
+        childEducation: {
+          hasGoal: clientFormData.hasChildEducationGoal || false,
+          targetAmount: parseFloat(clientFormData.childEducationTarget) || 0,
+          targetYear: parseInt(clientFormData.childEducationTargetYear) || new Date().getFullYear() + 10
+        },
+        homePurchase: {
+          hasGoal: clientFormData.hasHomePurchaseGoal || false
+        }
+      };
+    }
+    
     FormLogger.logOnboardingEvent('FORM_DATA_EXTRACTED', token, {
       hasCasData: !!casData,
       hasCustomGoals: !!customGoals?.length,
@@ -931,7 +1098,7 @@ const submitClientOnboardingForm = async (req, res) => {
       }
     });
     
-    // Prepare comprehensive client data for 5-stage form
+    // Prepare comprehensive client data using the transformed structure from frontend
     const clientData = {
       // Stage 1: Personal Information
       firstName: clientFormData.firstName,
@@ -941,6 +1108,8 @@ const submitClientOnboardingForm = async (req, res) => {
       dateOfBirth: clientFormData.dateOfBirth,
       gender: clientFormData.gender,
       panNumber: clientFormData.panNumber,
+      maritalStatus: clientFormData.maritalStatus,
+      numberOfDependents: clientFormData.numberOfDependents || 0,
       address: {
         street: clientFormData.address?.street,
         city: clientFormData.address?.city,
@@ -949,67 +1118,99 @@ const submitClientOnboardingForm = async (req, res) => {
         country: clientFormData.address?.country || 'India'
       },
       
-      // Stage 2: Income & Employment
+      // Stage 2: Income & Employment (Enhanced from frontend transformation)
       occupation: clientFormData.occupation,
       employerBusinessName: clientFormData.employerBusinessName,
-      annualIncome: clientFormData.annualIncome,
+      incomeType: clientFormData.incomeType,
+      totalMonthlyIncome: clientFormData.totalMonthlyIncome,
+      totalMonthlyExpenses: clientFormData.totalMonthlyExpenses,
+      annualIncome: clientFormData.annualIncome || (clientFormData.totalMonthlyIncome * 12),
       additionalIncome: clientFormData.additionalIncome || 0,
-      monthlyExpenses: {
-        housingRent: clientFormData.monthlyExpenses?.housingRent || 0,
-        groceriesUtilitiesFood: clientFormData.monthlyExpenses?.groceriesUtilitiesFood || 0,
-        transportation: clientFormData.monthlyExpenses?.transportation || 0,
-        education: clientFormData.monthlyExpenses?.education || 0,
-        healthcare: clientFormData.monthlyExpenses?.healthcare || 0,
-        entertainment: clientFormData.monthlyExpenses?.entertainment || 0,
-        insurancePremiums: clientFormData.monthlyExpenses?.insurancePremiums || 0,
-        loanEmis: clientFormData.monthlyExpenses?.loanEmis || 0,
-        otherExpenses: clientFormData.monthlyExpenses?.otherExpenses || 0
-      },
-      expenseNotes: clientFormData.expenseNotes,
-      annualTaxes: clientFormData.annualTaxes || 0,
-      annualVacationExpenses: clientFormData.annualVacationExpenses || 0,
       
-      // Stage 3: Financial Goals
-      retirementPlanning: {
-        targetRetirementAge: clientFormData.retirementPlanning?.targetRetirementAge,
-        retirementCorpusTarget: clientFormData.retirementPlanning?.retirementCorpusTarget
+      // Enhanced expense breakdown
+      expenseBreakdown: {
+        showBreakdown: clientFormData.expenseBreakdown?.showBreakdown || false,
+        housingRent: clientFormData.expenseBreakdown?.housingRent || 0,
+        foodGroceries: clientFormData.expenseBreakdown?.foodGroceries || 0,
+        transportation: clientFormData.expenseBreakdown?.transportation || 0,
+        utilities: clientFormData.expenseBreakdown?.utilities || 0,
+        entertainment: clientFormData.expenseBreakdown?.entertainment || 0,
+        healthcare: clientFormData.expenseBreakdown?.healthcare || 0,
+        otherExpenses: clientFormData.expenseBreakdown?.otherExpenses || 0
       },
+      
+      // Legacy monthly expenses structure (for backward compatibility)
+      monthlyExpenses: {
+        housingRent: clientFormData.expenseBreakdown?.housingRent || 0,
+        groceriesUtilitiesFood: clientFormData.expenseBreakdown?.foodGroceries || 0,
+        transportation: clientFormData.expenseBreakdown?.transportation || 0,
+        education: 0, // Not in current form
+        healthcare: clientFormData.expenseBreakdown?.healthcare || 0,
+        entertainment: clientFormData.expenseBreakdown?.entertainment || 0,
+        insurancePremiums: 0, // Will be calculated from insurance data
+        loanEmis: 0, // Will be calculated from loan data
+        otherExpenses: clientFormData.expenseBreakdown?.otherExpenses || 0
+      },
+      
+      // Stage 3: Retirement Planning (Enhanced)
+      retirementAge: clientFormData.retirementAge || 60,
+      hasRetirementCorpus: clientFormData.hasRetirementCorpus || false,
+      currentRetirementCorpus: clientFormData.currentRetirementCorpus || 0,
+      targetRetirementCorpus: clientFormData.targetRetirementCorpus || 0,
+      
+      // Legacy retirement planning structure
+      retirementPlanning: {
+        retirementAge: clientFormData.retirementAge || 60,
+        targetRetirementAge: clientFormData.retirementAge || 60,
+        retirementCorpusTarget: clientFormData.targetRetirementCorpus || 0,
+        hasRetirementCorpus: clientFormData.hasRetirementCorpus || false,
+        currentRetirementCorpus: clientFormData.currentRetirementCorpus || 0
+      },
+      
+      // Enhanced Financial Goals
+      financialGoals: clientFormData.financialGoals || {},
+      enhancedFinancialGoals: clientFormData.financialGoals || {},
       majorGoals: [
         ...(clientFormData.majorGoals || []),
         ...(customGoals || [])
-      ].filter(goal => goal.goalName && goal.targetAmount), // Filter out empty goals
+      ].filter(goal => goal.goalName && goal.targetAmount),
       
-      // Stage 4: Assets & Liabilities
+      // Stage 4: Investments (Using transformed structure)
+      investments: clientFormData.investments || {
+        equity: { mutualFunds: 0, directStocks: 0 },
+        fixedIncome: { ppf: 0, epf: 0, nps: 0, fixedDeposits: 0, bondsDebentures: 0, nsc: 0 },
+        other: { ulip: 0, otherInvestments: 0 }
+      },
+      
+      // Legacy assets structure (for backward compatibility)
       assets: {
-        cashBankSavings: clientFormData.assets?.cashBankSavings || 0,
-        realEstate: clientFormData.assets?.realEstate || 0,
-        investments: {
-          equity: {
-            mutualFunds: clientFormData.assets?.investments?.equity?.mutualFunds || 0,
-            directStocks: clientFormData.assets?.investments?.equity?.directStocks || 0
-          },
-          fixedIncome: {
-            ppf: clientFormData.assets?.investments?.fixedIncome?.ppf || 0,
-            epf: clientFormData.assets?.investments?.fixedIncome?.epf || 0,
-            nps: clientFormData.assets?.investments?.fixedIncome?.nps || 0,
-            fixedDeposits: clientFormData.assets?.investments?.fixedIncome?.fixedDeposits || 0,
-            bondsDebentures: clientFormData.assets?.investments?.fixedIncome?.bondsDebentures || 0,
-            nsc: clientFormData.assets?.investments?.fixedIncome?.nsc || 0
-          },
-          other: {
-            ulip: clientFormData.assets?.investments?.other?.ulip || 0,
-            otherInvestments: clientFormData.assets?.investments?.other?.otherInvestments || 0
-          }
+        cashBankSavings: 0, // Not in current form
+        realEstate: 0, // Not in current form
+        investments: clientFormData.investments || {
+          equity: { mutualFunds: 0, directStocks: 0 },
+          fixedIncome: { ppf: 0, epf: 0, nps: 0, fixedDeposits: 0, bondsDebentures: 0, nsc: 0 },
+          other: { ulip: 0, otherInvestments: 0 }
         }
       },
+      
+      // Stage 5: Debts & Liabilities (Using transformed structure)
+      debtsAndLiabilities: clientFormData.debtsAndLiabilities || {},
+      
+      // Legacy liabilities structure (calculate totals for backward compatibility)
       liabilities: {
-        loans: clientFormData.liabilities?.loans || 0,
-        creditCardDebt: clientFormData.liabilities?.creditCardDebt || 0
+        loans: Object.values(clientFormData.debtsAndLiabilities || {})
+          .filter(debt => debt && debt.hasLoan && debt.outstandingAmount)
+          .reduce((total, debt) => total + (debt.outstandingAmount || 0), 0),
+        creditCardDebt: clientFormData.debtsAndLiabilities?.creditCards?.totalOutstanding || 0
       },
       
-      // Stage 5: Investment Profile
+      // Stage 6: Insurance Coverage (Using transformed structure)
+      insuranceCoverage: clientFormData.insuranceCoverage || {},
+      
+      // Stage 7: Investment Profile & Risk
       investmentExperience: clientFormData.investmentExperience,
       riskTolerance: clientFormData.riskTolerance,
+      monthlyInvestmentCapacity: clientFormData.monthlyInvestmentCapacity || 0,
       investmentGoals: clientFormData.investmentGoals || [],
       monthlySavingsTarget: clientFormData.monthlySavingsTarget,
       
@@ -1068,8 +1269,42 @@ const submitClientOnboardingForm = async (req, res) => {
     }
     
     // Create and save client with comprehensive data
+    console.log('\n💾 CREATING CLIENT MODEL...');
+    console.log('📋 Final clientData structure overview:');
+    console.log(`  - firstName: "${clientData.firstName}"`);
+    console.log(`  - lastName: "${clientData.lastName}"`);
+    console.log(`  - email: "${clientData.email}"`);
+    console.log(`  - Has debtsAndLiabilities: ${!!clientData.debtsAndLiabilities}`);
+    console.log(`  - Has investments: ${!!clientData.investments}`);
+    console.log(`  - Has insuranceCoverage: ${!!clientData.insuranceCoverage}`);
+    
+    if (clientData.debtsAndLiabilities) {
+      console.log('\n🏦 FINAL DEBTS AND LIABILITIES VALIDATION CHECK:');
+      console.log('debtsAndLiabilities:', JSON.stringify(clientData.debtsAndLiabilities, null, 2));
+    }
+    
+    console.log('\n🏗️ ATTEMPTING TO CREATE CLIENT MODEL...');
     const client = new Client(clientData);
-    await client.save();
+    
+    console.log('✅ Client model created successfully');
+    console.log('\n💾 ATTEMPTING TO SAVE CLIENT TO DATABASE...');
+    
+    try {
+      await client.save();
+      console.log('✅ CLIENT SAVED SUCCESSFULLY TO DATABASE');
+    } catch (saveError) {
+      console.log('❌ CLIENT SAVE FAILED:');
+      console.log('  Error name:', saveError.name);
+      console.log('  Error message:', saveError.message);
+      console.log('  Validation errors:', saveError.errors);
+      if (saveError.errors) {
+        Object.keys(saveError.errors).forEach(field => {
+          console.log(`    ${field}: ${saveError.errors[field].message}`);
+        });
+      }
+      console.log('  Full error:', JSON.stringify(saveError, null, 2));
+      throw saveError; // Re-throw to be caught by outer try-catch
+    }
     
     // Calculate final metrics
     const calculatedFinancials = client.calculatedFinancials;
@@ -1121,7 +1356,23 @@ const submitClientOnboardingForm = async (req, res) => {
       }
     });
     
+    console.log('\n🎉 FORM SUBMISSION COMPLETED SUCCESSFULLY');
+    console.log('=' .repeat(80));
+    
   } catch (error) {
+    console.log('\n💥 FORM SUBMISSION ERROR OCCURRED');
+    console.log('=' .repeat(80));
+    console.log('❌ Error Details:');
+    console.log('  Name:', error.name);
+    console.log('  Message:', error.message);
+    console.log('  Stack:', error.stack);
+    if (error.errors) {
+      console.log('  Validation Errors:');
+      Object.keys(error.errors).forEach(field => {
+        console.log(`    ${field}: ${error.errors[field].message}`);
+      });
+    }
+    console.log('=' .repeat(80));
     const duration = Date.now() - startTime;
     FormLogger.logError('ENHANCED_ONBOARDING_ERROR', error, { token });
     logApi.error(method, url, error);

@@ -68,7 +68,6 @@ const getAdvisorClients = async (req, res) => {
     
     // Get all clients for this advisor
     const clients = await Client.find({ advisor: advisorId })
-      .select('name email phone casData createdAt')
       .sort({ createdAt: -1 });
 
     const duration = Date.now() - startTime;
@@ -161,8 +160,67 @@ const getDashboardStats = async (req, res) => {
   }
 };
 
+// Update client by admin
+const updateAdvisorClient = async (req, res) => {
+  const startTime = Date.now();
+  const { method, url } = req;
+  const { advisorId, clientId } = req.params;
+  
+  try {
+    logger.info(`Admin request: Update client ${clientId} for advisor ${advisorId}`);
+    
+    // Verify advisor exists
+    const advisor = await Advisor.findById(advisorId);
+    if (!advisor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Advisor not found'
+      });
+    }
+    
+    // Find and update the client
+    const client = await Client.findOne({ _id: clientId, advisor: advisorId });
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found for this advisor'
+      });
+    }
+
+    // Update client with the provided data
+    Object.assign(client, req.body);
+    client.updatedAt = new Date();
+    
+    const updatedClient = await client.save();
+
+    const duration = Date.now() - startTime;
+    logApi.response(method, url, 200, duration);
+    
+    logger.info(`Admin updated client ${clientId} for advisor ${advisorId}`);
+    
+    res.json({
+      success: true,
+      data: updatedClient,
+      message: 'Client updated successfully'
+    });
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logApi.error(method, url, error);
+    
+    logger.error(`Admin error updating client: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update client',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllAdvisors,
   getAdvisorClients,
-  getDashboardStats
+  getDashboardStats,
+  updateAdvisorClient
 }; 
