@@ -1,5 +1,10 @@
 // Export all cashflow planning components
 export { default as ClientDataPreview } from './ClientDataPreview';
+export { default as CashFlowPlanningInterface } from './CashFlowPlanningInterface';
+export { default as EditableClientData } from './EditableClientData';
+export { default as DebtManagementSection } from './DebtManagementSection';
+export { default as AdvisorRecommendationsForm } from './AdvisorRecommendationsForm';
+export { default as AISuggestionsPanel } from './AISuggestionsPanel';
 export { default as DebtManagement } from './DebtManagement';
 export { default as EmergencyFund } from './EmergencyFund';
 export { default as InvestmentStrategy } from './InvestmentStrategy';

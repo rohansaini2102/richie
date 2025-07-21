@@ -47,22 +47,36 @@ const ClientDataPreview = ({ clientId, onProceed, onCancel }) => {
 
   const fetchClientData = async () => {
     try {
+      console.log('🔄 [ClientDataPreview] Starting to fetch client data:', { clientId });
       setLoading(true);
-      const response = await clientAPI.getClientById(clientId);
-      console.log('🔍 Full response:', response);
-      console.log('🔍 Response.data:', response.data);
-      console.log('🔍 Response.data.data:', response.data.data);
       
-      // Try different response structure patterns
+      const response = await clientAPI.getClientById(clientId);
+      console.log('✅ [ClientDataPreview] API response received:', {
+        hasData: !!response?.data,
+        hasNestedData: !!response?.data?.data,
+        responseKeys: Object.keys(response || {})
+      });
+      
+      // Extract client data from nested response structure
       const clientData = response.data.data || response.data || response;
-      console.log('🔍 Extracted client data:', clientData);
+      console.log('📊 [ClientDataPreview] Extracted client data:', {
+        hasFirstName: !!clientData?.firstName,
+        hasLastName: !!clientData?.lastName,
+        hasDebts: !!clientData?.debtsAndLiabilities,
+        dataKeys: Object.keys(clientData || {}).slice(0, 10) // First 10 keys only
+      });
       
       setClientData(clientData);
       calculateDataCompleteness(clientData);
       setError(null);
+      console.log('✅ [ClientDataPreview] Client data set successfully');
     } catch (err) {
+      console.error('❌ [ClientDataPreview] Error fetching client data:', {
+        error: err.message,
+        status: err.response?.status,
+        statusText: err.response?.statusText
+      });
       setError('Failed to fetch client data');
-      console.error('Error fetching client data:', err);
     } finally {
       setLoading(false);
     }
@@ -451,7 +465,23 @@ const ClientDataPreview = ({ clientId, onProceed, onCancel }) => {
           </Button>
           <Button 
             variant="contained" 
-            onClick={() => onProceed(clientData)}
+            onClick={() => {
+              console.log('🚀 [ClientDataPreview] Proceed to Planning clicked:', {
+                hasClientData: !!clientData,
+                clientId: clientData?._id,
+                clientName: clientData?.firstName + ' ' + clientData?.lastName,
+                hasDebts: !!clientData?.debtsAndLiabilities,
+                dataCompleteness: dataCompleteness
+              });
+              
+              if (!clientData) {
+                console.error('❌ [ClientDataPreview] Cannot proceed: clientData is null');
+                return;
+              }
+              
+              console.log('📤 [ClientDataPreview] Calling onProceed with client data');
+              onProceed(clientData);
+            }}
             startIcon={<CheckCircle />}
           >
             Proceed to Planning

@@ -151,8 +151,16 @@ function ClientDetailView() {
   };
 
   const handlePlanCreated = (plan) => {
+    console.log('🎯 [ClientDetailView] Plan created callback received:', {
+      planId: plan?._id,
+      planType: plan?.planType,
+      clientId: plan?.clientId
+    });
+    
     setSelectedPlanId(plan._id);
     setShowCashFlowPlanning(true);
+    
+    console.log('📺 [ClientDetailView] Opening CashFlowPlanning component');
     toast.success('Financial plan created successfully');
   };
 

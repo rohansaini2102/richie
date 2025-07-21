@@ -62,8 +62,12 @@ import {
   Analytics
 } from '@mui/icons-material';
 import { planAPI, clientAPI } from '../../services/api';
+import DebtPlanningInterface from './DebtPlanningInterface';
+import ErrorBoundary from './ErrorBoundary';
 
 const CashFlowPlanning = ({ planId, clientId, onBack }) => {
+  console.log('🚀 [CashFlowPlanning] Component mounting:', { planId, clientId });
+  
   const [plan, setPlan] = useState(null);
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1181,13 +1185,14 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
               </Typography>
             </AccordionSummary>
             <AccordionDetails>
-              <DebtManagementSection 
-                plan={plan} 
-                setPlan={setPlan} 
-                client={editedClient}
-                metrics={financialMetrics}
-                prioritizedDebts={prioritizeDebts(editedClient?.debtsAndLiabilities)}
-              />
+              <ErrorBoundary>
+                <DebtPlanningInterface 
+                  clientId={clientId}
+                  clientData={editedClient}
+                  planId={planId}
+                  onPlanUpdate={(updatedPlan) => setPlan(updatedPlan)}
+                />
+              </ErrorBoundary>
             </AccordionDetails>
           </Accordion>
 

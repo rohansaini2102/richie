@@ -28,18 +28,20 @@ import {
 } from '@mui/icons-material';
 import { planAPI } from '../../services/api';
 import ClientDataPreview from './cashflow/ClientDataPreview';
+import CashFlowPlanningInterface from './cashflow/CashFlowPlanningInterface';
+import AISuggestionsPanel from './cashflow/AISuggestionsPanel';
 
 const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, onPlanCreated }) => {
   const [selectedPlanType, setSelectedPlanType] = useState('cash_flow');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeStep, setActiveStep] = useState(0);
-  const [reviewedClientData, setReviewedClientData] = useState(null);
+  const [planCreated, setPlanCreated] = useState(false);
 
   // For testing: Allow plan creation regardless of client data
   const hasRequiredData = true; // Temporarily disabled validation
   
-  const steps = ['Select Plan Type', 'Review Client Data', 'Create Plan'];
+  const steps = ['Select Plan Type', 'Review Client Data', 'Cash Flow Planning'];
 
   const planTypes = [
     {
@@ -70,8 +72,6 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
   const handleNext = () => {
     if (activeStep === 0 && selectedPlanType) {
       setActiveStep(1);
-    } else if (activeStep === 1 && reviewedClientData) {
-      handleCreatePlan();
     }
   };
 
@@ -79,40 +79,21 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
     setActiveStep(activeStep - 1);
   };
 
-  const handleCreatePlan = async () => {
-    setLoading(true);
-    setError('');
-    setActiveStep(2);
-
-    try {
-      const response = await planAPI.createPlan({
-        clientId,
-        planType: selectedPlanType
-      });
-
-      if (response.success) {
-        onPlanCreated(response.plan);
-        handleClose();
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create plan');
-      setActiveStep(1);
-    } finally {
-      setLoading(false);
+  const handlePlanSaved = (plan) => {
+    console.log('🎉 [PlanCreationModal] Plan saved successfully:', plan);
+    setPlanCreated(true);
+    if (onPlanCreated) {
+      onPlanCreated(plan);
     }
+    handleClose();
   };
 
   const handleClose = () => {
     setActiveStep(0);
     setSelectedPlanType('cash_flow');
-    setReviewedClientData(null);
+    setPlanCreated(false);
     setError('');
     onClose();
-  };
-
-  const handleDataReviewed = (data) => {
-    setReviewedClientData(data);
-    handleNext();
   };
 
   const renderStepContent = () => {
@@ -123,12 +104,25 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
         return (
           <ClientDataPreview
             clientId={clientId}
-            onProceed={handleDataReviewed}
+            onProceed={(reviewedData) => {
+              console.log('📊 [PlanCreationModal] Client data reviewed:', {
+                hasData: !!reviewedData,
+                clientName: reviewedData?.firstName + ' ' + reviewedData?.lastName
+              });
+              setActiveStep(2);
+            }}
             onCancel={handleBack}
           />
         );
       case 2:
-        return renderPlanCreation();
+        return (
+          <CashFlowPlanningInterface
+            clientId={clientId}
+            clientData={clientData}
+            onSavePlan={handlePlanSaved}
+            onCancel={handleBack}
+          />
+        );
       default:
         return null;
     }
@@ -204,20 +198,20 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
     </Box>
   );
 
-  const renderPlanCreation = () => (
-    <Box sx={{ p: 3, textAlign: 'center' }}>
-      <CircularProgress size={48} sx={{ mb: 2 }} />
-      <Typography variant="h6" gutterBottom>
-        Creating Financial Plan
-      </Typography>
-      <Typography variant="body2" color="text.secondary">
-        Please wait while we create the {selectedPlanType.replace('_', ' ')} plan for {clientName}...
-      </Typography>
-    </Box>
-  );
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+    <Dialog 
+      open={open} 
+      onClose={handleClose} 
+      maxWidth={activeStep === 2 ? "xl" : "md"} 
+      fullWidth
+      PaperProps={{
+        sx: {
+          height: activeStep === 2 ? '90vh' : 'auto',
+          maxHeight: activeStep === 2 ? '90vh' : '80vh'
+        }
+      }}
+    >
       <DialogTitle>
         <Box display="flex" alignItems="center" gap={2}>
           <Description color="primary" />
@@ -225,7 +219,7 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
         </Box>
       </DialogTitle>
 
-      <DialogContent>
+      <DialogContent sx={{ p: activeStep === 2 ? 0 : 3 }}>
         {activeStep < 2 && (
           <Stepper activeStep={activeStep} sx={{ mb: 3 }}>
             {steps.map((label) => (
@@ -239,34 +233,23 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
         {renderStepContent()}
       </DialogContent>
 
-      <DialogActions>
-        {activeStep < 2 && (
-          <>
-            <Button onClick={handleClose} disabled={loading}>
-              Cancel
+      {activeStep < 2 && (
+        <DialogActions>
+          <Button onClick={handleClose}>
+            Cancel
+          </Button>
+          {activeStep === 0 && (
+            <Button
+              variant="contained"
+              onClick={handleNext}
+              disabled={!selectedPlanType}
+              endIcon={<ArrowForward />}
+            >
+              Continue
             </Button>
-            {activeStep > 0 && (
-              <Button 
-                onClick={handleBack} 
-                disabled={loading}
-                startIcon={<ArrowBack />}
-              >
-                Back
-              </Button>
-            )}
-            {activeStep === 0 && (
-              <Button
-                variant="contained"
-                onClick={handleNext}
-                disabled={!selectedPlanType}
-                endIcon={<ArrowForward />}
-              >
-                Next
-              </Button>
-            )}
-          </>
-        )}
-      </DialogActions>
+          )}
+        </DialogActions>
+      )}
     </Dialog>
   );
 };

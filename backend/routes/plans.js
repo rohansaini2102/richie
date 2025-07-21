@@ -81,4 +81,28 @@ router.get(
   planController.exportPlanAsPDF
 );
 
+// AI-powered debt analysis
+router.post(
+  '/analyze-debt/:clientId',
+  planController.analyzeDebt
+);
+
+// Update debt strategy with advisor modifications
+router.put(
+  '/:planId/debt-strategy',
+  planController.updateDebtStrategy
+);
+
+// Get debt recommendations for a plan
+router.get(
+  '/:planId/debt-recommendations',
+  planController.getDebtRecommendations
+);
+
+// Test Claude AI service configuration
+router.get(
+  '/test/ai-service',
+  planController.testAIService
+);
+
 module.exports = router;

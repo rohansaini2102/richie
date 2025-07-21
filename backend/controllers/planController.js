@@ -1,6 +1,60 @@
 const FinancialPlan = require('../models/FinancialPlan');
 const Client = require('../models/Client');
 const { logger } = require('../utils/logger');
+const claudeAiService = require('../services/claudeAiService');
+
+// Enhanced JSON parsing for AI responses
+function parseAIResponse(content) {
+  // Strategy 1: Try direct JSON parsing
+  try {
+    return JSON.parse(content);
+  } catch (error1) {
+    // Strategy 2: Extract JSON from markdown code blocks
+    const jsonBlockMatch = content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+    if (jsonBlockMatch) {
+      try {
+        return JSON.parse(jsonBlockMatch[1]);
+      } catch (error2) {
+        // Continue to next strategy
+      }
+    }
+    
+    // Strategy 3: Extract JSON from any code blocks
+    const codeBlockMatch = content.match(/```\s*(\{[\s\S]*?\})\s*```/);
+    if (codeBlockMatch) {
+      try {
+        return JSON.parse(codeBlockMatch[1]);
+      } catch (error3) {
+        // Continue to next strategy
+      }
+    }
+    
+    // Strategy 4: Find JSON object in mixed content
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (error4) {
+        // Continue to next strategy
+      }
+    }
+    
+    // Strategy 5: Clean up common formatting issues
+    let cleanedContent = content
+      .replace(/^\s*[\w\s]*?(\{)/m, '$1') // Remove text before first {
+      .replace(/(\})\s*[\w\s]*?$/m, '$1') // Remove text after last }
+      .replace(/\n\s*Note:.*$/ms, '') // Remove trailing notes
+      .replace(/([^\\])"([^"]*?)"/g, '$1"$2"') // Fix unescaped quotes
+      .trim();
+    
+    try {
+      return JSON.parse(cleanedContent);
+    } catch (error5) {
+      // All strategies failed, throw the original error
+      throw new Error(`All JSON parsing strategies failed. Original content length: ${content.length}, Last error: ${error5.message}`);
+    }
+  }
+}
 
 // Create a new financial plan
 exports.createPlan = async (req, res) => {
@@ -702,5 +756,235 @@ function generateAIRecommendationsForPlan(plan) {
 
   return recommendations;
 }
+
+// AI-powered debt analysis
+exports.analyzeDebt = async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const advisorId = req.advisor.id;
+    const clientData = req.body.clientData || await Client.findOne({ _id: clientId, advisor: advisorId });
+
+    if (!clientData) {
+      return res.status(404).json({ success: false, error: 'Client not found' });
+    }
+
+    logger.info(`Analyzing debt strategy for client ${clientId} using Claude AI`);
+
+    // Get AI analysis using Claude
+    const aiResponse = await claudeAiService.analyzeDebtStrategy(clientData);
+    
+    if (!aiResponse.success) {
+      logger.error('Claude AI debt analysis failed', { error: aiResponse.error });
+      return res.status(500).json({ 
+        success: false, 
+        error: 'AI analysis service unavailable: ' + aiResponse.error 
+      });
+    }
+
+    // Parse AI response with enhanced robustness
+    let analysisData;
+    try {
+      analysisData = parseAIResponse(aiResponse.content);
+    } catch (parseError) {
+      logger.error('Failed to parse AI response after all attempts', { 
+        content: aiResponse.content,
+        error: parseError.message 
+      });
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to parse AI analysis' 
+      });
+    }
+
+    // Add metadata
+    const analysis = {
+      ...analysisData,
+      generatedAt: new Date(),
+      generatedBy: 'claude-ai',
+      clientId,
+      advisorId
+    };
+
+    logger.info(`Debt analysis completed for client ${clientId}`, {
+      debtsAnalyzed: analysis.debtStrategy?.prioritizedDebts?.length || 0,
+      totalSavings: analysis.financialMetrics?.totalInterestSavings || 0
+    });
+
+    res.json({ 
+      success: true, 
+      analysis,
+      aiUsage: aiResponse.usage 
+    });
+
+  } catch (error) {
+    logger.error('Error in debt analysis:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to analyze debt strategy' 
+    });
+  }
+};
+
+// Update debt strategy with advisor modifications
+exports.updateDebtStrategy = async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const advisorId = req.advisor.id;
+    const { debtStrategy, aiAnalysis, advisorNotes } = req.body;
+
+    // Find the plan
+    const plan = await FinancialPlan.findOne({ _id: planId, advisorId });
+    if (!plan) {
+      return res.status(404).json({ success: false, error: 'Plan not found' });
+    }
+
+    // Update debt management section in cash flow plan
+    if (!plan.planDetails.cashFlowPlan) {
+      plan.planDetails.cashFlowPlan = {};
+    }
+    
+    if (!plan.planDetails.cashFlowPlan.debtManagement) {
+      plan.planDetails.cashFlowPlan.debtManagement = {};
+    }
+
+    // Store the debt strategy
+    plan.planDetails.cashFlowPlan.debtManagement = {
+      prioritizedDebts: debtStrategy.prioritizedDebts,
+      overallStrategy: debtStrategy.overallStrategy,
+      totalDebtReduction: aiAnalysis.financialMetrics?.totalInterestSavings || 0,
+      totalInterestSavings: aiAnalysis.financialMetrics?.totalInterestSavings || 0,
+      debtFreeDate: aiAnalysis.financialMetrics?.debtFreeTimeline || null,
+      advisorModifications: true,
+      lastModified: new Date()
+    };
+
+    // Store AI recommendations for reference
+    plan.aiRecommendations.debtStrategy = aiAnalysis.debtStrategy?.overallStrategy || '';
+    plan.advisorRecommendations.detailedNotes = advisorNotes || '';
+
+    // Add to change history
+    plan.addChangeHistory({
+      userId: advisorId,
+      type: 'debt_strategy_update',
+      description: 'Updated debt management strategy with advisor modifications',
+      previousValue: null,
+      newValue: {
+        debtsCount: debtStrategy.prioritizedDebts.length,
+        totalSavings: aiAnalysis.financialMetrics?.totalInterestSavings
+      }
+    });
+
+    await plan.save();
+
+    logger.info(`Debt strategy updated for plan ${planId} by advisor ${advisorId}`);
+
+    res.json({ 
+      success: true, 
+      plan: plan.toJSON(),
+      message: 'Debt strategy updated successfully'
+    });
+
+  } catch (error) {
+    logger.error('Error updating debt strategy:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update debt strategy' 
+    });
+  }
+};
+
+// Get debt recommendations for a plan
+exports.getDebtRecommendations = async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const advisorId = req.advisor.id;
+
+    const plan = await FinancialPlan.findOne({ _id: planId, advisorId })
+      .populate('clientId', 'firstName lastName totalMonthlyIncome');
+    
+    if (!plan) {
+      return res.status(404).json({ success: false, error: 'Plan not found' });
+    }
+
+    const debtManagement = plan.planDetails.cashFlowPlan?.debtManagement;
+    
+    res.json({ 
+      success: true, 
+      debtRecommendations: debtManagement,
+      clientInfo: plan.clientId,
+      lastModified: debtManagement?.lastModified
+    });
+
+  } catch (error) {
+    logger.error('Error getting debt recommendations:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get debt recommendations' 
+    });
+  }
+};
+
+// Test Claude AI service configuration
+exports.testAIService = async (req, res) => {
+  try {
+    console.log('🧪 [PlanController] Testing Claude AI service configuration...');
+    
+    const validation = claudeAiService.validateConfiguration();
+    
+    if (!validation.isValid) {
+      console.error('❌ [PlanController] AI service configuration invalid:', validation.issues);
+      return res.status(500).json({
+        success: false,
+        error: 'AI service configuration invalid',
+        issues: validation.issues
+      });
+    }
+    
+    // Test with dummy client data
+    const testClientData = {
+      firstName: 'Test',
+      lastName: 'Client',
+      totalMonthlyIncome: 75000,
+      totalMonthlyExpenses: 45000,
+      debtsAndLiabilities: {
+        personalLoan: {
+          hasLoan: true,
+          outstandingAmount: 200000,
+          monthlyEMI: 7000,
+          interestRate: 14
+        },
+        homeLoan: {
+          hasLoan: true,
+          outstandingAmount: 2500000,
+          monthlyEMI: 20000,
+          interestRate: 8.5
+        }
+      }
+    };
+    
+    console.log('🤖 [PlanController] Testing AI analysis with sample data...');
+    const aiResponse = await claudeAiService.analyzeDebtStrategy(testClientData);
+    
+    console.log('✅ [PlanController] AI service test result:', {
+      success: aiResponse.success,
+      hasContent: !!aiResponse.content,
+      error: aiResponse.error
+    });
+    
+    res.json({
+      success: true,
+      configurationValid: validation.isValid,
+      aiServiceWorking: aiResponse.success,
+      testResponse: aiResponse.success ? 'AI service responding correctly' : aiResponse.error
+    });
+    
+  } catch (error) {
+    console.error('💥 [PlanController] AI service test failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'AI service test failed: ' + error.message
+    });
+  }
+};
 
 module.exports = exports;

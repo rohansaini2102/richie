@@ -624,6 +624,57 @@ export const planAPI = {
     console.log('✅ PLAN PDF EXPORTED:', { planId });
     
     return response.data;
+  },
+
+  // AI-powered debt analysis
+  analyzeDebt: async (clientId, clientData) => {
+    console.log('🤖 ANALYZING DEBT STRATEGY:', { clientId });
+    
+    const response = await api.post(`/plans/analyze-debt/${clientId}`, {
+      clientData
+    });
+    
+    console.log('✅ DEBT ANALYSIS COMPLETED:', {
+      clientId,
+      debtsAnalyzed: response.data.analysis?.debtStrategy?.prioritizedDebts?.length || 0,
+      totalSavings: response.data.analysis?.financialMetrics?.totalInterestSavings || 0
+    });
+    
+    return response.data;
+  },
+
+  // Update debt strategy with advisor modifications
+  updateDebtStrategy: async (planId, strategyData) => {
+    console.log('💰 UPDATING DEBT STRATEGY:', { planId });
+    
+    const response = await api.put(`/plans/${planId}/debt-strategy`, strategyData);
+    
+    console.log('✅ DEBT STRATEGY UPDATED:', { planId });
+    
+    return response.data;
+  },
+
+  // Get debt recommendations for a plan
+  getDebtRecommendations: async (planId) => {
+    console.log('📊 FETCHING DEBT RECOMMENDATIONS:', { planId });
+    
+    const response = await api.get(`/plans/${planId}/debt-recommendations`);
+    
+    console.log('✅ DEBT RECOMMENDATIONS FETCHED:', { planId });
+    
+    return response.data;
+  },
+
+  // Analyze debt strategy using AI
+  analyzeDebt: async (clientId, clientData = null) => {
+    console.log('🤖 ANALYZING DEBT STRATEGY:', { clientId });
+    
+    const requestData = clientData ? { clientData } : {};
+    const response = await api.post(`/plans/analyze-debt/${clientId}`, requestData);
+    
+    console.log('✅ DEBT ANALYSIS COMPLETED:', { clientId });
+    
+    return response.data;
   }
 };
 
