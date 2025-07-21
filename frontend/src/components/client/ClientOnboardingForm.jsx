@@ -3360,7 +3360,7 @@ function ClientOnboardingForm() {
         </div>
 
         {/* Debug Panel (Development Only) */}
-        {process.env.NODE_ENV === 'development' && (
+        {import.meta.env.DEV && (
           <div className="mt-6 bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-xs">
             <h3 className="text-white font-bold mb-2">🔍 Enhanced Debug Information</h3>
             <div className="space-y-1">

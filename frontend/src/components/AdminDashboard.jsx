@@ -85,10 +85,64 @@ const AdminDashboard = () => {
   };
 
   const handleClientClick = async (client) => {
-    setSelectedClient(client);
-    setShowClientDetails(true);
-    // Here you would typically fetch detailed client data
-    // For now, we'll use the available client data
+    console.log('👆 CLIENT CLICKED:', {
+      clientId: client._id,
+      clientName: `${client.firstName} ${client.lastName}`,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Set loading state while fetching detailed data
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Fetch detailed client information
+      console.log('🔄 INITIATING CLIENT DETAILS FETCH:', {
+        advisorId: selectedAdvisor._id,
+        clientId: client._id
+      });
+      
+      const response = await adminAPI.getAdvisorClientDetails(selectedAdvisor._id, client._id);
+      
+      if (response.success && response.data) {
+        console.log('✅ CLIENT DETAILS LOADED:', {
+          clientId: response.data._id,
+          fieldsReceived: Object.keys(response.data).length,
+          completionPercentage: response.data.completionPercentage || 0,
+          metadata: response.metadata
+        });
+        
+        setSelectedClient(response.data);
+        setShowClientDetails(true);
+        
+        // Log the view action
+        console.log('👁️ CLIENT DETAIL VIEW OPENED:', {
+          clientId: response.data._id,
+          clientName: `${response.data.firstName} ${response.data.lastName}`,
+          viewTimestamp: new Date().toISOString()
+        });
+      } else {
+        console.error('❌ UNEXPECTED RESPONSE FORMAT:', response);
+        setError('Failed to load client details');
+        // Fallback to using the basic client data
+        setSelectedClient(client);
+        setShowClientDetails(true);
+      }
+    } catch (error) {
+      console.error('❌ ERROR FETCHING CLIENT DETAILS:', {
+        error: error.message,
+        clientId: client._id,
+        advisorId: selectedAdvisor._id,
+        stack: error.stack
+      });
+      
+      setError('Error loading detailed client information');
+      // Fallback to using the basic client data
+      setSelectedClient(client);
+      setShowClientDetails(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -134,15 +188,23 @@ const AdminDashboard = () => {
   // Edit functionality functions
   const handleEdit = (step) => {
     if (!selectedClient) {
+      console.warn('⚠️ EDIT ATTEMPTED WITHOUT SELECTED CLIENT');
       return;
     }
+    
+    console.log('✏️ EDIT MODE INITIATED:', {
+      clientId: selectedClient._id,
+      clientName: `${selectedClient.firstName} ${selectedClient.lastName}`,
+      step: step,
+      timestamp: new Date().toISOString()
+    });
     
     try {
       setEditingStep(step);
       
       // Initialize edit data based on step
       switch (step) {
-      case 1:
+      case 1: {
         const step1Data = {
           firstName: selectedClient?.firstName || '',
           lastName: selectedClient?.lastName || '',
@@ -165,6 +227,7 @@ const AdminDashboard = () => {
         };
         setEditData(step1Data);
         break;
+      }
       case 2:
         setEditData({
           totalMonthlyIncome: selectedClient?.totalMonthlyIncome || 0,
@@ -296,108 +359,6 @@ const AdminDashboard = () => {
           }
         });
         break;
-      case 4:
-        setEditData({
-          assets: {
-            investments: {
-              equity: {
-                mutualFunds: selectedClient?.assets?.investments?.equity?.mutualFunds || 0,
-                directStocks: selectedClient?.assets?.investments?.equity?.directStocks || 0,
-              },
-              fixedIncome: {
-                ppf: selectedClient?.assets?.investments?.fixedIncome?.ppf || 0,
-                epf: selectedClient?.assets?.investments?.fixedIncome?.epf || 0,
-                nps: selectedClient?.assets?.investments?.fixedIncome?.nps || 0,
-                fixedDeposits: selectedClient?.assets?.investments?.fixedIncome?.fixedDeposits || 0,
-                bondsDebentures: selectedClient?.assets?.investments?.fixedIncome?.bondsDebentures || 0,
-                nsc: selectedClient?.assets?.investments?.fixedIncome?.nsc || 0,
-              },
-              other: {
-                ulip: selectedClient?.assets?.investments?.other?.ulip || 0,
-                otherInvestments: selectedClient?.assets?.investments?.other?.otherInvestments || 0,
-              }
-            }
-          }
-        });
-        break;
-      case 5:
-        setEditData({
-          debtsAndLiabilities: {
-            homeLoan: {
-              hasLoan: selectedClient?.debtsAndLiabilities?.homeLoan?.hasLoan || false,
-              outstandingAmount: selectedClient?.debtsAndLiabilities?.homeLoan?.outstandingAmount || 0,
-              monthlyEMI: selectedClient?.debtsAndLiabilities?.homeLoan?.monthlyEMI || 0,
-              interestRate: selectedClient?.debtsAndLiabilities?.homeLoan?.interestRate || 0,
-              remainingTenure: selectedClient?.debtsAndLiabilities?.homeLoan?.remainingTenure || 0,
-            },
-            personalLoan: {
-              hasLoan: selectedClient?.debtsAndLiabilities?.personalLoan?.hasLoan || false,
-              outstandingAmount: selectedClient?.debtsAndLiabilities?.personalLoan?.outstandingAmount || 0,
-              monthlyEMI: selectedClient?.debtsAndLiabilities?.personalLoan?.monthlyEMI || 0,
-              interestRate: selectedClient?.debtsAndLiabilities?.personalLoan?.interestRate || 0,
-            },
-            carLoan: {
-              hasLoan: selectedClient?.debtsAndLiabilities?.carLoan?.hasLoan || false,
-              outstandingAmount: selectedClient?.debtsAndLiabilities?.carLoan?.outstandingAmount || 0,
-              monthlyEMI: selectedClient?.debtsAndLiabilities?.carLoan?.monthlyEMI || 0,
-              interestRate: selectedClient?.debtsAndLiabilities?.carLoan?.interestRate || 0,
-            },
-            creditCards: {
-              hasDebt: selectedClient?.debtsAndLiabilities?.creditCards?.hasDebt || false,
-              totalOutstanding: selectedClient?.debtsAndLiabilities?.creditCards?.totalOutstanding || 0,
-              monthlyPayment: selectedClient?.debtsAndLiabilities?.creditCards?.monthlyPayment || 0,
-              averageInterestRate: selectedClient?.debtsAndLiabilities?.creditCards?.averageInterestRate || 36,
-            }
-          }
-        });
-        break;
-      case 6:
-        setEditData({
-          insuranceCoverage: {
-            lifeInsurance: {
-              hasInsurance: selectedClient?.insuranceCoverage?.lifeInsurance?.hasInsurance || false,
-              totalCoverAmount: selectedClient?.insuranceCoverage?.lifeInsurance?.totalCoverAmount || 0,
-              annualPremium: selectedClient?.insuranceCoverage?.lifeInsurance?.annualPremium || 0,
-              insuranceType: selectedClient?.insuranceCoverage?.lifeInsurance?.insuranceType || 'Term Life',
-            },
-            healthInsurance: {
-              hasInsurance: selectedClient?.insuranceCoverage?.healthInsurance?.hasInsurance || false,
-              totalCoverAmount: selectedClient?.insuranceCoverage?.healthInsurance?.totalCoverAmount || 0,
-              annualPremium: selectedClient?.insuranceCoverage?.healthInsurance?.annualPremium || 0,
-              familyMembers: selectedClient?.insuranceCoverage?.healthInsurance?.familyMembers || 1,
-            },
-            vehicleInsurance: {
-              hasInsurance: selectedClient?.insuranceCoverage?.vehicleInsurance?.hasInsurance || false,
-              annualPremium: selectedClient?.insuranceCoverage?.vehicleInsurance?.annualPremium || 0,
-            }
-          }
-        });
-        break;
-      case 7:
-        setEditData({
-          enhancedRiskProfile: {
-            investmentExperience: selectedClient?.enhancedRiskProfile?.investmentExperience || '',
-            riskTolerance: selectedClient?.enhancedRiskProfile?.riskTolerance || '',
-            monthlyInvestmentCapacity: selectedClient?.enhancedRiskProfile?.monthlyInvestmentCapacity || 0,
-          },
-          enhancedFinancialGoals: {
-            emergencyFund: {
-              priority: selectedClient?.enhancedFinancialGoals?.emergencyFund?.priority || 'High',
-              targetAmount: selectedClient?.enhancedFinancialGoals?.emergencyFund?.targetAmount || 0,
-            },
-            childEducation: {
-              isApplicable: selectedClient?.enhancedFinancialGoals?.childEducation?.isApplicable || false,
-              targetAmount: selectedClient?.enhancedFinancialGoals?.childEducation?.targetAmount || 0,
-              targetYear: selectedClient?.enhancedFinancialGoals?.childEducation?.targetYear || new Date().getFullYear() + 10,
-            },
-            homePurchase: {
-              isApplicable: selectedClient?.enhancedFinancialGoals?.homePurchase?.isApplicable || false,
-              targetAmount: selectedClient?.enhancedFinancialGoals?.homePurchase?.targetAmount || 0,
-              targetYear: selectedClient?.enhancedFinancialGoals?.homePurchase?.targetYear || new Date().getFullYear() + 5,
-            }
-          }
-        });
-        break;
       default:
         setEditData({});
     }
@@ -409,9 +370,36 @@ const AdminDashboard = () => {
   };
 
   const handleSave = async () => {
+    const saveRequestId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+    const saveStartTime = Date.now();
+    
+    console.log('💾 SAVE OPERATION INITIATED:', {
+      requestId: saveRequestId,
+      clientId: selectedClient._id,
+      clientName: `${selectedClient.firstName} ${selectedClient.lastName}`,
+      advisorId: selectedAdvisor._id,
+      editingStep: editingStep,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Log what fields are being updated
+    console.log('📝 FIELDS BEING UPDATED:', {
+      requestId: saveRequestId,
+      fieldsCount: Object.keys(editData).length,
+      fields: Object.keys(editData),
+      dataSize: JSON.stringify(editData).length
+    });
+    
     try {
       setSaving(true);
       
+      // Log the data being sent
+      console.log('📤 SENDING UPDATE REQUEST:', {
+        requestId: saveRequestId,
+        endpoint: `/api/admin/advisors/${selectedAdvisor._id}/clients/${selectedClient._id}`,
+        method: 'PUT',
+        hasAdminToken: !!localStorage.getItem('adminToken')
+      });
       
       // Update the client data via API call - using admin endpoint
       const response = await fetch(`/api/admin/advisors/${selectedAdvisor._id}/clients/${selectedClient._id}`, {
@@ -423,8 +411,18 @@ const AdminDashboard = () => {
         body: JSON.stringify(editData),
       });
 
+      const duration = Date.now() - saveStartTime;
+
       if (response.ok) {
-        const updatedClient = await response.json();
+        const responseData = await response.json();
+        
+        console.log('✅ CLIENT UPDATE SUCCESSFUL:', {
+          requestId: saveRequestId,
+          duration: `${duration}ms`,
+          status: response.status,
+          updatedFields: Object.keys(editData),
+          newCompletionPercentage: responseData.data?.completionPercentage
+        });
         
         // Update local state with the response data
         setSelectedClient({ ...selectedClient, ...editData });
@@ -436,40 +434,102 @@ const AdminDashboard = () => {
             : client
         ));
         
+        // Log state update
+        console.log('🔄 LOCAL STATE UPDATED:', {
+          requestId: saveRequestId,
+          clientId: selectedClient._id,
+          updatedFieldsCount: Object.keys(editData).length
+        });
+        
         // Reset edit state
         setEditingStep(null);
         setEditData({});
         
-        // Show success message
-        console.log('Client updated successfully');
-        // TODO: Add proper success notification
+        console.log('✨ EDIT MODE CLOSED:', {
+          requestId: saveRequestId,
+          clientId: selectedClient._id,
+          totalDuration: `${Date.now() - saveStartTime}ms`
+        });
         
       } else {
         const errorData = await response.json();
-        console.error('Failed to update client:', errorData);
-        // TODO: Add proper error notification
+        console.error('❌ CLIENT UPDATE FAILED:', {
+          requestId: saveRequestId,
+          duration: `${duration}ms`,
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData.message || 'Unknown error',
+          errorDetails: errorData
+        });
+        
         alert('Failed to update client: ' + (errorData.message || 'Unknown error'));
       }
     } catch (error) {
-      console.error('Error updating client:', error);
-      // TODO: Add proper error notification  
+      const duration = Date.now() - saveStartTime;
+      console.error('❌ ERROR DURING CLIENT UPDATE:', {
+        requestId: saveRequestId,
+        duration: `${duration}ms`,
+        error: error.message,
+        stack: error.stack,
+        clientId: selectedClient._id,
+        advisorId: selectedAdvisor._id
+      });
+      
       alert('Error updating client: ' + error.message);
     } finally {
       setSaving(false);
+      console.log('🏁 SAVE OPERATION COMPLETED:', {
+        requestId: saveRequestId,
+        totalDuration: `${Date.now() - saveStartTime}ms`
+      });
     }
   };
 
+  // Helper function to log edit data changes
+  const updateEditData = (newData) => {
+    console.log('📝 EDIT DATA UPDATED:', {
+      clientId: selectedClient._id,
+      editingStep: editingStep,
+      previousDataSize: JSON.stringify(editData).length,
+      newDataSize: JSON.stringify(newData).length,
+      fieldsChanged: Object.keys(newData).filter(key => editData[key] !== newData[key]),
+      timestamp: new Date().toISOString()
+    });
+    setEditData(newData);
+  };
+
   const handleCancel = () => {
+    console.log('🚫 CANCEL EDIT INITIATED:', {
+      clientId: selectedClient._id,
+      editingStep: editingStep,
+      hasUnsavedChanges: Object.keys(editData).length > 0,
+      changedFields: Object.keys(editData),
+      timestamp: new Date().toISOString()
+    });
+    
     // Confirm if user wants to discard changes
     if (Object.keys(editData).length > 0) {
+      console.log('⚠️ UNSAVED CHANGES DETECTED:', {
+        fieldsModified: Object.keys(editData),
+        dataToDiscard: editData
+      });
+      
       const confirmDiscard = window.confirm('Are you sure you want to discard your changes?');
       if (!confirmDiscard) {
+        console.log('↩️ CANCEL ABORTED - User chose to keep editing');
         return;
       }
+      
+      console.log('🗑️ USER CONFIRMED DISCARD CHANGES');
     }
     
     setEditingStep(null);
     setEditData({});
+    
+    console.log('✅ EDIT MODE CANCELLED:', {
+      clientId: selectedClient._id,
+      editingStepCancelled: editingStep
+    });
   };
 
   if (loading) {

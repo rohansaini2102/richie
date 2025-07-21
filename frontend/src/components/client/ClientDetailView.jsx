@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { clientAPI } from '../../services/api';
 import toast from 'react-hot-toast';
+import { PlanCreationModal, CashFlowPlanning, PlanHistory } from '../planning';
 import { 
   User, 
   Mail, 
@@ -50,6 +51,9 @@ function ClientDetailView() {
   const [editingSection, setEditingSection] = useState(null);
   const [editData, setEditData] = useState({});
   const [saving, setSaving] = useState(false);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [showCashFlowPlanning, setShowCashFlowPlanning] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState(null);
 
   useEffect(() => {
     loadClientDetails();
@@ -144,6 +148,17 @@ function ClientDetailView() {
   const handleCancel = () => {
     setEditingSection(null);
     setEditData({});
+  };
+
+  const handlePlanCreated = (plan) => {
+    setSelectedPlanId(plan._id);
+    setShowCashFlowPlanning(true);
+    toast.success('Financial plan created successfully');
+  };
+
+  const handleSelectPlan = (planId) => {
+    setSelectedPlanId(planId);
+    setShowCashFlowPlanning(true);
   };
 
   // Helper functions
@@ -1205,7 +1220,53 @@ function ClientDetailView() {
 
         {/* Step 7: Goals & Risk Profile */}
         {renderStep7GoalsRiskProfile()}
+
+        {/* Financial Planning Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <TrendingUp className="h-5 w-5 mr-2" />
+              Financial Planning Strategies
+            </h2>
+            <button
+              onClick={() => setShowPlanModal(true)}
+              className="flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Create New Plan
+            </button>
+          </div>
+
+          <PlanHistory 
+            clientId={clientId} 
+            onSelectPlan={handleSelectPlan}
+          />
+        </div>
       </div>
+
+      {/* Plan Creation Modal */}
+      <PlanCreationModal
+        open={showPlanModal}
+        onClose={() => setShowPlanModal(false)}
+        clientId={clientId}
+        clientName={clientName}
+        clientData={client}
+        onPlanCreated={handlePlanCreated}
+      />
+
+      {/* Cash Flow Planning Component */}
+      {showCashFlowPlanning && selectedPlanId && (
+        <div className="fixed inset-0 bg-white z-50 overflow-auto">
+          <CashFlowPlanning
+            planId={selectedPlanId}
+            clientId={clientId}
+            onBack={() => {
+              setShowCashFlowPlanning(false);
+              setSelectedPlanId(null);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

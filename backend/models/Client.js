@@ -1043,6 +1043,13 @@ clientSchema.virtual('calculatedFinancials').get(function() {
   };
 });
 
+// Virtual for financial plans
+clientSchema.virtual('financialPlans', {
+  ref: 'FinancialPlan',
+  localField: '_id',
+  foreignField: 'clientId'
+});
+
 // Ensure virtual fields are serialized
 clientSchema.set('toJSON', { virtuals: true });
 clientSchema.set('toObject', { virtuals: true });

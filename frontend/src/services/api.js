@@ -485,6 +485,148 @@ export const clientAPI = {
   }
 };
 
+// Financial Planning API
+export const planAPI = {
+  // Create a new financial plan
+  createPlan: async (planData) => {
+    console.log('📋 CREATING FINANCIAL PLAN:', {
+      clientId: planData.clientId,
+      planType: planData.planType
+    });
+    
+    const response = await api.post('/plans', planData);
+    
+    console.log('✅ PLAN CREATED:', {
+      planId: response.data.plan._id,
+      status: response.data.plan.status
+    });
+    
+    return response.data;
+  },
+
+  // Get plan by ID
+  getPlanById: async (planId) => {
+    console.log('📋 FETCHING PLAN:', { planId });
+    
+    const response = await api.get(`/plans/${planId}`);
+    
+    console.log('✅ PLAN FETCHED:', {
+      planId,
+      planType: response.data.plan.planType,
+      status: response.data.plan.status
+    });
+    
+    return response.data;
+  },
+
+  // Update plan
+  updatePlan: async (planId, updates) => {
+    console.log('📝 UPDATING PLAN:', { planId });
+    
+    const response = await api.put(`/plans/${planId}`, updates);
+    
+    console.log('✅ PLAN UPDATED:', { planId });
+    
+    return response.data;
+  },
+
+  // Archive plan
+  archivePlan: async (planId) => {
+    console.log('📦 ARCHIVING PLAN:', { planId });
+    
+    const response = await api.delete(`/plans/${planId}`);
+    
+    console.log('✅ PLAN ARCHIVED:', { planId });
+    
+    return response.data;
+  },
+
+  // Get all plans for a client
+  getClientPlans: async (clientId) => {
+    console.log('📋 FETCHING CLIENT PLANS:', { clientId });
+    
+    const response = await api.get(`/plans/client/${clientId}`);
+    
+    console.log('✅ CLIENT PLANS FETCHED:', {
+      clientId,
+      planCount: response.data.plans.length
+    });
+    
+    return response.data;
+  },
+
+  // Update plan status
+  updatePlanStatus: async (planId, status) => {
+    console.log('🔄 UPDATING PLAN STATUS:', { planId, status });
+    
+    const response = await api.patch(`/plans/${planId}/status`, { status });
+    
+    console.log('✅ PLAN STATUS UPDATED:', { planId, status });
+    
+    return response.data;
+  },
+
+  // Add review note
+  addReviewNote: async (planId, reviewData) => {
+    console.log('📝 ADDING REVIEW NOTE:', { planId });
+    
+    const response = await api.post(`/plans/${planId}/review`, reviewData);
+    
+    console.log('✅ REVIEW NOTE ADDED:', { planId });
+    
+    return response.data;
+  },
+
+  // Generate AI recommendations
+  generateAIRecommendations: async (planId) => {
+    console.log('🤖 GENERATING AI RECOMMENDATIONS:', { planId });
+    
+    const response = await api.post(`/plans/${planId}/ai-recommendations`);
+    
+    console.log('✅ AI RECOMMENDATIONS GENERATED:', { planId });
+    
+    return response.data;
+  },
+
+  // Get performance metrics
+  getPerformanceMetrics: async (planId) => {
+    console.log('📊 FETCHING PERFORMANCE METRICS:', { planId });
+    
+    const response = await api.get(`/plans/${planId}/performance`);
+    
+    console.log('✅ PERFORMANCE METRICS FETCHED:', { planId });
+    
+    return response.data;
+  },
+
+  // Clone plan
+  clonePlan: async (planId, targetClientId = null) => {
+    console.log('📑 CLONING PLAN:', { planId, targetClientId });
+    
+    const response = await api.post(`/plans/${planId}/clone`, { targetClientId });
+    
+    console.log('✅ PLAN CLONED:', {
+      originalPlanId: planId,
+      newPlanId: response.data.plan._id
+    });
+    
+    return response.data;
+  },
+
+  // Export plan as PDF
+  exportPlanAsPDF: async (planId) => {
+    console.log('📄 EXPORTING PLAN AS PDF:', { planId });
+    
+    const response = await api.get(`/plans/${planId}/export/pdf`, {
+      responseType: 'blob'
+    });
+    
+    console.log('✅ PLAN PDF EXPORTED:', { planId });
+    
+    return response.data;
+  }
+};
+
 // Enhanced Admin API
 export const adminAPI = {
   // Admin login (static credentials)
@@ -572,6 +714,87 @@ export const adminAPI = {
     });
     
     return response.data;
+  },
+
+  // Get individual client details with comprehensive logging
+  getAdvisorClientDetails: async (advisorId, clientId) => {
+    const requestStart = Date.now();
+    const requestId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+    
+    console.log('🔍 FETCHING CLIENT DETAILS:', {
+      requestId,
+      advisorId,
+      clientId,
+      timestamp: new Date().toISOString(),
+      adminToken: !!localStorage.getItem('adminToken')
+    });
+    
+    try {
+      const response = await api.get(`/admin/advisors/${advisorId}/clients/${clientId}`, {
+        headers: {
+          'admin-token': localStorage.getItem('adminToken')
+        }
+      });
+      
+      const duration = Date.now() - requestStart;
+      const clientData = response.data.data;
+      
+      console.log('✅ CLIENT DETAILS FETCHED SUCCESSFULLY:', {
+        requestId,
+        duration: `${duration}ms`,
+        clientId,
+        clientName: `${clientData?.firstName} ${clientData?.lastName}`,
+        email: clientData?.email,
+        completionPercentage: clientData?.completionPercentage || 0,
+        casStatus: clientData?.casData?.casStatus || 'not_uploaded',
+        metadata: response.data.metadata
+      });
+      
+      // Log data structure details
+      console.log('📋 CLIENT DATA STRUCTURE:', {
+        requestId,
+        availableFields: Object.keys(clientData || {}),
+        nestedDataPresent: {
+          address: !!clientData?.address,
+          assets: !!clientData?.assets,
+          debts: !!clientData?.debtsAndLiabilities,
+          goals: !!clientData?.financialGoals,
+          casData: !!clientData?.casData,
+          expenseBreakdown: !!clientData?.expenseBreakdown
+        },
+        dataSize: JSON.stringify(clientData || {}).length
+      });
+      
+      // Log specific important fields
+      if (clientData) {
+        console.log('💰 CLIENT FINANCIAL SNAPSHOT:', {
+          requestId,
+          monthlyIncome: clientData.totalMonthlyIncome || 0,
+          monthlyExpenses: clientData.totalMonthlyExpenses || 0,
+          annualIncome: clientData.annualIncome || 0,
+          hasAssets: !!(clientData.assets && Object.keys(clientData.assets).length > 0),
+          hasDebts: !!(clientData.debtsAndLiabilities && Object.keys(clientData.debtsAndLiabilities).length > 0)
+        });
+      }
+      
+      return response.data;
+      
+    } catch (error) {
+      const duration = Date.now() - requestStart;
+      
+      console.error('❌ CLIENT DETAILS FETCH ERROR:', {
+        requestId,
+        duration: `${duration}ms`,
+        advisorId,
+        clientId,
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        responseData: error.response?.data
+      });
+      
+      throw error;
+    }
   }
 };
 
