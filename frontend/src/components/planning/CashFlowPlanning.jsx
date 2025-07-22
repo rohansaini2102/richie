@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Grid,
@@ -64,6 +64,8 @@ import {
 import { planAPI, clientAPI } from '../../services/api';
 import DebtPlanningInterface from './DebtPlanningInterface';
 import ErrorBoundary from './ErrorBoundary';
+import { useAIRecommendations } from '../../hooks/useAIRecommendations';
+import AISuggestionsPanel from './cashflow/AISuggestionsPanel';
 
 const CashFlowPlanning = ({ planId, clientId, onBack }) => {
   console.log('🚀 [CashFlowPlanning] Component mounting:', { planId, clientId });
@@ -74,7 +76,6 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedClient, setEditedClient] = useState(null);
-  const [aiRecommendations, setAiRecommendations] = useState(null);
   const [activeSection, setActiveSection] = useState('client-review');
   const [calculatedMetrics, setCalculatedMetrics] = useState({});
   const [validationErrors, setValidationErrors] = useState([]);
@@ -84,6 +85,18 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
   const [error, setError] = useState(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [clientLoading, setClientLoading] = useState(false);
+
+  // Use the new AI Recommendations hook
+  const {
+    aiRecommendations,
+    isLoading: aiLoading,
+    error: aiError,
+    isFallback,
+    generateRecommendations,
+    updateRecommendations,
+    clearRecommendations,
+    areRecommendationsStale
+  } = useAIRecommendations(clientId, planId);
 
   // Fetch plan and client data
   useEffect(() => {
@@ -110,8 +123,19 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
 
   // Calculate financial metrics whenever client data changes
   const financialMetrics = useMemo(() => {
+    console.log('🧮 [Financial Metrics] Calculating with editedClient:', {
+      hasEditedClient: !!editedClient,
+      clientType: typeof editedClient,
+      clientData: editedClient ? {
+        firstName: editedClient.firstName,
+        totalMonthlyIncome: editedClient.totalMonthlyIncome,
+        totalMonthlyExpenses: editedClient.totalMonthlyExpenses,
+        hasDebts: !!editedClient.debtsAndLiabilities
+      } : null
+    });
+
     if (!editedClient || typeof editedClient !== 'object') {
-      console.warn('Invalid client data for financial metrics calculation');
+      console.warn('❌ Invalid client data for financial metrics calculation');
       return {
         monthlyIncome: 0,
         monthlyExpenses: 0,
@@ -206,6 +230,51 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
     setValidationErrors(errors);
   }, [financialMetrics]);
 
+  // Validate client data for AI analysis
+  const validateClientDataForAI = useCallback((clientData) => {
+    const required = ['totalMonthlyIncome', 'totalMonthlyExpenses'];
+    const missing = required.filter(field => !clientData[field] || clientData[field] <= 0);
+    
+    if (missing.length > 0) {
+      throw new Error(`Please provide valid ${missing.join(' and ')} for AI analysis`);
+    }
+    
+    // Check if client has any meaningful financial data
+    const hasFinancialData = clientData.totalMonthlyIncome > 0 || 
+                            Object.keys(clientData.debtsAndLiabilities || {}).length > 0 ||
+                            (clientData.assets?.investments && Object.keys(clientData.assets.investments).length > 0);
+    
+    if (!hasFinancialData) {
+      throw new Error('Please add financial information (income, expenses, or debts) for AI analysis');
+    }
+    
+    return true;
+  }, []);
+
+  // Debounced AI recommendations update using the new hook
+  const debouncedAIUpdate = useCallback(
+    (() => {
+      let timeoutId;
+      return (clientData) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(async () => {
+          if (clientData && clientId) {
+            console.log('🤖 [CashFlowPlanning] Auto-updating AI recommendations after debounce...');
+            await generateRecommendations(clientData, financialMetrics, false); // forceRefresh = false
+          }
+        }, 3000); // 3 second delay after user stops editing
+      };
+    })(),
+    [clientId, generateRecommendations, financialMetrics]
+  );
+
+  // Auto-update AI when client data changes
+  useEffect(() => {
+    if (editedClient && clientId) {
+      debouncedAIUpdate(editedClient);
+    }
+  }, [editedClient, clientId, debouncedAIUpdate]);
+
   const fetchPlanData = async () => {
     if (!planId) {
       console.warn('No planId provided for fetchPlanData');
@@ -219,8 +288,8 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
       console.log('🔄 Fetching plan data for planId:', planId);
       const response = await planAPI.getPlanById(planId);
       
-      // Handle different response structures
-      const planData = response?.plan || response?.data?.plan || response;
+      // Extract plan from the consistent API response
+      const planData = response?.plan || response;
       
       if (!planData) {
         throw new Error('Plan data not found in response');
@@ -233,7 +302,10 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
       });
       
       setPlan(planData);
-      setAiRecommendations(planData.aiRecommendations || null);
+      // Use the AI hook to update recommendations instead of direct state
+      if (planData.aiRecommendations) {
+        updateRecommendations(planData.aiRecommendations);
+      }
       
       // Initialize custom variables if they exist
       if (planData.advisorRecommendations?.customVariables) {
@@ -281,10 +353,7 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
     
     try {
       console.log('🔄 Fetching client data for clientId:', clientId);
-      const response = await clientAPI.getClientById(clientId);
-      
-      // Handle different response structures
-      const clientData = response?.data?.data || response?.data || response;
+      const clientData = await clientAPI.getClientById(clientId);
       
       if (!clientData) {
         throw new Error('Client data not found in response');
@@ -297,9 +366,19 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
       });
       
       // Add default values for missing fields to prevent crashes
+      // Convert annualIncome to totalMonthlyIncome if needed
+      let totalMonthlyIncome = clientData.totalMonthlyIncome;
+      if (!totalMonthlyIncome && clientData.annualIncome) {
+        totalMonthlyIncome = Math.round(clientData.annualIncome / 12);
+        console.log('🔄 [Data Transform] Converting annualIncome to totalMonthlyIncome:', {
+          annualIncome: clientData.annualIncome,
+          convertedMonthlyIncome: totalMonthlyIncome
+        });
+      }
+      
       const enhancedClientData = {
         ...clientData,
-        totalMonthlyIncome: clientData.totalMonthlyIncome || 0,
+        totalMonthlyIncome: totalMonthlyIncome || 0,
         totalMonthlyExpenses: clientData.totalMonthlyExpenses || 0,
         debtsAndLiabilities: clientData.debtsAndLiabilities || {},
         assets: {
@@ -423,14 +502,64 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
     }
   };
 
-  const generateAIRecommendations = async () => {
-    try {
-      const response = await planAPI.generateAIRecommendations(planId);
-      setAiRecommendations(response.aiRecommendations);
-    } catch (error) {
-      console.error('Error generating AI recommendations:', error);
+  // Generate fallback recommendations based on financial metrics
+  const generateFallbackRecommendations = (metrics) => {
+    const recommendations = {
+      debtStrategy: "",
+      emergencyFundAnalysis: "",
+      investmentAnalysis: "",
+      cashFlowOptimization: "",
+      riskWarnings: [],
+      opportunities: []
+    };
+
+    // Debt strategy recommendations
+    if (metrics.emiRatio > 40) {
+      recommendations.debtStrategy = `Your EMI ratio of ${metrics.emiRatio.toFixed(1)}% exceeds the safe limit. Consider increasing EMI on high-interest loans to reduce overall debt burden.`;
+      recommendations.riskWarnings.push("High debt-to-income ratio detected");
+    } else if (metrics.totalEMIs > 0) {
+      recommendations.debtStrategy = `Your EMI ratio of ${metrics.emiRatio.toFixed(1)}% is healthy. Consider extra payments to clear debts faster.`;
+    } else {
+      recommendations.debtStrategy = "No existing debts detected. Excellent! Focus on wealth building.";
     }
+
+    // Emergency fund analysis
+    const emergencyFundGap = metrics.emergencyFundTarget - metrics.emergencyFundCurrent;
+    if (emergencyFundGap > 0) {
+      recommendations.emergencyFundAnalysis = `Build emergency fund: Need ₹${emergencyFundGap.toLocaleString('en-IN')} more to reach 6-month expense target.`;
+      recommendations.opportunities.push("Build emergency fund to improve financial security");
+    } else {
+      recommendations.emergencyFundAnalysis = "Emergency fund target achieved! Great financial discipline.";
+    }
+
+    // Investment analysis
+    if (metrics.monthlySurplus > 0) {
+      recommendations.investmentAnalysis = `Available surplus: ₹${metrics.monthlySurplus.toLocaleString('en-IN')}/month for investments. Consider SIP in equity mutual funds.`;
+      recommendations.opportunities.push("Invest monthly surplus for wealth creation");
+    } else {
+      recommendations.investmentAnalysis = "Focus on improving cash flow before starting investments.";
+      recommendations.riskWarnings.push("Negative cash flow - review expenses");
+    }
+
+    // Cash flow optimization
+    if (metrics.savingsRate < 20) {
+      recommendations.cashFlowOptimization = `Savings rate of ${metrics.savingsRate.toFixed(1)}% is below ideal 20%. Review expenses and increase income.`;
+    } else {
+      recommendations.cashFlowOptimization = `Excellent savings rate of ${metrics.savingsRate.toFixed(1)}%! You're on track for financial goals.`;
+    }
+
+    return recommendations;
   };
+
+  const generateAIRecommendations = useCallback(async () => {
+    if (!editedClient || !clientId) {
+      setError('No client data available for AI analysis');
+      return;
+    }
+
+    console.log('🤖 [CashFlowPlanning] Triggering manual AI recommendation generation');
+    await generateRecommendations(editedClient, financialMetrics, true); // forceRefresh = true
+  }, [editedClient, clientId, generateRecommendations, financialMetrics]);
 
   const savePlan = async () => {
     if (!plan || !plan._id) {
@@ -442,33 +571,118 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
     setError(null);
     
     try {
-      console.log('💾 Saving plan...', { planId: plan._id });
+      console.log('💾 [CashFlowPlanning] Starting plan save...', { 
+        planId: plan._id,
+        hasAIRecommendations: !!aiRecommendations,
+        hasEditedClient: !!editedClient,
+        aiRecommendationsKeys: aiRecommendations ? Object.keys(aiRecommendations) : []
+      });
       
+      // Prepare comprehensive update data
       const updates = {
-        planDetails: plan.planDetails,
+        // Core plan details
+        planDetails: {
+          ...plan.planDetails,
+          cashFlowPlan: {
+            ...plan.planDetails?.cashFlowPlan,
+            // Ensure financial metrics are included
+            cashFlowMetrics: {
+              ...plan.planDetails?.cashFlowPlan?.cashFlowMetrics,
+              currentEmiRatio: financialMetrics.emiRatio,
+              targetEmiRatio: 40,
+              currentSavingsRate: financialMetrics.savingsRate,
+              targetSavingsRate: 20,
+              currentFixedExpenditureRatio: financialMetrics.fixedExpenditureRatio,
+              targetFixedExpenditureRatio: 50,
+              financialHealthScore: financialMetrics.financialHealthScore,
+              lastUpdated: new Date().toISOString()
+            }
+          }
+        },
+        
+        // Client data snapshot with enhanced financial calculations
+        clientDataSnapshot: {
+          ...editedClient,
+          calculatedFinancials: {
+            monthlyIncome: financialMetrics.monthlyIncome,
+            monthlyExpenses: financialMetrics.monthlyExpenses,
+            totalEMIs: financialMetrics.totalEMIs,
+            monthlySurplus: financialMetrics.monthlySurplus,
+            emiRatio: financialMetrics.emiRatio,
+            savingsRate: financialMetrics.savingsRate,
+            financialHealthScore: financialMetrics.financialHealthScore,
+            lastCalculated: new Date().toISOString()
+          }
+        },
+        
+        // AI recommendations with metadata
+        aiRecommendations: aiRecommendations ? {
+          ...aiRecommendations,
+          metadata: {
+            generatedAt: new Date().toISOString(),
+            clientId: clientId,
+            planId: plan._id,
+            sourceData: 'cash-flow-planning',
+            isFallback: isFallback,
+            lastError: error
+          }
+        } : null,
+        
+        // Advisor recommendations and custom variables
         advisorRecommendations: {
           ...plan.advisorRecommendations,
-          customVariables: customVariables
-        }
+          customVariables: customVariables,
+          lastUpdated: new Date().toISOString()
+        },
+        
+        // Update timestamps
+        lastModified: new Date().toISOString(),
+        updatedBy: 'cash-flow-planning'
       };
+
+      console.log('📋 [CashFlowPlanning] Prepared save data:', {
+        planId: plan._id,
+        hasAIRecommendations: !!updates.aiRecommendations,
+        hasClientSnapshot: !!updates.clientDataSnapshot,
+        hasCalculatedFinancials: !!updates.clientDataSnapshot?.calculatedFinancials,
+        updateDataSize: JSON.stringify(updates).length + ' chars'
+      });
       
       const response = await planAPI.updatePlan(plan._id, updates);
       
-      console.log('✅ Plan saved successfully');
+      console.log('✅ [CashFlowPlanning] Plan saved successfully:', {
+        planId: plan._id,
+        success: response?.success,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Update local plan state to reflect saved data
+      if (response?.plan) {
+        setPlan({
+          ...response.plan,
+          // Preserve current AI recommendations state
+          aiRecommendations: updates.aiRecommendations
+        });
+      }
       
       // Show success message
-      const successMessage = 'Financial plan saved successfully!';
+      const successMessage = 'Financial plan saved successfully with AI recommendations!';
       if (window.toast) {
         window.toast.success(successMessage);
       } else {
         alert(successMessage);
       }
       
-      // Refresh plan data
-      await fetchPlanData();
+      console.log('💾 [CashFlowPlanning] Save completed - plan updated with current analysis');
       
     } catch (error) {
-      console.error('❌ Error saving plan:', error);
+      console.error('❌ [CashFlowPlanning] Error saving plan:', {
+        planId: plan._id,
+        error: error.message,
+        status: error.response?.status,
+        responseData: error.response?.data
+      });
+      
       const errorMessage = `Failed to save plan: ${error.response?.data?.error || error.message}`;
       setError(errorMessage);
       
@@ -619,7 +833,7 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
     setCustomVariables(customVariables.filter(variable => variable.id !== id));
   };
 
-  if (loading) {
+  if (loading || planLoading || clientLoading || !editedClient) {
     return (
       <Box sx={{ width: '100%', mt: 4, textAlign: 'center' }}>
         <LinearProgress sx={{ mb: 2 }} />
@@ -634,6 +848,11 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
         {clientLoading && (
           <Typography variant="caption" display="block" sx={{ mt: 1 }}>
             Loading client data...
+          </Typography>
+        )}
+        {(!editedClient && !clientLoading) && (
+          <Typography variant="caption" display="block" sx={{ mt: 1, color: 'warning.main' }}>
+            Waiting for client data...
           </Typography>
         )}
       </Box>
@@ -1241,298 +1460,54 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
 
         {/* Right Panel - AI Recommendations */}
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2, position: 'sticky', top: 20 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <AutoAwesome sx={{ mr: 1 }} color="primary" />
-              <Typography variant="h6">AI Recommendations</Typography>
-              <Tooltip title="Generate new AI recommendations">
-                <IconButton size="small" onClick={generateAIRecommendations} sx={{ ml: 'auto' }}>
-                  <AutoAwesome />
-                </IconButton>
-              </Tooltip>
+          <Paper sx={{ p: 0, position: 'sticky', top: 20, borderRadius: 2 }}>
+            {/* Manual AI Generation Button */}
+            <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
+                  <AutoAwesome sx={{ mr: 1 }} color="primary" />
+                  AI Recommendations
+                  {isFallback && (
+                    <Chip 
+                      label="Calculated" 
+                      size="small" 
+                      color="warning" 
+                      sx={{ ml: 1, fontSize: '0.7rem' }}
+                    />
+                  )}
+                </Typography>
+                <Tooltip title={aiLoading ? "Generating recommendations..." : "Generate new AI recommendations"}>
+                  <IconButton 
+                    size="small" 
+                    onClick={generateAIRecommendations} 
+                    disabled={aiLoading}
+                    color="primary"
+                  >
+                    {aiLoading ? <CircularProgress size={16} /> : <AutoAwesome />}
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              
+              {/* AI Error Alert */}
+              {aiError && (
+                <Alert severity="warning" sx={{ mt: 2 }} variant="outlined">
+                  <Typography variant="body2">{aiError}</Typography>
+                </Alert>
+              )}
             </Box>
-            <Divider sx={{ mb: 2 }} />
-            
-            {(aiRecommendations || financialMetrics) ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {/* Real-time Debt Management Analysis */}
-                <Card variant="outlined" sx={{ bgcolor: 'error.light' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                      <TrendingDown sx={{ mr: 1, fontSize: '1rem' }} />
-                      Debt Management Analysis
-                    </Typography>
-                    {financialMetrics.emiRatio > 40 ? (
-                      <Box>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium', color: 'error.main' }}>
-                          ⚠️ Priority: Clear high-interest debts immediately
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 1 }}>
-                          Current EMI ratio {financialMetrics.emiRatio.toFixed(1)}% exceeds safe limit of 40%
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 1 }}>
-                          Reduce monthly EMI by ₹{Math.max(0, (financialMetrics.totalEMIs - (financialMetrics.monthlyIncome * 0.4))).toLocaleString('en-IN')} to reach safe zone
-                        </Typography>
-                        <Typography variant="caption" color="success.main">
-                          Potential annual interest savings: ₹{(financialMetrics.totalEMIs * 0.15).toLocaleString('en-IN')}+ by increasing EMI on high-interest loans
-                        </Typography>
-                      </Box>
-                    ) : financialMetrics.totalEMIs > 0 ? (
-                      <Box>
-                        <Typography variant="body2" sx={{ mb: 1, color: 'success.main' }}>
-                          ✅ EMI ratio {financialMetrics.emiRatio.toFixed(1)}% is within safe limits
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 1 }}>
-                          Consider extra payments on highest interest loans for faster debt clearance
-                        </Typography>
-                        <Typography variant="caption">
-                          Available EMI capacity: ₹{Math.max(0, (financialMetrics.monthlyIncome * 0.4) - financialMetrics.totalEMIs).toLocaleString('en-IN')}
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <Typography variant="body2" color="success.main">
-                        ✨ Excellent! No existing debts. Focus on wealth building through investments.
-                      </Typography>
-                    )}
-                    {aiRecommendations?.debtStrategy && (
-                      <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                        AI Insight: {aiRecommendations.debtStrategy}
-                      </Typography>
-                    )}
-                  </CardContent>
-                </Card>
 
-                {/* Real-time Emergency Fund Strategy */}
-                <Card variant="outlined" sx={{ bgcolor: 'warning.light' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Security sx={{ mr: 1, fontSize: '1rem' }} />
-                      Emergency Fund Strategy
-                    </Typography>
-                    <Box>
-                      <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
-                        Target: ₹{financialMetrics.emergencyFundTarget?.toLocaleString('en-IN')} (6 months expenses)
-                      </Typography>
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        Current Gap: ₹{Math.max(0, (financialMetrics.emergencyFundTarget || 0) - (financialMetrics.emergencyFundCurrent || 0)).toLocaleString('en-IN')}
-                      </Typography>
-                      {(financialMetrics.emergencyFundTarget || 0) > (financialMetrics.emergencyFundCurrent || 0) ? (
-                        <Box>
-                          <Typography variant="body2" sx={{ mb: 1 }}>
-                            Suggested Timeline: {Math.ceil(Math.max(0, (financialMetrics.emergencyFundTarget || 0) - (financialMetrics.emergencyFundCurrent || 0)) / Math.max(financialMetrics.monthlySurplus * 0.3, 5000))} months
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 1 }}>
-                            Monthly Allocation: ₹{Math.max(financialMetrics.monthlySurplus * 0.3, 5000).toLocaleString('en-IN')}
-                          </Typography>
-                          <Typography variant="caption" color="info.main">
-                            Recommended: Ultra Short-term Debt Fund for liquidity
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" color="success.main">
-                          ✅ Emergency fund target achieved! Consider optimizing allocation.
-                        </Typography>
-                      )}
-                    </Box>
-                    {aiRecommendations?.emergencyFundAnalysis && (
-                      <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                        AI Insight: {aiRecommendations.emergencyFundAnalysis}
-                      </Typography>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Real-time Investment Recommendations */}
-                <Card variant="outlined" sx={{ bgcolor: 'success.light' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                      <ShowChart sx={{ mr: 1, fontSize: '1rem' }} />
-                      Investment Recommendations
-                    </Typography>
-                    <Box>
-                      {financialMetrics.monthlySurplus > 0 ? (
-                        <Box>
-                          <Typography variant="body2" sx={{ mb: 1 }}>
-                            Monthly Surplus: ₹{financialMetrics.monthlySurplus?.toLocaleString('en-IN')}
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
-                            Recommended Investment: ₹{Math.min(financialMetrics.monthlySurplus * 0.7, financialMetrics.monthlyIncome * 0.2).toLocaleString('en-IN')}/month
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 1 }}>
-                            Suggested Allocation:
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 0.5, ml: 2 }}>
-                            • Large Cap Equity: ₹{Math.round(Math.min(financialMetrics.monthlySurplus * 0.7, financialMetrics.monthlyIncome * 0.2) * 0.4).toLocaleString('en-IN')}/month (40%)
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 0.5, ml: 2 }}>
-                            • Multi Cap Equity: ₹{Math.round(Math.min(financialMetrics.monthlySurplus * 0.7, financialMetrics.monthlyIncome * 0.2) * 0.3).toLocaleString('en-IN')}/month (30%)
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 1, ml: 2 }}>
-                            • Corporate Bond Fund: ₹{Math.round(Math.min(financialMetrics.monthlySurplus * 0.7, financialMetrics.monthlyIncome * 0.2) * 0.3).toLocaleString('en-IN')}/month (30%)
-                          </Typography>
-                          <Typography variant="caption" color="success.main">
-                            Expected Returns: 11-12% annually | Time Horizon: 7+ years for equity
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" color="error.main">
-                          ⚠️ Negative cash flow detected. Focus on expense optimization and debt reduction first.
-                        </Typography>
-                      )}
-                    </Box>
-                    {aiRecommendations?.investmentAnalysis && (
-                      <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                        AI Insight: {aiRecommendations.investmentAnalysis}
-                      </Typography>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Real-time Cash Flow Optimization */}
-                <Card variant="outlined" sx={{ bgcolor: 'info.light' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                      <MonetizationOn sx={{ mr: 1, fontSize: '1rem' }} />
-                      Cash Flow Optimization
-                    </Typography>
-                    <Box>
-                      {financialMetrics.monthlySurplus > 0 ? (
-                        <Box>
-                          <Typography variant="body2" sx={{ mb: 1 }}>
-                            Monthly Surplus Available: ₹{financialMetrics.monthlySurplus?.toLocaleString('en-IN')}
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 1 }}>
-                            Optimal Allocation:
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 0.5, ml: 2 }}>
-                            • Emergency Fund: ₹{Math.min(financialMetrics.monthlySurplus * 0.4, 15000).toLocaleString('en-IN')} (Priority)
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 1, ml: 2 }}>
-                            • SIP Investments: ₹{Math.max(0, financialMetrics.monthlySurplus - Math.min(financialMetrics.monthlySurplus * 0.4, 15000)).toLocaleString('en-IN')}
-                          </Typography>
-                          <Typography variant="caption">
-                            After emergency fund completion: Total investment capacity ₹{financialMetrics.monthlySurplus?.toLocaleString('en-IN')}/month
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" color="error.main">
-                          Immediate action needed: Monthly expenses exceed income. Review and optimize spending.
-                        </Typography>
-                      )}
-                    </Box>
-                    {aiRecommendations?.cashFlowOptimization && (
-                      <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                        AI Insight: {aiRecommendations.cashFlowOptimization}
-                      </Typography>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Dynamic Risk Warnings */}
-                <Card variant="outlined" sx={{ bgcolor: 'error.light' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Warning sx={{ mr: 1, fontSize: '1rem' }} />
-                      Risk Warnings
-                    </Typography>
-                    <Box>
-                      {financialMetrics.emiRatio > 40 && (
-                        <Typography variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-                          <Error sx={{ mr: 1, fontSize: '1rem', color: 'error.main' }} />
-                          EMI ratio {financialMetrics.emiRatio.toFixed(1)}% exceeds safe limit of 40%
-                        </Typography>
-                      )}
-                      {financialMetrics.monthlySurplus < 0 && (
-                        <Typography variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-                          <Error sx={{ mr: 1, fontSize: '1rem', color: 'error.main' }} />
-                          Negative monthly cash flow - immediate expense review required
-                        </Typography>
-                      )}
-                      {(financialMetrics.emergencyFundCurrent || 0) < (financialMetrics.emergencyFundTarget || 0) && (
-                        <Typography variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-                          <Warning sx={{ mr: 1, fontSize: '1rem', color: 'warning.main' }} />
-                          Emergency fund insufficient - only {Math.round(((financialMetrics.emergencyFundCurrent || 0) / Math.max((financialMetrics.monthlyExpenses || 1), 1)) * 10) / 10} months covered
-                        </Typography>
-                      )}
-                      {financialMetrics.financialHealthScore < 5 && (
-                        <Typography variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-                          <Error sx={{ mr: 1, fontSize: '1rem', color: 'error.main' }} />
-                          Low financial health score ({financialMetrics.financialHealthScore}/10) requires immediate attention
-                        </Typography>
-                      )}
-                      {aiRecommendations?.riskWarnings?.map((warning, idx) => (
-                        <Typography key={idx} variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
-                          <Warning sx={{ mr: 1, fontSize: '1rem', color: 'warning.main', mt: 0.1 }} />
-                          {warning}
-                        </Typography>
-                      ))}
-                      {!financialMetrics.emiRatio && !financialMetrics.monthlySurplus && (
-                        <Typography variant="body2" color="text.secondary">
-                          Complete client data to view personalized risk analysis
-                        </Typography>
-                      )}
-                    </Box>
-                  </CardContent>
-                </Card>
-
-                {/* Dynamic Opportunities */}
-                <Card variant="outlined" sx={{ bgcolor: 'success.light' }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                      <TrendingUp sx={{ mr: 1, fontSize: '1rem' }} />
-                      Opportunities
-                    </Typography>
-                    <Box>
-                      {financialMetrics.savingsRate > 20 && (
-                        <Typography variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-                          <CheckCircle sx={{ mr: 1, fontSize: '1rem', color: 'success.main' }} />
-                          High savings rate ({financialMetrics.savingsRate.toFixed(1)}%) - excellent foundation for wealth building
-                        </Typography>
-                      )}
-                      {financialMetrics.emiRatio <= 30 && financialMetrics.emiRatio > 0 && (
-                        <Typography variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-                          <CheckCircle sx={{ mr: 1, fontSize: '1rem', color: 'success.main' }} />
-                          Healthy debt management - capacity for additional productive loans if needed
-                        </Typography>
-                      )}
-                      {(editedClient?.incomeType === 'Salaried' || editedClient?.financialInfo?.incomeType === 'Salaried') && (
-                        <Typography variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-                          <Info sx={{ mr: 1, fontSize: '1rem', color: 'info.main' }} />
-                          Salaried income - explore tax-saving investment options under Section 80C
-                        </Typography>
-                      )}
-                      {financialMetrics.financialHealthScore >= 7 && (
-                        <Typography variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-                          <CheckCircle sx={{ mr: 1, fontSize: '1rem', color: 'success.main' }} />
-                          Excellent financial health - consider advanced wealth building strategies
-                        </Typography>
-                      )}
-                      {aiRecommendations?.opportunities?.map((opportunity, idx) => (
-                        <Typography key={idx} variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
-                          <TrendingUp sx={{ mr: 1, fontSize: '1rem', color: 'success.main', mt: 0.1 }} />
-                          {opportunity}
-                        </Typography>
-                      ))}
-                      {!financialMetrics.monthlySurplus && (
-                        <Typography variant="body2" color="text.secondary">
-                          Complete financial data to identify personalized opportunities
-                        </Typography>
-                      )}
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Box>
-            ) : (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <AutoAwesome sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Real-time AI analysis will appear here
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Complete client data review to enable AI recommendations
-                </Typography>
-              </Box>
-            )}
+            {/* Use the dedicated AISuggestionsPanel component */}
+            <Box sx={{ p: 2 }}>
+              <AISuggestionsPanel 
+                suggestions={aiRecommendations ? { 
+                  success: true, 
+                  analysis: aiRecommendations,
+                  error: aiError 
+                } : null}
+                loading={aiLoading}
+                clientData={editedClient}
+              />
+            </Box>
           </Paper>
         </Grid>
       </Grid>

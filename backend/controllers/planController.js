@@ -3,57 +3,151 @@ const Client = require('../models/Client');
 const { logger } = require('../utils/logger');
 const claudeAiService = require('../services/claudeAiService');
 
-// Enhanced JSON parsing for AI responses
+// Enhanced JSON parsing for AI responses with improved strategies
 function parseAIResponse(content) {
-  // Strategy 1: Try direct JSON parsing
+  console.log('🔧 [Parser] Attempting to parse AI response:', {
+    contentLength: content?.length,
+    contentPreview: content?.substring(0, 200),
+    startsWithBrace: content?.trim().startsWith('{'),
+    endsWithBrace: content?.trim().endsWith('}')
+  });
+
+  if (!content || typeof content !== 'string') {
+    throw new Error('Invalid content provided for parsing');
+  }
+
+  // Strategy 1: Direct JSON parsing
   try {
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+    console.log('✅ [Parser] Direct JSON parsing successful');
+    return parsed;
   } catch (error1) {
-    // Strategy 2: Extract JSON from markdown code blocks
-    const jsonBlockMatch = content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-    if (jsonBlockMatch) {
-      try {
-        return JSON.parse(jsonBlockMatch[1]);
-      } catch (error2) {
-        // Continue to next strategy
-      }
-    }
-    
-    // Strategy 3: Extract JSON from any code blocks
-    const codeBlockMatch = content.match(/```\s*(\{[\s\S]*?\})\s*```/);
-    if (codeBlockMatch) {
-      try {
-        return JSON.parse(codeBlockMatch[1]);
-      } catch (error3) {
-        // Continue to next strategy
-      }
-    }
-    
-    // Strategy 4: Find JSON object in mixed content
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0]);
-      } catch (error4) {
-        // Continue to next strategy
-      }
-    }
-    
-    // Strategy 5: Clean up common formatting issues
-    let cleanedContent = content
-      .replace(/^\s*[\w\s]*?(\{)/m, '$1') // Remove text before first {
-      .replace(/(\})\s*[\w\s]*?$/m, '$1') // Remove text after last }
-      .replace(/\n\s*Note:.*$/ms, '') // Remove trailing notes
-      .replace(/([^\\])"([^"]*?)"/g, '$1"$2"') // Fix unescaped quotes
-      .trim();
-    
+    console.log('⚠️ [Parser] Direct parsing failed, trying alternative strategies');
+  }
+
+  // Strategy 2: Extract JSON from markdown code blocks
+  const jsonBlockPattern = /```(?:json)?\s*(\{[\s\S]*?\})\s*```/gi;
+  const jsonBlockMatch = jsonBlockPattern.exec(content);
+  if (jsonBlockMatch) {
     try {
-      return JSON.parse(cleanedContent);
-    } catch (error5) {
-      // All strategies failed, throw the original error
-      throw new Error(`All JSON parsing strategies failed. Original content length: ${content.length}, Last error: ${error5.message}`);
+      const parsed = JSON.parse(jsonBlockMatch[1]);
+      console.log('✅ [Parser] Markdown JSON block parsing successful');
+      return parsed;
+    } catch (error2) {
+      console.log('⚠️ [Parser] JSON block parsing failed');
     }
   }
+
+  // Strategy 3: Find the largest JSON-like structure
+  const jsonPattern = /\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/g;
+  const jsonMatches = content.match(jsonPattern);
+  if (jsonMatches && jsonMatches.length > 0) {
+    // Try parsing the largest match first
+    const sortedMatches = jsonMatches.sort((a, b) => b.length - a.length);
+    
+    for (const match of sortedMatches) {
+      try {
+        const parsed = JSON.parse(match);
+        console.log('✅ [Parser] Pattern-based parsing successful');
+        return parsed;
+      } catch (error3) {
+        console.log('⚠️ [Parser] Pattern match failed, trying next');
+        continue;
+      }
+    }
+  }
+
+  // Strategy 4: Advanced cleanup and parsing
+  try {
+    let cleanedContent = content
+      .replace(/^[^{]*(\{)/s, '$1') // Remove everything before first {
+      .replace(/(\})[^}]*$/s, '$1') // Remove everything after last }
+      .replace(/,\s*}/g, '}') // Remove trailing commas
+      .replace(/,\s*]/g, ']') // Remove trailing commas in arrays
+      .replace(/\/\/.*$/gm, '') // Remove comments
+      .replace(/\n\s*Note:.*$/ms, '') // Remove trailing notes
+      .replace(/[\u201C\u201D]/g, '"') // Replace curly quotes
+      .replace(/[\u2018\u2019]/g, "'") // Replace curly apostrophes
+      .trim();
+
+    const parsed = JSON.parse(cleanedContent);
+    console.log('✅ [Parser] Advanced cleanup parsing successful');
+    return parsed;
+  } catch (error4) {
+    console.log('⚠️ [Parser] Advanced cleanup failed');
+  }
+
+  // Strategy 5: Generate fallback structure if parsing completely fails
+  console.log('❌ [Parser] All parsing strategies failed, generating fallback response');
+  
+  // Extract key information from text if possible
+  const fallbackResponse = {
+    debtStrategy: {
+      prioritizedDebts: [],
+      overallStrategy: extractTextValue(content, ['strategy', 'debt strategy', 'recommendation']) || 
+                      'AI response could not be parsed, but analysis was attempted.'
+    },
+    financialMetrics: {
+      currentEMIRatio: extractNumberValue(content, ['emi ratio', 'emi-to-income']) || 0,
+      targetEMIRatio: 40,
+      monthlySurplus: extractNumberValue(content, ['surplus', 'available']) || 0,
+      totalInterestSavings: extractNumberValue(content, ['savings', 'save']) || 0,
+      debtFreeTimeline: extractTextValue(content, ['timeline', 'payoff', 'debt-free']) || 'Not specified',
+      financialHealthScore: extractNumberValue(content, ['health score', 'score']) || 0
+    },
+    recommendations: {
+      immediateActions: extractListItems(content, 'immediate') || ['Review and optimize current debt payments'],
+      mediumTermActions: extractListItems(content, 'medium') || ['Focus on building emergency fund'],
+      longTermActions: extractListItems(content, 'long') || ['Develop long-term investment strategy']
+    },
+    warnings: extractListItems(content, 'warning') || [],
+    opportunities: extractListItems(content, 'opportunity') || [],
+    generatedBy: 'fallback-parser',
+    originalContentLength: content.length,
+    parsingError: 'AI response format could not be parsed as valid JSON'
+  };
+
+  console.log('🔄 [Parser] Generated fallback response:', {
+    hasStrategy: !!fallbackResponse.debtStrategy.overallStrategy,
+    hasMetrics: !!fallbackResponse.financialMetrics,
+    hasRecommendations: !!fallbackResponse.recommendations
+  });
+
+  return fallbackResponse;
+}
+
+// Helper functions for text extraction
+function extractTextValue(content, keywords) {
+  for (const keyword of keywords) {
+    const pattern = new RegExp(`${keyword}[:\\s]*([^\\n\\.]+)`, 'i');
+    const match = content.match(pattern);
+    if (match) return match[1].trim();
+  }
+  return null;
+}
+
+function extractNumberValue(content, keywords) {
+  for (const keyword of keywords) {
+    const pattern = new RegExp(`${keyword}[:\\s]*[₹\\$]?([\\d,]+(?:\\.\\d+)?)\\%?`, 'i');
+    const match = content.match(pattern);
+    if (match) {
+      return parseFloat(match[1].replace(/,/g, ''));
+    }
+  }
+  return null;
+}
+
+function extractListItems(content, category) {
+  const pattern = new RegExp(`${category}[^:]*:([\\s\\S]*?)(?=\\n\\n|$)`, 'i');
+  const match = content.match(pattern);
+  if (match) {
+    return match[1]
+      .split(/\n/)
+      .map(line => line.replace(/^[\s\-\*\d\.]+/, '').trim())
+      .filter(line => line.length > 0)
+      .slice(0, 3); // Limit to 3 items
+  }
+  return null;
 }
 
 // Create a new financial plan
@@ -759,21 +853,75 @@ function generateAIRecommendationsForPlan(plan) {
 
 // AI-powered debt analysis
 exports.analyzeDebt = async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { clientId } = req.params;
     const advisorId = req.advisor.id;
-    const clientData = req.body.clientData || await Client.findOne({ _id: clientId, advisor: advisorId });
+    const receivedClientData = req.body.clientData;
+    
+    console.log('📥 [Backend] Received debt analysis request:', {
+      clientId,
+      advisorId,
+      hasBodyClientData: !!receivedClientData,
+      bodyDataSize: receivedClientData ? JSON.stringify(receivedClientData).length + ' chars' : 0,
+      bodyDataKeys: receivedClientData ? Object.keys(receivedClientData) : [],
+      hasCalculatedFinancials: !!receivedClientData?.calculatedFinancials,
+      calculatedFinancials: receivedClientData?.calculatedFinancials,
+      hasDebts: !!receivedClientData?.debtsAndLiabilities,
+      requestHeaders: {
+        contentType: req.headers['content-type'],
+        contentLength: req.headers['content-length']
+      }
+    });
+
+    // Use provided data or fetch from database
+    let clientData;
+    if (receivedClientData) {
+      clientData = receivedClientData;
+      console.log('📋 [Backend] Using provided client data from request body');
+    } else {
+      console.log('🔍 [Backend] No client data in body, fetching from database...');
+      clientData = await Client.findOne({ _id: clientId, advisor: advisorId });
+      console.log('📋 [Backend] Database client data:', {
+        found: !!clientData,
+        hasCalculatedFinancials: !!clientData?.calculatedFinancials,
+        dataSize: clientData ? JSON.stringify(clientData.toObject()).length + ' chars' : 0
+      });
+    }
 
     if (!clientData) {
+      console.log('❌ [Backend] Client not found');
       return res.status(404).json({ success: false, error: 'Client not found' });
     }
+
+    console.log('🧠 [Backend] Preparing data for Claude AI:', {
+      clientId,
+      hasFinancialData: !!(clientData.calculatedFinancials?.monthlyIncome || clientData.totalMonthlyIncome),
+      hasDebtsData: !!clientData.debtsAndLiabilities,
+      dataStructure: {
+        calculatedFinancials: !!clientData.calculatedFinancials,
+        directTotalMonthlyIncome: !!clientData.totalMonthlyIncome,
+        debtsAndLiabilities: !!clientData.debtsAndLiabilities
+      }
+    });
 
     logger.info(`Analyzing debt strategy for client ${clientId} using Claude AI`);
 
     // Get AI analysis using Claude
+    console.log('📡 [Backend] Calling Claude AI service...');
     const aiResponse = await claudeAiService.analyzeDebtStrategy(clientData);
     
+    console.log('📥 [Backend] Claude AI response received:', {
+      success: aiResponse.success,
+      hasContent: !!aiResponse.content,
+      contentLength: aiResponse.content ? aiResponse.content.length + ' chars' : 0,
+      hasUsage: !!aiResponse.usage,
+      error: aiResponse.error
+    });
+    
     if (!aiResponse.success) {
+      console.log('❌ [Backend] Claude AI debt analysis failed:', aiResponse.error);
       logger.error('Claude AI debt analysis failed', { error: aiResponse.error });
       return res.status(500).json({ 
         success: false, 
@@ -784,8 +932,20 @@ exports.analyzeDebt = async (req, res) => {
     // Parse AI response with enhanced robustness
     let analysisData;
     try {
+      console.log('🔧 [Backend] Parsing Claude AI response...');
       analysisData = parseAIResponse(aiResponse.content);
+      console.log('✅ [Backend] Claude response parsed successfully:', {
+        hasDebtStrategy: !!analysisData.debtStrategy,
+        hasFinancialMetrics: !!analysisData.financialMetrics,
+        hasRecommendations: !!analysisData.recommendations,
+        analysisKeys: Object.keys(analysisData)
+      });
     } catch (parseError) {
+      console.log('❌ [Backend] Failed to parse Claude AI response:', {
+        error: parseError.message,
+        contentPreview: aiResponse.content?.substring(0, 200) + '...',
+        contentLength: aiResponse.content?.length
+      });
       logger.error('Failed to parse AI response after all attempts', { 
         content: aiResponse.content,
         error: parseError.message 
@@ -805,18 +965,46 @@ exports.analyzeDebt = async (req, res) => {
       advisorId
     };
 
+    const responseTime = Date.now() - startTime;
+    
+    console.log('✅ [Backend] Debt analysis completed successfully:', {
+      clientId,
+      responseTime: responseTime + 'ms',
+      debtsAnalyzed: analysis.debtStrategy?.prioritizedDebts?.length || 0,
+      totalSavings: analysis.financialMetrics?.totalInterestSavings || 0,
+      hasWarnings: !!analysis.warnings,
+      hasOpportunities: !!analysis.opportunities
+    });
+
     logger.info(`Debt analysis completed for client ${clientId}`, {
       debtsAnalyzed: analysis.debtStrategy?.prioritizedDebts?.length || 0,
       totalSavings: analysis.financialMetrics?.totalInterestSavings || 0
     });
 
-    res.json({ 
+    const finalResponse = { 
       success: true, 
       analysis,
       aiUsage: aiResponse.usage 
+    };
+    
+    console.log('📤 [Backend] Sending response to frontend:', {
+      responseSize: JSON.stringify(finalResponse).length + ' chars',
+      hasAnalysis: !!finalResponse.analysis,
+      hasUsage: !!finalResponse.aiUsage
     });
 
+    res.json(finalResponse);
+
   } catch (error) {
+    const responseTime = Date.now() - startTime;
+    console.error('❌ [Backend] Error in debt analysis:', {
+      clientId: req.params.clientId,
+      responseTime: responseTime + 'ms',
+      errorType: error.constructor.name,
+      errorMessage: error.message,
+      stack: error.stack?.split('\n').slice(0, 5)
+    });
+    
     logger.error('Error in debt analysis:', error);
     res.status(500).json({ 
       success: false, 
@@ -924,65 +1112,178 @@ exports.getDebtRecommendations = async (req, res) => {
   }
 };
 
-// Test Claude AI service configuration
+// Test Claude AI service configuration with enhanced testing
 exports.testAIService = async (req, res) => {
+  const testStartTime = Date.now();
+  
   try {
-    console.log('🧪 [PlanController] Testing Claude AI service configuration...');
+    console.log('🧪 [PlanController] Starting comprehensive AI service test...');
     
+    // Step 1: Validate configuration
     const validation = claudeAiService.validateConfiguration();
+    console.log('🔧 [PlanController] Configuration validation:', validation);
     
     if (!validation.isValid) {
       console.error('❌ [PlanController] AI service configuration invalid:', validation.issues);
       return res.status(500).json({
         success: false,
         error: 'AI service configuration invalid',
-        issues: validation.issues
+        issues: validation.issues,
+        testDuration: Date.now() - testStartTime
       });
     }
     
-    // Test with dummy client data
+    // Step 2: Test with comprehensive dummy client data
     const testClientData = {
       firstName: 'Test',
       lastName: 'Client',
-      totalMonthlyIncome: 75000,
-      totalMonthlyExpenses: 45000,
+      age: 32,
+      totalMonthlyIncome: 85000,
+      totalMonthlyExpenses: 50000,
+      incomeType: 'Salaried',
+      riskTolerance: 'Moderate',
+      assets: {
+        cashBankSavings: 150000,
+        investments: {
+          equity: {
+            mutualFunds: 250000,
+            directStocks: 100000,
+            elss: 50000
+          },
+          fixedIncome: {
+            ppf: 200000,
+            epf: 300000,
+            fixedDeposits: 100000
+          }
+        }
+      },
       debtsAndLiabilities: {
         personalLoan: {
           hasLoan: true,
-          outstandingAmount: 200000,
-          monthlyEMI: 7000,
-          interestRate: 14
+          outstandingAmount: 300000,
+          monthlyEMI: 12000,
+          interestRate: 16,
+          remainingTenure: 2.5,
+          loanProvider: 'Test Bank'
+        },
+        carLoan: {
+          hasLoan: true,
+          outstandingAmount: 500000,
+          monthlyEMI: 15000,
+          interestRate: 10.5,
+          remainingTenure: 3,
+          loanProvider: 'Auto Finance'
         },
         homeLoan: {
           hasLoan: true,
-          outstandingAmount: 2500000,
-          monthlyEMI: 20000,
-          interestRate: 8.5
+          outstandingAmount: 2800000,
+          monthlyEMI: 25000,
+          interestRate: 8.75,
+          remainingTenure: 12,
+          loanProvider: 'Home Loans Ltd'
         }
       }
     };
     
-    console.log('🤖 [PlanController] Testing AI analysis with sample data...');
-    const aiResponse = await claudeAiService.analyzeDebtStrategy(testClientData);
+    console.log('📋 [PlanController] Testing with enhanced client data:', {
+      hasIncome: !!testClientData.totalMonthlyIncome,
+      hasExpenses: !!testClientData.totalMonthlyExpenses,
+      debtCount: Object.keys(testClientData.debtsAndLiabilities).length,
+      hasAssets: !!testClientData.assets
+    });
     
-    console.log('✅ [PlanController] AI service test result:', {
+    // Step 3: Call AI service
+    console.log('🤖 [PlanController] Calling Claude AI service...');
+    const aiCallStartTime = Date.now();
+    const aiResponse = await claudeAiService.analyzeDebtStrategy(testClientData);
+    const aiCallDuration = Date.now() - aiCallStartTime;
+    
+    console.log('📥 [PlanController] AI service response received:', {
       success: aiResponse.success,
       hasContent: !!aiResponse.content,
+      contentLength: aiResponse.content?.length,
+      callDuration: aiCallDuration + 'ms',
       error: aiResponse.error
     });
     
-    res.json({
+    // Step 4: Test response parsing if successful
+    let parsedResponse = null;
+    let parsingSuccess = false;
+    
+    if (aiResponse.success && aiResponse.content) {
+      try {
+        console.log('🔧 [PlanController] Testing response parsing...');
+        parsedResponse = parseAIResponse(aiResponse.content);
+        parsingSuccess = true;
+        
+        console.log('✅ [PlanController] Response parsing successful:', {
+          hasDebtStrategy: !!parsedResponse.debtStrategy,
+          hasFinancialMetrics: !!parsedResponse.financialMetrics,
+          hasRecommendations: !!parsedResponse.recommendations,
+          generatedBy: parsedResponse.generatedBy || 'AI'
+        });
+      } catch (parseError) {
+        console.error('❌ [PlanController] Response parsing failed:', parseError.message);
+        parsedResponse = { error: 'Parsing failed: ' + parseError.message };
+        parsingSuccess = false;
+      }
+    }
+    
+    const totalTestDuration = Date.now() - testStartTime;
+    
+    const testResults = {
       success: true,
-      configurationValid: validation.isValid,
-      aiServiceWorking: aiResponse.success,
-      testResponse: aiResponse.success ? 'AI service responding correctly' : aiResponse.error
-    });
+      testDuration: totalTestDuration + 'ms',
+      steps: {
+        configurationValid: validation.isValid,
+        aiServiceConnectivity: aiResponse.success,
+        responseParsing: parsingSuccess,
+        endToEndWorking: validation.isValid && aiResponse.success && parsingSuccess
+      },
+      performance: {
+        totalTestTime: totalTestDuration,
+        aiCallTime: aiCallDuration,
+        testDataSize: JSON.stringify(testClientData).length
+      },
+      aiServiceStatus: {
+        responding: aiResponse.success,
+        responseLength: aiResponse.content?.length || 0,
+        error: aiResponse.error || null
+      },
+      parsedData: parsingSuccess ? {
+        hasDebtStrategy: !!parsedResponse.debtStrategy,
+        hasFinancialMetrics: !!parsedResponse.financialMetrics,
+        hasRecommendations: !!parsedResponse.recommendations,
+        structure: Object.keys(parsedResponse)
+      } : null,
+      recommendations: {
+        status: validation.isValid && aiResponse.success && parsingSuccess ? 'FULLY_FUNCTIONAL' : 'NEEDS_ATTENTION',
+        message: validation.isValid && aiResponse.success && parsingSuccess 
+          ? 'AI service is fully functional and ready for production use'
+          : 'AI service has issues that need to be addressed'
+      }
+    };
+    
+    console.log('🏁 [PlanController] AI service test completed:', testResults);
+    
+    res.json(testResults);
     
   } catch (error) {
-    console.error('💥 [PlanController] AI service test failed:', error);
+    const totalTestDuration = Date.now() - testStartTime;
+    console.error('💥 [PlanController] AI service test failed:', {
+      error: error.message,
+      testDuration: totalTestDuration + 'ms',
+      stack: error.stack?.split('\n').slice(0, 3)
+    });
+    
     res.status(500).json({
       success: false,
-      error: 'AI service test failed: ' + error.message
+      error: 'AI service test failed: ' + error.message,
+      testDuration: totalTestDuration + 'ms',
+      recommendations: {
+        status: 'FAILED',
+        message: 'AI service test encountered critical errors'
+      }
     });
   }
 };

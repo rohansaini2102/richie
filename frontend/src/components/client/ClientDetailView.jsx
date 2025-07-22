@@ -60,16 +60,52 @@ function ClientDetailView() {
   }, [clientId]);
 
   const loadClientDetails = async () => {
+    console.group('🔄 [ClientDetailView] Loading Client Details');
+    console.log('📋 Request Parameters:', { clientId, timestamp: new Date().toISOString() });
+    
     try {
       setLoading(true);
-      const response = await clientAPI.getClientById(clientId);
-      setClient(response.data);
+      const clientData = await clientAPI.getClientById(clientId);
+      
+      console.log('📦 Raw API Response:', {
+        hasData: !!clientData,
+        dataType: typeof clientData,
+        isArray: Array.isArray(clientData),
+        dataKeys: clientData ? Object.keys(clientData).slice(0, 15) : [],
+        dataSize: clientData ? JSON.stringify(clientData).length : 0
+      });
+      
+      console.log('👤 Client Data Structure:', {
+        firstName: clientData?.firstName,
+        lastName: clientData?.lastName,
+        email: clientData?.email,
+        hasPersonalInfo: !!(clientData?.firstName && clientData?.lastName),
+        hasFinancialInfo: !!(clientData?.totalMonthlyIncome || clientData?.totalMonthlyExpenses),
+        hasAssets: !!clientData?.assets,
+        hasDebts: !!clientData?.debtsAndLiabilities,
+        completionPercentage: clientData?.completionPercentage
+      });
+      
+      setClient(clientData);
+      
+      console.log('✅ Client State Updated Successfully:', {
+        clientSet: true,
+        clientName: `${clientData?.firstName} ${clientData?.lastName}`,
+        timestamp: new Date().toISOString()
+      });
+      
     } catch (error) {
-      console.error('Error loading client details:', error);
+      console.error('❌ Error loading client details:', {
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        responseData: error.response?.data
+      });
       toast.error('Failed to load client details');
       navigate('/clients');
     } finally {
       setLoading(false);
+      console.groupEnd();
     }
   };
 
@@ -1237,7 +1273,27 @@ function ClientDetailView() {
               Financial Planning Strategies
             </h2>
             <button
-              onClick={() => setShowPlanModal(true)}
+              onClick={() => {
+                console.group('🚀 [ClientDetailView] Opening Plan Creation Modal');
+                console.log('📋 Modal Trigger Data:', {
+                  clientId,
+                  clientName: clientName || `${client?.firstName} ${client?.lastName}`,
+                  hasClient: !!client,
+                  clientKeys: client ? Object.keys(client).slice(0, 10) : [],
+                  timestamp: new Date().toISOString()
+                });
+                console.log('👤 Client Data Being Passed:', {
+                  firstName: client?.firstName,
+                  lastName: client?.lastName,
+                  email: client?.email,
+                  hasFinancialData: !!(client?.totalMonthlyIncome || client?.totalMonthlyExpenses),
+                  hasAssets: !!client?.assets,
+                  hasDebts: !!client?.debtsAndLiabilities,
+                  dataSize: client ? JSON.stringify(client).length : 0
+                });
+                console.groupEnd();
+                setShowPlanModal(true);
+              }}
               className="flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
             >
               <Plus className="h-4 w-4 mr-1" />
@@ -1255,9 +1311,12 @@ function ClientDetailView() {
       {/* Plan Creation Modal */}
       <PlanCreationModal
         open={showPlanModal}
-        onClose={() => setShowPlanModal(false)}
+        onClose={() => {
+          console.log('🔒 [ClientDetailView] Closing Plan Creation Modal');
+          setShowPlanModal(false);
+        }}
         clientId={clientId}
-        clientName={clientName}
+        clientName={`${client?.firstName || ''} ${client?.lastName || ''}`.trim()}
         clientData={client}
         onPlanCreated={handlePlanCreated}
       />

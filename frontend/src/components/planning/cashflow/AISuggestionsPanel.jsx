@@ -32,6 +32,22 @@ import {
 } from '@mui/icons-material';
 
 const AISuggestionsPanel = ({ suggestions, loading, clientData }) => {
+  console.log('🎨 [AISuggestionsPanel] Component rendering with props:', {
+    hasSuggestions: !!suggestions,
+    isLoading: loading,
+    hasClientData: !!clientData,
+    suggestionsType: suggestions ? typeof suggestions : 'undefined',
+    suggestionsKeys: suggestions ? Object.keys(suggestions) : [],
+    hasError: !!suggestions?.error,
+    hasAnalysis: !!suggestions?.analysis,
+    hasSuccess: !!suggestions?.success,
+    clientName: clientData ? `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() : 'N/A',
+    clientDataForRealtimeCalc: {
+      hasCalculatedFinancials: !!clientData?.calculatedFinancials,
+      monthlyIncome: clientData?.calculatedFinancials?.monthlyIncome || clientData?.totalMonthlyIncome,
+      monthlyExpenses: clientData?.calculatedFinancials?.totalMonthlyExpenses || clientData?.totalMonthlyExpenses
+    }
+  });
   const formatCurrency = (amount) => {
     if (!amount || amount === 0) return '₹0';
     return new Intl.NumberFormat('en-IN', {
@@ -94,16 +110,269 @@ const AISuggestionsPanel = ({ suggestions, loading, clientData }) => {
     );
   }
 
-  // Render real-time AI recommendations based on current client data
-  const renderRealtimeRecommendations = () => {
-    if (!clientData) return null;
+  // Enhanced rendering for both AI and calculated recommendations  
+  const renderAIRecommendations = () => {
+    if (!clientData && !suggestions) return null;
+
+    // Check if we have valid AI suggestions
+    const hasAIAnalysis = suggestions && !suggestions.error && suggestions.analysis;
+    const hasSuccessfulResponse = suggestions?.success && suggestions?.analysis;
+
+    console.log('🎨 [AISuggestionsPanel] Rendering recommendations:', {
+      hasAIAnalysis,
+      hasSuccessfulResponse,
+      suggestionsKeys: suggestions ? Object.keys(suggestions) : [],
+      analysisKeys: suggestions?.analysis ? Object.keys(suggestions.analysis) : []
+    });
 
     return (
       <Box>
+        {/* Primary AI Analysis Section */}
+        {hasAIAnalysis && (
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: 'primary.main' }}>
+              🧠 Claude AI Financial Analysis
+            </Typography>
+            {renderDetailedAIAnalysis(suggestions.analysis)}
+          </Box>
+        )}
+
+        {/* Fallback to real-time calculated recommendations */}
+        {!hasAIAnalysis && clientData && (
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: 'secondary.main' }}>
+              📊 Real-time Financial Analysis
+            </Typography>
+            {renderRealtimeRecommendations()}
+          </Box>
+        )}
+
+        {/* Error state */}
+        {suggestions?.error && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              AI Analysis Unavailable
+            </Typography>
+            <Typography variant="body2">
+              {suggestions.error}
+            </Typography>
+          </Alert>
+        )}
+      </Box>
+    );
+  };
+
+  // Render detailed AI analysis from Claude
+  const renderDetailedAIAnalysis = (analysis) => {
+    return (
+      <Box>
+        {/* Debt Strategy Analysis */}
+        {analysis.debtStrategy && (
+          <Paper sx={{ 
+            p: 3, 
+            mb: 3, 
+            bgcolor: '#fef2f2', 
+            border: '2px solid #fecaca',
+            borderRadius: 2
+          }}>
+            <Typography variant="h6" sx={{ 
+              fontWeight: 700, 
+              mb: 2, 
+              display: 'flex', 
+              alignItems: 'center',
+              color: '#dc2626'
+            }}>
+              <CreditCard sx={{ fontSize: 20, mr: 1.5 }} />
+              Debt Management Strategy
+            </Typography>
+            
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {analysis.debtStrategy.overallStrategy || analysis.debtStrategy.strategy || 'Debt strategy analysis completed'}
+            </Typography>
+
+            {/* Show prioritized debts if available */}
+            {analysis.debtStrategy.prioritizedDebts && analysis.debtStrategy.prioritizedDebts.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>Priority Debts:</Typography>
+                {analysis.debtStrategy.prioritizedDebts.slice(0, 3).map((debt, index) => (
+                  <Typography key={index} variant="body2" sx={{ mb: 1 }}>
+                    • {debt.debtType || `Debt ${index + 1}`}: ₹{(debt.currentEMI || 0).toLocaleString('en-IN')}/month 
+                    {debt.interestRate && ` (${debt.interestRate}% interest)`}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+          </Paper>
+        )}
+
+        {/* Financial Metrics */}
+        {analysis.financialMetrics && (
+          <Paper sx={{ 
+            p: 3, 
+            mb: 3, 
+            bgcolor: '#eff6ff', 
+            border: '2px solid #bfdbfe',
+            borderRadius: 2
+          }}>
+            <Typography variant="h6" sx={{ 
+              fontWeight: 700, 
+              mb: 2, 
+              display: 'flex', 
+              alignItems: 'center',
+              color: '#2563eb'
+            }}>
+              <Assessment sx={{ fontSize: 20, mr: 1.5 }} />
+              Financial Health Analysis
+            </Typography>
+            
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
+              {analysis.financialMetrics.currentEMIRatio && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">EMI Ratio</Typography>
+                  <Typography variant="h6" color={analysis.financialMetrics.currentEMIRatio > 40 ? 'error.main' : 'success.main'}>
+                    {analysis.financialMetrics.currentEMIRatio}%
+                  </Typography>
+                </Box>
+              )}
+              
+              {analysis.financialMetrics.totalInterestSavings && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Potential Savings</Typography>
+                  <Typography variant="h6" color="success.main">
+                    ₹{analysis.financialMetrics.totalInterestSavings.toLocaleString('en-IN')}
+                  </Typography>
+                </Box>
+              )}
+              
+              {analysis.financialMetrics.financialHealthScore && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Health Score</Typography>
+                  <Typography variant="h6" color="primary.main">
+                    {analysis.financialMetrics.financialHealthScore}/100
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Paper>
+        )}
+
+        {/* Recommendations */}
+        {analysis.recommendations && (
+          <Paper sx={{ 
+            p: 3, 
+            mb: 3, 
+            bgcolor: '#f0fdf4', 
+            border: '2px solid #bbf7d0',
+            borderRadius: 2
+          }}>
+            <Typography variant="h6" sx={{ 
+              fontWeight: 700, 
+              mb: 2, 
+              display: 'flex', 
+              alignItems: 'center',
+              color: '#059669'
+            }}>
+              <TrendingUp sx={{ fontSize: 20, mr: 1.5 }} />
+              AI Recommendations
+            </Typography>
+            
+            {/* Immediate Actions */}
+            {analysis.recommendations.immediateActions && analysis.recommendations.immediateActions.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" gutterBottom sx={{ color: 'error.main' }}>
+                  Immediate Actions (0-3 months):
+                </Typography>
+                {analysis.recommendations.immediateActions.map((action, index) => (
+                  <Typography key={index} variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
+                    <CheckCircle sx={{ fontSize: 16, mr: 1, mt: 0.2, color: 'error.main' }} />
+                    {action}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+
+            {/* Medium Term Actions */}
+            {analysis.recommendations.mediumTermActions && analysis.recommendations.mediumTermActions.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" gutterBottom sx={{ color: 'warning.main' }}>
+                  Medium Term Actions (3-12 months):
+                </Typography>
+                {analysis.recommendations.mediumTermActions.map((action, index) => (
+                  <Typography key={index} variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
+                    <CheckCircle sx={{ fontSize: 16, mr: 1, mt: 0.2, color: 'warning.main' }} />
+                    {action}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+
+            {/* Long Term Actions */}
+            {analysis.recommendations.longTermActions && analysis.recommendations.longTermActions.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2" gutterBottom sx={{ color: 'success.main' }}>
+                  Long Term Actions (12+ months):
+                </Typography>
+                {analysis.recommendations.longTermActions.map((action, index) => (
+                  <Typography key={index} variant="body2" sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
+                    <CheckCircle sx={{ fontSize: 16, mr: 1, mt: 0.2, color: 'success.main' }} />
+                    {action}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+          </Paper>
+        )}
+
+        {/* Warnings */}
+        {analysis.warnings && analysis.warnings.length > 0 && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>Risk Warnings:</Typography>
+            {analysis.warnings.map((warning, index) => (
+              <Typography key={index} variant="body2" sx={{ mb: 0.5 }}>
+                • {warning}
+              </Typography>
+            ))}
+          </Alert>
+        )}
+
+        {/* Opportunities */}
+        {analysis.opportunities && analysis.opportunities.length > 0 && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>Opportunities:</Typography>
+            {analysis.opportunities.map((opportunity, index) => (
+              <Typography key={index} variant="body2" sx={{ mb: 0.5 }}>
+                • {opportunity}
+              </Typography>
+            ))}
+          </Alert>
+        )}
+      </Box>
+    );
+  };
+
+  // Render real-time calculated recommendations (fallback)
+  const renderRealtimeRecommendations = () => {
+    return (
+      <Box>
         {/* Debt Management Analysis */}
-        <Paper sx={{ p: 2, mb: 2, bgcolor: 'white', border: '1px solid #e2e8f0' }}>
-          <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center' }}>
-            <CreditCard sx={{ fontSize: 16, mr: 1, color: '#dc2626' }} />
+        <Paper sx={{ 
+          p: 3, 
+          mb: 3, 
+          bgcolor: '#fef2f2', 
+          border: '2px solid #fecaca',
+          borderRadius: 2,
+          '&:hover': { 
+            boxShadow: '0 4px 12px rgba(220, 38, 38, 0.15)' 
+          }
+        }}>
+          <Typography variant="h6" sx={{ 
+            fontWeight: 700, 
+            mb: 2, 
+            display: 'flex', 
+            alignItems: 'center',
+            color: '#dc2626'
+          }}>
+            <CreditCard sx={{ fontSize: 20, mr: 1.5 }} />
             Debt Management Analysis
           </Typography>
           
@@ -131,10 +400,25 @@ const AISuggestionsPanel = ({ suggestions, loading, clientData }) => {
         </Paper>
 
         {/* Emergency Fund Strategy */}
-        <Paper sx={{ p: 2, mb: 2, bgcolor: 'white', border: '1px solid #e2e8f0' }}>
-          <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center' }}>
-            <Shield sx={{ fontSize: 16, mr: 1, color: '#059669' }} />
-            Emergency Fund Strategy
+        <Paper sx={{ 
+          p: 3, 
+          mb: 3, 
+          bgcolor: '#f0fdf4', 
+          border: '2px solid #bbf7d0',
+          borderRadius: 2,
+          '&:hover': { 
+            boxShadow: '0 4px 12px rgba(5, 150, 105, 0.15)' 
+          }
+        }}>
+          <Typography variant="h6" sx={{ 
+            fontWeight: 700, 
+            mb: 2, 
+            display: 'flex', 
+            alignItems: 'center',
+            color: '#059669'
+          }}>
+            <Shield sx={{ fontSize: 20, mr: 1.5 }} />
+            🤖 Emergency Fund Strategy
           </Typography>
           
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -158,10 +442,25 @@ const AISuggestionsPanel = ({ suggestions, loading, clientData }) => {
         </Paper>
 
         {/* Investment Recommendations */}
-        <Paper sx={{ p: 2, mb: 2, bgcolor: 'white', border: '1px solid #e2e8f0' }}>
-          <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center' }}>
-            <TrendingUp sx={{ fontSize: 16, mr: 1, color: '#2563eb' }} />
-            Investment Recommendations
+        <Paper sx={{ 
+          p: 3, 
+          mb: 3, 
+          bgcolor: '#eff6ff', 
+          border: '2px solid #bfdbfe',
+          borderRadius: 2,
+          '&:hover': { 
+            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.15)' 
+          }
+        }}>
+          <Typography variant="h6" sx={{ 
+            fontWeight: 700, 
+            mb: 2, 
+            display: 'flex', 
+            alignItems: 'center',
+            color: '#2563eb'
+          }}>
+            <TrendingUp sx={{ fontSize: 20, mr: 1.5 }} />
+            🤖 Investment Recommendations
           </Typography>
           
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -191,10 +490,25 @@ const AISuggestionsPanel = ({ suggestions, loading, clientData }) => {
         </Paper>
 
         {/* Cash Flow Optimization */}
-        <Paper sx={{ p: 2, mb: 2, bgcolor: 'white', border: '1px solid #e2e8f0' }}>
-          <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center' }}>
-            <Assessment sx={{ fontSize: 16, mr: 1, color: '#7c3aed' }} />
-            Cash Flow Optimization
+        <Paper sx={{ 
+          p: 3, 
+          mb: 3, 
+          bgcolor: '#faf5ff', 
+          border: '2px solid #d8b4fe',
+          borderRadius: 2,
+          '&:hover': { 
+            boxShadow: '0 4px 12px rgba(124, 58, 237, 0.15)' 
+          }
+        }}>
+          <Typography variant="h6" sx={{ 
+            fontWeight: 700, 
+            mb: 2, 
+            display: 'flex', 
+            alignItems: 'center',
+            color: '#7c3aed'
+          }}>
+            <Assessment sx={{ fontSize: 20, mr: 1.5 }} />
+            🤖 Cash Flow Optimization
           </Typography>
           
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -258,29 +572,20 @@ const AISuggestionsPanel = ({ suggestions, loading, clientData }) => {
 
   return (
     <Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
-        Real-time analysis updates as you modify client data
+      {/* Header */}
+      <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3, display: 'flex', alignItems: 'center' }}>
+        🤖 AI Financial Recommendations
+        {loading && <CircularProgress size={16} sx={{ ml: 1 }} />}
       </Typography>
       
-      {suggestions?.error ? (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          <Typography variant="body2">{suggestions.error}</Typography>
-        </Alert>
-      ) : (
-        renderRealtimeRecommendations()
-      )}
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3, fontStyle: 'italic' }}>
+        {loading ? 'Analyzing financial data...' : 'Real-time analysis updates as you modify client data'}
+      </Typography>
 
-      {/* API-based suggestions if available */}
-      {suggestions && !suggestions.error && (
-        <Box mt={2}>
-          <Divider sx={{ mb: 2 }} />
-          <Typography variant="body2" sx={{ fontWeight: 600, mb: 2 }}>
-            🤖 Advanced AI Analysis:
-          </Typography>
-          {/* Render API suggestions here if needed */}
-        </Box>
-      )}
+      {/* Main Recommendations Rendering */}
+      {renderAIRecommendations()}
       
+      {/* Footer */}
       <Box mt={2}>
         <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
           💡 These recommendations update in real-time as you modify the client's financial data. 

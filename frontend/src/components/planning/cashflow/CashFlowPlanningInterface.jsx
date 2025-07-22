@@ -39,11 +39,10 @@ const CashFlowPlanningInterface = ({
   const loadClientData = async () => {
     try {
       setLoading(true);
-      const response = await clientAPI.getClientById(clientId);
-      const data = response.data.data || response.data || response;
-      setClientData(data);
+      const clientData = await clientAPI.getClientById(clientId);
+      setClientData(clientData);
       // Trigger initial AI analysis
-      requestAISuggestions(data);
+      requestAISuggestions(clientData);
     } catch (err) {
       console.error('Error loading client data:', err);
       setError('Failed to load client data');
@@ -69,17 +68,75 @@ const CashFlowPlanningInterface = ({
   };
 
   const requestAISuggestions = async (data) => {
-    if (!data) return;
+    if (!data) {
+      console.log('🚫 [CashFlowPlanningInterface] No data provided for AI suggestions');
+      return;
+    }
+    
+    console.log('🚀 [CashFlowPlanningInterface] Starting AI suggestion request for client:', clientId);
+    console.log('📋 [CashFlowPlanningInterface] ClientData structure:', {
+      hasCalculatedFinancials: !!data.calculatedFinancials,
+      calculatedFinancials: data.calculatedFinancials,
+      hasDirectIncome: !!data.totalMonthlyIncome,
+      directIncome: data.totalMonthlyIncome,
+      hasDirectExpenses: !!data.totalMonthlyExpenses,
+      directExpenses: data.totalMonthlyExpenses,
+      hasDebts: !!data.debtsAndLiabilities,
+      dataSize: JSON.stringify(data).length + ' chars',
+      clientName: `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+      mainKeys: Object.keys(data)
+    });
     
     setLoadingAI(true);
+    const startTime = Date.now();
+    
     try {
-      const response = await planAPI.analyzeDebt(clientId, { clientData: data });
-      setAiSuggestions(response.data);
+      console.log('📤 [CashFlowPlanningInterface] Calling planAPI.analyzeDebt with clientId:', clientId);
+      const response = await planAPI.analyzeDebt(clientId, data);
+      const responseTime = Date.now() - startTime;
+      
+      console.log('📥 [CashFlowPlanningInterface] AI API response received:', {
+        responseTime: responseTime + 'ms',
+        hasResponse: !!response,
+        responseKeys: response ? Object.keys(response) : [],
+        hasSuccess: response?.success,
+        hasAnalysis: !!response?.analysis,
+        hasError: !!response?.error,
+        analysisKeys: response?.analysis ? Object.keys(response.analysis) : [],
+        responseSize: response ? JSON.stringify(response).length + ' chars' : 0
+      });
+      
+      if (response?.success && response?.analysis) {
+        console.log('✅ [CashFlowPlanningInterface] AI analysis received successfully:', {
+          hasDebtStrategy: !!response.analysis.debtStrategy,
+          hasFinancialMetrics: !!response.analysis.financialMetrics,
+          hasRecommendations: !!response.analysis.recommendations,
+          debtCount: response.analysis.debtStrategy?.prioritizedDebts?.length || 0
+        });
+      } else if (response?.error) {
+        console.log('⚠️ [CashFlowPlanningInterface] AI response contains error:', response.error);
+      } else {
+        console.log('⚠️ [CashFlowPlanningInterface] Unexpected response structure:', response);
+      }
+      
+      setAiSuggestions(response);
     } catch (error) {
-      console.error('Failed to get AI suggestions:', error);
-      setAiSuggestions({ error: 'Failed to load AI suggestions' });
+      const responseTime = Date.now() - startTime;
+      console.error('❌ [CashFlowPlanningInterface] Failed to get AI suggestions:', {
+        error: error.message,
+        responseTime: responseTime + 'ms',
+        errorType: error.constructor.name,
+        stack: error.stack?.split('\n').slice(0, 3),
+        requestData: {
+          clientId,
+          hasData: !!data,
+          dataKeys: data ? Object.keys(data) : []
+        }
+      });
+      setAiSuggestions({ error: 'Failed to load AI suggestions: ' + error.message });
     } finally {
       setLoadingAI(false);
+      console.log('🏁 [CashFlowPlanningInterface] AI suggestion request completed');
     }
   };
 

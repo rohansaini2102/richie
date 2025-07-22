@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -38,6 +38,38 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
   const [activeStep, setActiveStep] = useState(0);
   const [planCreated, setPlanCreated] = useState(false);
 
+  // Log props when modal opens
+  useEffect(() => {
+    if (open) {
+      console.group('📊 [PlanCreationModal] Modal Opened with Props');
+      console.log('🔍 Props Analysis:', {
+        open,
+        clientId,
+        clientName,
+        hasClientData: !!clientData,
+        clientDataType: typeof clientData,
+        clientDataSize: clientData ? JSON.stringify(clientData).length : 0,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (clientData) {
+        console.log('👤 Received Client Data Structure:', {
+          firstName: clientData?.firstName,
+          lastName: clientData?.lastName,
+          email: clientData?.email,
+          hasPersonalInfo: !!(clientData?.firstName && clientData?.lastName),
+          hasFinancialInfo: !!(clientData?.totalMonthlyIncome || clientData?.totalMonthlyExpenses),
+          hasAssets: !!clientData?.assets,
+          hasDebts: !!clientData?.debtsAndLiabilities,
+          topLevelKeys: Object.keys(clientData).slice(0, 15)
+        });
+      } else {
+        console.warn('⚠️ No clientData received in PlanCreationModal props!');
+      }
+      console.groupEnd();
+    }
+  }, [open, clientId, clientName, clientData]);
+
   // For testing: Allow plan creation regardless of client data
   const hasRequiredData = true; // Temporarily disabled validation
   
@@ -71,6 +103,11 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
 
   const handleNext = () => {
     if (activeStep === 0 && selectedPlanType) {
+      console.log('➡️ [PlanCreationModal] Step transition 0→1 (Plan Type → Client Data Review)', {
+        selectedPlanType,
+        hasClientData: !!clientData,
+        timestamp: new Date().toISOString()
+      });
       setActiveStep(1);
     }
   };
@@ -101,13 +138,29 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
       case 0:
         return renderPlanTypeSelection();
       case 1:
+        console.group('📋 [PlanCreationModal] Rendering ClientDataPreview');
+        console.log('🔄 Passing Props to ClientDataPreview:', {
+          clientId,
+          hasClientData: !!clientData,
+          clientDataKeys: clientData ? Object.keys(clientData).slice(0, 10) : [],
+          clientName: clientData ? `${clientData.firstName} ${clientData.lastName}` : 'Unknown',
+          timestamp: new Date().toISOString()
+        });
+        
+        if (!clientData) {
+          console.error('❌ CRITICAL: No clientData to pass to ClientDataPreview!');
+        }
+        console.groupEnd();
+        
         return (
           <ClientDataPreview
             clientId={clientId}
+            clientData={clientData}
             onProceed={(reviewedData) => {
               console.log('📊 [PlanCreationModal] Client data reviewed:', {
                 hasData: !!reviewedData,
-                clientName: reviewedData?.firstName + ' ' + reviewedData?.lastName
+                clientName: reviewedData?.firstName + ' ' + reviewedData?.lastName,
+                reviewedDataSize: reviewedData ? JSON.stringify(reviewedData).length : 0
               });
               setActiveStep(2);
             }}

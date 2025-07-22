@@ -46,13 +46,13 @@ export const usePlanData = (planId, clientId) => {
 
     try {
       setState(prev => ({ ...prev, clientLoading: true, error: null }));
-      const response = await clientAPI.getClientById(id);
+      const clientData = await clientAPI.getClientById(id);
       setState(prev => ({
         ...prev,
-        clientData: response.data,
+        clientData: clientData,
         clientLoading: false
       }));
-      return response.data;
+      return clientData;
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to load client data';
       setState(prev => ({

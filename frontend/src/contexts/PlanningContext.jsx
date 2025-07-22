@@ -222,9 +222,9 @@ export const PlanningProvider = ({ children }) => {
     loadClientData: async (clientId) => {
       try {
         actions.setClientLoading(true);
-        const response = await clientAPI.getClientById(clientId);
-        actions.setClientData(response.data);
-        return response.data;
+        const clientData = await clientAPI.getClientById(clientId);
+        actions.setClientData(clientData);
+        return clientData;
       } catch (error) {
         const errorMessage = error.response?.data?.error || 'Failed to load client data';
         actions.setClientError(errorMessage);

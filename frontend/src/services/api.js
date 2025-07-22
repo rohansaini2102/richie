@@ -83,6 +83,12 @@ api.interceptors.response.use(
   }
 );
 
+// Response parsing helper function
+const parseApiResponse = (response, fallbackPath = null) => {
+  // Handle different response structures consistently
+  return response?.data?.plan || response?.plan || response?.data || response || null;
+};
+
 // Enhanced Authentication API
 export const authAPI = {
   // Advisor registration with enhanced data
@@ -184,18 +190,41 @@ export const clientAPI = {
 
   // Get client by ID with enhanced data
   getClientById: async (clientId) => {
-    console.log('👤 FETCHING CLIENT DETAILS:', { clientId });
+    console.group('🔄 [clientAPI] Fetching Client Details');
+    console.log('📋 Request:', { 
+      clientId, 
+      endpoint: `/clients/manage/${clientId}`,
+      timestamp: new Date().toISOString()
+    });
     
     const response = await api.get(`/clients/manage/${clientId}`);
     
-    console.log('✅ CLIENT DETAILS FETCHED:', {
-      clientId,
-      clientName: response.data.data?.firstName + ' ' + response.data.data?.lastName,
-      completionPercentage: response.data.data?.completionPercentage,
-      hasCasData: !!response.data.data?.portfolioSummary
+    console.log('📦 Raw API Response:', {
+      status: response.status,
+      hasData: !!response.data,
+      responseStructure: {
+        hasDataProperty: !!response.data.data,
+        hasSuccessProperty: !!response.data.success,
+        hasMetadataProperty: !!response.data.metadata,
+        topLevelKeys: Object.keys(response.data || {})
+      }
     });
     
-    return response.data;
+    const extractedData = response.data.data || response.data;
+    
+    console.log('✅ CLIENT DETAILS EXTRACTED:', {
+      clientId,
+      hasExtractedData: !!extractedData,
+      clientName: extractedData?.firstName + ' ' + extractedData?.lastName,
+      completionPercentage: extractedData?.completionPercentage,
+      hasCasData: !!extractedData?.portfolioSummary,
+      extractedDataKeys: extractedData ? Object.keys(extractedData).slice(0, 15) : [],
+      extractedDataSize: extractedData ? JSON.stringify(extractedData).length : 0
+    });
+    console.groupEnd();
+    
+    // Return only the client data object for consistency
+    return extractedData;
   },
 
   // Get enhanced dashboard statistics
@@ -509,14 +538,16 @@ export const planAPI = {
     console.log('📋 FETCHING PLAN:', { planId });
     
     const response = await api.get(`/plans/${planId}`);
+    const planData = parseApiResponse(response);
     
     console.log('✅ PLAN FETCHED:', {
       planId,
-      planType: response.data.plan.planType,
-      status: response.data.plan.status
+      planType: planData?.plan?.planType || planData?.planType,
+      status: planData?.plan?.status || planData?.status,
+      hasData: !!planData
     });
     
-    return response.data;
+    return planData;
   },
 
   // Update plan
@@ -628,19 +659,65 @@ export const planAPI = {
 
   // AI-powered debt analysis
   analyzeDebt: async (clientId, clientData) => {
-    console.log('🤖 ANALYZING DEBT STRATEGY:', { clientId });
+    console.log('🤖 [API] ANALYZING DEBT STRATEGY:', { clientId });
     
-    const response = await api.post(`/plans/analyze-debt/${clientId}`, {
-      clientData
+    const requestPayload = { clientData };
+    const requestUrl = `/plans/analyze-debt/${clientId}`;
+    
+    console.log('📤 [API] POST request details:', {
+      url: requestUrl,
+      payloadSize: JSON.stringify(requestPayload).length + ' chars',
+      hasClientData: !!clientData,
+      clientDataKeys: clientData ? Object.keys(clientData) : [],
+      hasCalculatedFinancials: !!clientData?.calculatedFinancials,
+      hasDebts: !!clientData?.debtsAndLiabilities,
+      clientName: clientData ? `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() : 'N/A'
     });
     
-    console.log('✅ DEBT ANALYSIS COMPLETED:', {
-      clientId,
-      debtsAnalyzed: response.data.analysis?.debtStrategy?.prioritizedDebts?.length || 0,
-      totalSavings: response.data.analysis?.financialMetrics?.totalInterestSavings || 0
-    });
+    const startTime = Date.now();
     
-    return response.data;
+    try {
+      const response = await api.post(requestUrl, requestPayload);
+      const responseTime = Date.now() - startTime;
+      
+      console.log('📥 [API] POST response received:', {
+        responseTime: responseTime + 'ms',
+        status: response.status,
+        statusText: response.statusText,
+        hasData: !!response.data,
+        responseDataKeys: response.data ? Object.keys(response.data) : [],
+        responseSize: response.data ? JSON.stringify(response.data).length + ' chars' : 0
+      });
+      
+      console.log('✅ [API] DEBT ANALYSIS COMPLETED:', {
+        clientId,
+        success: response.data?.success,
+        hasAnalysis: !!response.data?.analysis,
+        debtsAnalyzed: response.data?.analysis?.debtStrategy?.prioritizedDebts?.length || 0,
+        totalSavings: response.data?.analysis?.financialMetrics?.totalInterestSavings || 0,
+        hasError: !!response.data?.error,
+        errorMessage: response.data?.error
+      });
+      
+      return response.data;
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      
+      console.error('❌ [API] DEBT ANALYSIS FAILED:', {
+        clientId,
+        responseTime: responseTime + 'ms',
+        errorType: error.constructor.name,
+        errorMessage: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        responseData: error.response?.data,
+        requestUrl,
+        hasClientData: !!clientData
+      });
+      
+      // Re-throw the error so calling code can handle it
+      throw error;
+    }
   },
 
   // Update debt strategy with advisor modifications
@@ -665,17 +742,38 @@ export const planAPI = {
     return response.data;
   },
 
-  // Analyze debt strategy using AI
-  analyzeDebt: async (clientId, clientData = null) => {
-    console.log('🤖 ANALYZING DEBT STRATEGY:', { clientId });
+  // Test AI service integration
+  testAIService: async () => {
+    console.log('🧪 [API] TESTING AI SERVICE INTEGRATION...');
     
-    const requestData = clientData ? { clientData } : {};
-    const response = await api.post(`/plans/analyze-debt/${clientId}`, requestData);
+    const startTime = Date.now();
     
-    console.log('✅ DEBT ANALYSIS COMPLETED:', { clientId });
-    
-    return response.data;
-  }
+    try {
+      const response = await api.get('/plans/test-ai-service');
+      const duration = Date.now() - startTime;
+      
+      console.log('✅ [API] AI SERVICE TEST COMPLETED:', {
+        duration: duration + 'ms',
+        success: response.data?.success,
+        status: response.data?.recommendations?.status,
+        endToEndWorking: response.data?.steps?.endToEndWorking
+      });
+      
+      return response.data;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      console.error('❌ [API] AI SERVICE TEST FAILED:', {
+        duration: duration + 'ms',
+        error: error.message,
+        status: error.response?.status,
+        responseData: error.response?.data
+      });
+      
+      throw error;
+    }
+  },
+
 };
 
 // Enhanced Admin API

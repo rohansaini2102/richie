@@ -8,7 +8,8 @@ import {
   IconButton,
   InputAdornment,
   Divider,
-  Chip
+  Chip,
+  CircularProgress
 } from '@mui/material';
 import {
   Edit,
@@ -24,6 +25,26 @@ import {
 const EditableClientData = ({ clientData, onDataUpdate }) => {
   const [editingField, setEditingField] = useState(null);
   const [tempValue, setTempValue] = useState('');
+
+  // Add null safety check and loading state
+  if (!clientData) {
+    console.log('🔄 [EditableClientData] Waiting for client data...');
+    return (
+      <Box display="flex" alignItems="center" justifyContent="center" minHeight="200px">
+        <CircularProgress size={40} />
+        <Typography variant="body1" sx={{ ml: 2 }}>
+          Loading client data...
+        </Typography>
+      </Box>
+    );
+  }
+
+  console.log('✅ [EditableClientData] Rendering with client data:', {
+    hasIncome: !!(clientData?.calculatedFinancials?.monthlyIncome || clientData?.totalMonthlyIncome),
+    hasExpenses: !!(clientData?.calculatedFinancials?.totalMonthlyExpenses || clientData?.totalMonthlyExpenses),
+    clientName: `${clientData?.firstName || ''} ${clientData?.lastName || ''}`.trim(),
+    dataStructure: clientData?.calculatedFinancials ? 'backend calculated' : 'direct properties'
+  });
 
   const formatCurrency = (amount) => {
     if (!amount || amount === 0) return '₹0';
@@ -134,10 +155,25 @@ const EditableClientData = ({ clientData, onDataUpdate }) => {
     );
   };
 
-  const monthlySurplus = (clientData.totalMonthlyIncome || 0) - (clientData.totalMonthlyExpenses || 0);
-  const savingsRate = clientData.totalMonthlyIncome > 0 
-    ? ((monthlySurplus / clientData.totalMonthlyIncome) * 100).toFixed(1)
+  // Extract financial data from calculatedFinancials or fallback to direct properties
+  const monthlyIncome = clientData?.calculatedFinancials?.monthlyIncome || 
+                       clientData?.totalMonthlyIncome || 0;
+  const monthlyExpenses = clientData?.calculatedFinancials?.totalMonthlyExpenses || 
+                         clientData?.totalMonthlyExpenses || 0;
+  
+  const monthlySurplus = monthlyIncome - monthlyExpenses;
+  const savingsRate = monthlyIncome > 0 
+    ? ((monthlySurplus / monthlyIncome) * 100).toFixed(1)
     : 0;
+
+  console.log('💰 [EditableClientData] Financial Summary calculations:', {
+    source: clientData?.calculatedFinancials ? 'calculatedFinancials' : 'direct properties',
+    monthlyIncome,
+    monthlyExpenses,
+    monthlySurplus,
+    savingsRate,
+    hasCalculatedFinancials: !!clientData?.calculatedFinancials
+  });
 
   return (
     <Box sx={{ mb: 3 }}>
@@ -214,7 +250,7 @@ const EditableClientData = ({ clientData, onDataUpdate }) => {
                 Monthly Income
               </Typography>
               <Typography variant="h6" sx={{ color: '#14532d', fontWeight: 700 }}>
-                {formatCurrency(clientData.totalMonthlyIncome || 0)}
+                {formatCurrency(monthlyIncome)}
               </Typography>
             </Box>
           </Grid>
@@ -231,7 +267,7 @@ const EditableClientData = ({ clientData, onDataUpdate }) => {
                 Monthly Expenses
               </Typography>
               <Typography variant="h6" sx={{ color: '#991b1b', fontWeight: 700 }}>
-                {formatCurrency(clientData.totalMonthlyExpenses || 0)}
+                {formatCurrency(monthlyExpenses)}
               </Typography>
             </Box>
           </Grid>
@@ -286,21 +322,21 @@ const EditableClientData = ({ clientData, onDataUpdate }) => {
             {renderEditableField(
               'totalMonthlyIncome', 
               'Monthly Income', 
-              clientData.totalMonthlyIncome, 
+              monthlyIncome, 
               true,
               '₹'
             )}
             {renderEditableField(
               'incomeType', 
               'Income Type', 
-              clientData.incomeType
+              clientData?.incomeType
             )}
           </Grid>
           <Grid item xs={12} md={6}>
             {renderEditableField(
               'totalMonthlyExpenses', 
               'Monthly Expenses', 
-              clientData.totalMonthlyExpenses, 
+              monthlyExpenses, 
               true,
               '₹'
             )}
