@@ -30,6 +30,7 @@ import { planAPI } from '../../services/api';
 import ClientDataPreview from './cashflow/ClientDataPreview';
 import CashFlowPlanningInterface from './cashflow/CashFlowPlanningInterface';
 import AISuggestionsPanel from './cashflow/AISuggestionsPanel';
+import { GoalBasedPlanningInterface } from './goalBased';
 
 const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, onPlanCreated }) => {
   const [selectedPlanType, setSelectedPlanType] = useState('cash_flow');
@@ -73,7 +74,15 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
   // For testing: Allow plan creation regardless of client data
   const hasRequiredData = true; // Temporarily disabled validation
   
-  const steps = ['Select Plan Type', 'Review Client Data', 'Cash Flow Planning'];
+  // Dynamic steps based on plan type
+  const getSteps = () => {
+    if (selectedPlanType === 'goal_based') {
+      return ['Select Plan Type', 'Goal-Based Planning'];
+    }
+    return ['Select Plan Type', 'Review Client Data', 'Cash Flow Planning'];
+  };
+  
+  const steps = getSteps();
 
   const planTypes = [
     {
@@ -89,7 +98,7 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
       icon: <TrackChanges />,
       description: 'Plan for specific financial goals like retirement, education, or home purchase',
       features: ['Goal tracking', 'Target amount calculation', 'Timeline planning'],
-      disabled: true
+      disabled: false
     },
     {
       value: 'hybrid',
@@ -103,12 +112,19 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
 
   const handleNext = () => {
     if (activeStep === 0 && selectedPlanType) {
-      console.log('➡️ [PlanCreationModal] Step transition 0→1 (Plan Type → Client Data Review)', {
+      console.log('➡️ [PlanCreationModal] Step transition 0→1', {
         selectedPlanType,
         hasClientData: !!clientData,
         timestamp: new Date().toISOString()
       });
-      setActiveStep(1);
+      
+      if (selectedPlanType === 'goal_based') {
+        // Skip to goal-based planning directly
+        setActiveStep(1);
+      } else {
+        // Go to client data review for cash flow
+        setActiveStep(1);
+      }
     }
   };
 
@@ -138,35 +154,47 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
       case 0:
         return renderPlanTypeSelection();
       case 1:
-        console.group('📋 [PlanCreationModal] Rendering ClientDataPreview');
-        console.log('🔄 Passing Props to ClientDataPreview:', {
-          clientId,
-          hasClientData: !!clientData,
-          clientDataKeys: clientData ? Object.keys(clientData).slice(0, 10) : [],
-          clientName: clientData ? `${clientData.firstName} ${clientData.lastName}` : 'Unknown',
-          timestamp: new Date().toISOString()
-        });
-        
-        if (!clientData) {
-          console.error('❌ CRITICAL: No clientData to pass to ClientDataPreview!');
+        if (selectedPlanType === 'goal_based') {
+          console.log('🎯 [PlanCreationModal] Rendering GoalBasedPlanningInterface');
+          return (
+            <GoalBasedPlanningInterface
+              clientId={clientId}
+              clientData={clientData}
+              onSavePlan={handlePlanSaved}
+              onCancel={handleBack}
+            />
+          );
+        } else {
+          console.group('📋 [PlanCreationModal] Rendering ClientDataPreview');
+          console.log('🔄 Passing Props to ClientDataPreview:', {
+            clientId,
+            hasClientData: !!clientData,
+            clientDataKeys: clientData ? Object.keys(clientData).slice(0, 10) : [],
+            clientName: clientData ? `${clientData.firstName} ${clientData.lastName}` : 'Unknown',
+            timestamp: new Date().toISOString()
+          });
+          
+          if (!clientData) {
+            console.error('❌ CRITICAL: No clientData to pass to ClientDataPreview!');
+          }
+          console.groupEnd();
+          
+          return (
+            <ClientDataPreview
+              clientId={clientId}
+              clientData={clientData}
+              onProceed={(reviewedData) => {
+                console.log('📊 [PlanCreationModal] Client data reviewed:', {
+                  hasData: !!reviewedData,
+                  clientName: reviewedData?.firstName + ' ' + reviewedData?.lastName,
+                  reviewedDataSize: reviewedData ? JSON.stringify(reviewedData).length : 0
+                });
+                setActiveStep(2);
+              }}
+              onCancel={handleBack}
+            />
+          );
         }
-        console.groupEnd();
-        
-        return (
-          <ClientDataPreview
-            clientId={clientId}
-            clientData={clientData}
-            onProceed={(reviewedData) => {
-              console.log('📊 [PlanCreationModal] Client data reviewed:', {
-                hasData: !!reviewedData,
-                clientName: reviewedData?.firstName + ' ' + reviewedData?.lastName,
-                reviewedDataSize: reviewedData ? JSON.stringify(reviewedData).length : 0
-              });
-              setActiveStep(2);
-            }}
-            onCancel={handleBack}
-          />
-        );
       case 2:
         return (
           <CashFlowPlanningInterface

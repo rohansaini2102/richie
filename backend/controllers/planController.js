@@ -1288,4 +1288,256 @@ exports.testAIService = async (req, res) => {
   }
 };
 
+// AI-powered goal analysis for goal-based planning
+exports.analyzeGoals = async (req, res) => {
+  const requestStartTime = Date.now();
+  
+  try {
+    console.log('🎯 [PlanController] Goal analysis request received:', {
+      method: req.method,
+      url: req.url,
+      hasAuth: !!req.headers.authorization,
+      advisorId: req.advisor?.id || 'unknown',
+      bodySize: JSON.stringify(req.body).length + ' chars',
+      contentType: req.headers['content-type'],
+      timestamp: new Date().toISOString()
+    });
+
+    console.log('🎯 [PlanController] Starting goal analysis:', {
+      hasSelectedGoals: !!req.body.selectedGoals,
+      hasClientData: !!req.body.clientData,
+      goalsCount: req.body.selectedGoals?.length || 0,
+      clientId: req.body.clientData?._id || 'unknown',
+      goalTypes: req.body.selectedGoals?.map(g => g.title || g.type) || []
+    });
+
+    const { selectedGoals, clientData } = req.body;
+
+    // Validate request data
+    if (!selectedGoals || !Array.isArray(selectedGoals) || selectedGoals.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Selected goals are required and must be a non-empty array'
+      });
+    }
+
+    if (!clientData || !clientData._id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Client data is required with valid client ID'
+      });
+    }
+
+    // Fetch complete client data from database
+    const fullClientData = await Client.findById(clientData._id);
+    if (!fullClientData) {
+      return res.status(404).json({
+        success: false,
+        error: 'Client not found'
+      });
+    }
+
+    console.log('✅ [PlanController] Client data retrieved:', {
+      clientId: fullClientData._id,
+      hasFinancialGoals: !!fullClientData.enhancedFinancialGoals,
+      hasAssets: !!fullClientData.assets,
+      hasDebts: !!fullClientData.debtsAndLiabilities
+    });
+
+    // Call Claude AI service for goal analysis
+    const aiResponse = await claudeAiService.analyzeGoals(selectedGoals, fullClientData);
+
+    if (!aiResponse.success) {
+      console.error('❌ [PlanController] AI goal analysis failed:', aiResponse.error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to generate goal recommendations: ' + aiResponse.error
+      });
+    }
+
+    // Parse AI response
+    let parsedRecommendations = null;
+    let parsingSuccess = false;
+
+    try {
+      parsedRecommendations = parseAIResponse(aiResponse.content);
+      parsingSuccess = true;
+      console.log('✅ [PlanController] AI response parsed successfully:', {
+        hasIndividualAnalysis: !!parsedRecommendations.individualGoalAnalysis,
+        hasMultiGoalOptimization: !!parsedRecommendations.multiGoalOptimization,
+        hasRecommendations: !!parsedRecommendations.recommendations
+      });
+    } catch (error) {
+      console.error('⚠️ [PlanController] Failed to parse AI response as JSON:', error.message);
+      // Return raw content for debugging if parsing fails
+      parsedRecommendations = aiResponse.content;
+    }
+
+    const processingTime = Date.now() - requestStartTime;
+
+    console.log('🏁 [PlanController] Goal analysis completed:', {
+      processingTime: processingTime + 'ms',
+      success: true,
+      parsingSuccess,
+      recommendationsType: typeof parsedRecommendations
+    });
+
+    res.json({
+      success: true,
+      recommendations: parsedRecommendations,
+      metadata: {
+        processingTime,
+        parsingSuccess,
+        aiUsage: aiResponse.usage || null,
+        goalsAnalyzed: selectedGoals.length,
+        clientId: fullClientData._id
+      }
+    });
+
+  } catch (error) {
+    const processingTime = Date.now() - requestStartTime;
+    console.error('💥 [PlanController] Goal analysis error:', {
+      error: error.message,
+      processingTime: processingTime + 'ms',
+      stack: error.stack?.split('\n').slice(0, 3)
+    });
+
+    logger.error('Goal analysis failed', {
+      error: error.message,
+      processingTime,
+      hasSelectedGoals: !!req.body.selectedGoals,
+      hasClientData: !!req.body.clientData
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Goal analysis failed: ' + error.message,
+      processingTime
+    });
+  }
+};
+
+// Get goal recommendations for an existing plan
+exports.getGoalRecommendations = async (req, res) => {
+  try {
+    console.log('📊 [PlanController] Getting goal recommendations for plan:', req.params.planId);
+
+    const plan = await FinancialPlan.findById(req.params.planId);
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found'
+      });
+    }
+
+    // Check if user has access to this plan
+    if (plan.advisorId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this plan'
+      });
+    }
+
+    const recommendations = plan.data?.goalRecommendations || null;
+
+    console.log('✅ [PlanController] Goal recommendations retrieved:', {
+      planId: plan._id,
+      hasRecommendations: !!recommendations,
+      recommendationsKeys: recommendations ? Object.keys(recommendations) : []
+    });
+
+    res.json({
+      success: true,
+      recommendations,
+      planId: plan._id,
+      lastUpdated: plan.updatedAt
+    });
+
+  } catch (error) {
+    console.error('💥 [PlanController] Error getting goal recommendations:', error.message);
+    
+    logger.error('Failed to get goal recommendations', {
+      error: error.message,
+      planId: req.params.planId
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get goal recommendations: ' + error.message
+    });
+  }
+};
+
+// Update goal strategy with advisor modifications
+exports.updateGoalStrategy = async (req, res) => {
+  try {
+    console.log('🔄 [PlanController] Updating goal strategy for plan:', req.params.planId);
+
+    const { goalStrategy, modifiedGoals } = req.body;
+
+    const plan = await FinancialPlan.findById(req.params.planId);
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found'
+      });
+    }
+
+    // Check if user has access to this plan
+    if (plan.advisorId.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied to this plan'
+      });
+    }
+
+    // Update plan data with new goal strategy
+    plan.data = {
+      ...plan.data,
+      goalStrategy,
+      modifiedGoals,
+      lastModified: new Date(),
+      modifiedBy: req.user.id
+    };
+
+    plan.status = 'modified';
+    await plan.save();
+
+    console.log('✅ [PlanController] Goal strategy updated successfully:', {
+      planId: plan._id,
+      hasGoalStrategy: !!goalStrategy,
+      modifiedGoalsCount: modifiedGoals?.length || 0
+    });
+
+    logger.info('Goal strategy updated', {
+      planId: plan._id,
+      advisorId: req.user.id,
+      goalsCount: modifiedGoals?.length || 0
+    });
+
+    res.json({
+      success: true,
+      message: 'Goal strategy updated successfully',
+      plan: {
+        id: plan._id,
+        status: plan.status,
+        updatedAt: plan.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 [PlanController] Error updating goal strategy:', error.message);
+    
+    logger.error('Failed to update goal strategy', {
+      error: error.message,
+      planId: req.params.planId
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update goal strategy: ' + error.message
+    });
+  }
+};
+
 module.exports = exports;

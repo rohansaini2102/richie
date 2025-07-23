@@ -865,6 +865,99 @@ const getClientOnboardingForm = async (req, res) => {
   }
 };
 
+// Helper function to transform form data into enhancedFinancialGoals structure
+const transformToEnhancedFinancialGoals = (clientFormData) => {
+  console.log('🔄 [transformToEnhancedFinancialGoals] Processing financial goals only (no retirement)');
+  console.log('📋 Form data majorGoals:', clientFormData.majorGoals);
+  
+  const enhancedGoals = {};
+  
+  // Process majorGoals array to categorize into structured goals
+  const majorGoals = clientFormData.majorGoals || [];
+  console.log('📋 [transformToEnhancedFinancialGoals] Processing majorGoals:', JSON.stringify(majorGoals, null, 2));
+  
+  // Emergency Fund - only include if client specified it
+  const emergencyFundGoal = majorGoals.find(goal => 
+    goal.goalName && goal.goalName.toLowerCase().includes('emergency')
+  );
+  
+  if (emergencyFundGoal) {
+    enhancedGoals.emergencyFund = {
+      priority: emergencyFundGoal.priority || 'High',
+      targetAmount: emergencyFundGoal.targetAmount || (clientFormData.totalMonthlyExpenses || 0) * 6
+    };
+    console.log('✅ [transformToEnhancedFinancialGoals] Found client emergency fund goal:', emergencyFundGoal);
+  } else {
+    enhancedGoals.emergencyFund = {
+      priority: 'High',
+      targetAmount: 0 // No emergency fund specified by client
+    };
+    console.log('ℹ️ [transformToEnhancedFinancialGoals] No emergency fund goal specified by client');
+  }
+  
+  // Child Education Goal
+  const childEducationGoal = majorGoals.find(goal => 
+    goal.goalName && goal.goalName.toLowerCase().includes('education')
+  );
+  
+  enhancedGoals.childEducation = {
+    isApplicable: !!childEducationGoal,
+    targetAmount: childEducationGoal?.targetAmount || 2500000,
+    targetYear: childEducationGoal?.targetYear || (new Date().getFullYear() + 15)
+  };
+  
+  // Home Purchase Goal
+  const homePurchaseGoal = majorGoals.find(goal => 
+    goal.goalName && (goal.goalName.toLowerCase().includes('home') || goal.goalName.toLowerCase().includes('house'))
+  );
+  
+  enhancedGoals.homePurchase = {
+    isApplicable: !!homePurchaseGoal,
+    targetAmount: homePurchaseGoal?.targetAmount || 5000000,
+    targetYear: homePurchaseGoal?.targetYear || (new Date().getFullYear() + 5)
+  };
+  
+  // Marriage Goal
+  const marriageGoal = majorGoals.find(goal => 
+    goal.goalName && goal.goalName.toLowerCase().includes('marriage')
+  );
+  
+  enhancedGoals.marriageOfDaughter = {
+    isApplicable: !!marriageGoal,
+    targetAmount: marriageGoal?.targetAmount || 1500000,
+    targetYear: marriageGoal?.targetYear || (new Date().getFullYear() + 20),
+    daughterCurrentAge: 8
+  };
+  
+  // Custom Goals - remaining goals that don't fit categories
+  const customGoals = majorGoals.filter(goal => {
+    if (!goal.goalName) return false;
+    const goalName = goal.goalName.toLowerCase();
+    return !goalName.includes('education') && 
+           !goalName.includes('home') && 
+           !goalName.includes('house') && 
+           !goalName.includes('marriage') &&
+           !goalName.includes('emergency'); // Exclude emergency fund
+  }).map(goal => ({
+    goalName: goal.goalName,
+    targetAmount: goal.targetAmount,
+    targetYear: goal.targetYear,
+    priority: goal.priority || 'Medium'
+  }));
+  
+  enhancedGoals.customGoals = customGoals;
+  
+  console.log('✅ [transformToEnhancedFinancialGoals] Financial goals processed:', {
+    emergencyFund: enhancedGoals.emergencyFund.targetAmount,
+    childEducation: enhancedGoals.childEducation.isApplicable,
+    homePurchase: enhancedGoals.homePurchase.isApplicable,
+    marriage: enhancedGoals.marriageOfDaughter.isApplicable,
+    customGoalsCount: enhancedGoals.customGoals.length
+  });
+  
+  return enhancedGoals;
+};
+
 // Public endpoint - Submit client onboarding form - ENHANCED FOR 5-STAGE FORM
 const submitClientOnboardingForm = async (req, res) => {
   const startTime = Date.now();
@@ -1167,9 +1260,9 @@ const submitClientOnboardingForm = async (req, res) => {
         currentRetirementCorpus: clientFormData.currentRetirementCorpus || 0
       },
       
-      // Enhanced Financial Goals
+      // Enhanced Financial Goals - Transform from actual form fields
       financialGoals: clientFormData.financialGoals || {},
-      enhancedFinancialGoals: clientFormData.financialGoals || {},
+      enhancedFinancialGoals: transformToEnhancedFinancialGoals(clientFormData),
       majorGoals: [
         ...(clientFormData.majorGoals || []),
         ...(customGoals || [])

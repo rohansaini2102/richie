@@ -105,4 +105,22 @@ router.get(
   planController.testAIService
 );
 
+// AI-powered goal analysis for goal-based planning
+router.post(
+  '/analyze-goals',
+  planController.analyzeGoals
+);
+
+// Get goal recommendations for a plan
+router.get(
+  '/:planId/goal-recommendations',
+  planController.getGoalRecommendations
+);
+
+// Update goal strategy with advisor modifications
+router.put(
+  '/:planId/goal-strategy',
+  planController.updateGoalStrategy
+);
+
 module.exports = router;

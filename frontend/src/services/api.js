@@ -774,6 +774,68 @@ export const planAPI = {
     }
   },
 
+  // AI-powered goal analysis for goal-based planning
+  analyzeGoals: async (selectedGoals, clientData) => {
+    console.log('🎯 [API] ANALYZING GOALS:', {
+      goalsCount: selectedGoals?.length || 0,
+      hasClientData: !!clientData,
+      clientId: clientData?._id || 'unknown'
+    });
+    
+    const requestPayload = { 
+      selectedGoals: selectedGoals || [], 
+      clientData: clientData || {} 
+    };
+    const requestUrl = '/plans/analyze-goals';
+    
+    console.log('📤 [API] POST request details:', {
+      url: requestUrl,
+      payloadSize: JSON.stringify(requestPayload).length + ' chars',
+      selectedGoalsCount: selectedGoals?.length || 0,
+      goalTypes: selectedGoals?.map(g => g.title || g.type) || [],
+      hasClientData: !!clientData,
+      clientName: clientData ? `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() : 'N/A',
+      hasFinancialGoals: !!clientData?.enhancedFinancialGoals,
+      hasAssets: !!clientData?.assets,
+      hasDebts: !!clientData?.debtsAndLiabilities
+    });
+    
+    const startTime = Date.now();
+    
+    try {
+      const response = await api.post(requestUrl, requestPayload);
+      const duration = Date.now() - startTime;
+      
+      console.log('✅ [API] GOAL ANALYSIS COMPLETED:', {
+        duration: duration + 'ms',
+        success: response.data?.success,
+        hasRecommendations: !!response.data?.recommendations,
+        recommendationsType: typeof response.data?.recommendations,
+        hasError: !!response.data?.error,
+        errorMessage: response.data?.error
+      });
+      
+      return response.data;
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      
+      console.error('❌ [API] GOAL ANALYSIS FAILED:', {
+        responseTime: responseTime + 'ms',
+        errorType: error.constructor.name,
+        errorMessage: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        responseData: error.response?.data,
+        requestUrl,
+        hasSelectedGoals: !!selectedGoals,
+        hasClientData: !!clientData
+      });
+      
+      // Re-throw the error so calling code can handle it
+      throw error;
+    }
+  },
+
 };
 
 // Enhanced Admin API

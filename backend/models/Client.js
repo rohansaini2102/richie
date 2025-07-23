@@ -482,6 +482,14 @@ const clientSchema = new mongoose.Schema({
       targetYear: { type: Number, min: [2024, 'Year cannot be in the past'] }
     },
     
+    // Marriage of Daughter
+    marriageOfDaughter: {
+      isApplicable: { type: Boolean, default: false },
+      targetAmount: { type: Number, min: [0, 'Amount cannot be negative'], default: 1500000 },
+      targetYear: { type: Number, min: [2024, 'Year cannot be in the past'] },
+      daughterCurrentAge: { type: Number, min: [0, 'Age cannot be negative'], max: [25, 'Age seems too high'], default: 8 }
+    },
+    
     // Custom Goals
     customGoals: [{
       goalName: { type: String, trim: true, maxlength: [100, 'Goal name too long'] },
