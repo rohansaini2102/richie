@@ -23,6 +23,42 @@ export const parseExistingGoalsFromClient = (clientData) => {
     enhancedFinancialGoalsStructure: clientData?.enhancedFinancialGoals
   });
   
+  // Additional debugging: check each goal type specifically
+  if (clientData?.enhancedFinancialGoals) {
+    const goals = clientData.enhancedFinancialGoals;
+    console.log('🔍 [goalDataHelpers] Detailed goal type analysis:', {
+      emergencyFund: {
+        exists: !!goals.emergencyFund,
+        hasTargetAmount: !!(goals.emergencyFund?.targetAmount),
+        targetAmountValue: goals.emergencyFund?.targetAmount,
+        structure: goals.emergencyFund
+      },
+      childEducation: {
+        exists: !!goals.childEducation,
+        isApplicable: goals.childEducation?.isApplicable,
+        hasDetails: !!(goals.childEducation?.details),
+        structure: goals.childEducation
+      },
+      homePurchase: {
+        exists: !!goals.homePurchase,
+        isApplicable: goals.homePurchase?.isApplicable,
+        hasDetails: !!(goals.homePurchase?.details),
+        structure: goals.homePurchase
+      },
+      marriageOfDaughter: {
+        exists: !!goals.marriageOfDaughter,
+        isApplicable: goals.marriageOfDaughter?.isApplicable,
+        structure: goals.marriageOfDaughter
+      },
+      customGoals: {
+        exists: !!goals.customGoals,
+        isArray: Array.isArray(goals.customGoals),
+        length: goals.customGoals?.length || 0,
+        structure: goals.customGoals
+      }
+    });
+  }
+  
   if (!clientData || !clientData.enhancedFinancialGoals) {
     console.log('❌ [goalDataHelpers] No enhancedFinancialGoals data found');
     return existingGoals;
@@ -41,8 +77,16 @@ export const parseExistingGoalsFromClient = (clientData) => {
   });
 
   // Emergency Fund Goal - enhanced parsing with proper validation
-  if (goals.emergencyFund?.targetAmount && goals.emergencyFund.targetAmount > 0) {
+  // Check both explicit targetAmount and isApplicable flag
+  if ((goals.emergencyFund?.targetAmount && goals.emergencyFund.targetAmount > 0) || 
+      goals.emergencyFund?.isApplicable === true) {
     console.log('✅ [goalDataHelpers] Found client-specified emergency fund goal:', goals.emergencyFund);
+    
+    // Use targetAmount if available, otherwise calculate default
+    const emergencyAmount = goals.emergencyFund.targetAmount > 0 ? 
+      goals.emergencyFund.targetAmount : 
+      (clientData.totalMonthlyExpenses || 50000) * 6;
+    
     existingGoals.push({
       id: `existing-emergency-${Date.now()}`,
       type: 'custom',
@@ -51,7 +95,7 @@ export const parseExistingGoalsFromClient = (clientData) => {
       isSelected: true,
       data: {
         goalName: 'Emergency Fund',
-        targetAmount: goals.emergencyFund.targetAmount,
+        targetAmount: emergencyAmount,
         targetYear: currentYear + 1, // Emergency fund is immediate priority
         priority: goals.emergencyFund.priority || 'High',
         flexibility: 'Low', // Emergency funds are typically not flexible
@@ -67,9 +111,14 @@ export const parseExistingGoalsFromClient = (clientData) => {
   }
 
   // Child Education Goal - enhanced with better data mapping
-  if (goals.childEducation?.isApplicable && goals.childEducation?.details) {
+  if (goals.childEducation?.isApplicable === true) {
     console.log('✅ [goalDataHelpers] Found child education goal:', goals.childEducation);
-    const educationDetails = goals.childEducation.details;
+    const educationDetails = goals.childEducation.details || {};
+    
+    // Use provided details or calculate intelligent defaults
+    const targetAmount = educationDetails.targetAmount || 2500000;
+    const targetYear = educationDetails.targetYear || (currentYear + 15);
+    
     existingGoals.push({
       id: `existing-childEducation-${Date.now()}`,
       type: 'childEducation',
@@ -77,8 +126,8 @@ export const parseExistingGoalsFromClient = (clientData) => {
       status: 'existing',
       isSelected: true,
       data: {
-        targetAmount: educationDetails.targetAmount || 2500000,
-        targetYear: educationDetails.targetYear || (currentYear + 15),
+        targetAmount: targetAmount,
+        targetYear: targetYear,
         currentAge: null, // To be calculated based on target year
         educationLevel: 'Engineering', // Default - can be customized by advisor
         notes: 'Client-specified child education goal from onboarding',
@@ -93,9 +142,14 @@ export const parseExistingGoalsFromClient = (clientData) => {
   }
 
   // Home Purchase Goal - enhanced with proper data structure mapping
-  if (goals.homePurchase?.isApplicable && goals.homePurchase?.details) {
+  if (goals.homePurchase?.isApplicable === true) {
     console.log('✅ [goalDataHelpers] Found home purchase goal:', goals.homePurchase);
-    const homeDetails = goals.homePurchase.details;
+    const homeDetails = goals.homePurchase.details || {};
+    
+    // Use provided details or intelligent defaults
+    const targetAmount = homeDetails.targetAmount || 5000000;
+    const targetYear = homeDetails.targetYear || (currentYear + 5);
+    
     existingGoals.push({
       id: `existing-homePurchase-${Date.now()}`,
       type: 'carPurchase', // Using existing category for now
@@ -103,8 +157,8 @@ export const parseExistingGoalsFromClient = (clientData) => {
       status: 'existing',
       isSelected: true,
       data: {
-        targetAmount: homeDetails.targetAmount || 5000000,
-        targetYear: homeDetails.targetYear || (currentYear + 5),
+        targetAmount: targetAmount,
+        targetYear: targetYear,
         category: 'Home Purchase',
         downPaymentPercentage: 20, // Standard assumption
         notes: 'Client-specified home purchase goal from onboarding',
@@ -120,8 +174,13 @@ export const parseExistingGoalsFromClient = (clientData) => {
 
   // Marriage Goal - use the correct field name from schema
   const marriageGoal = goals.marriageOfDaughter;
-  if (marriageGoal?.isApplicable) {
+  if (marriageGoal?.isApplicable === true) {
     console.log('✅ [goalDataHelpers] Found marriage goal:', marriageGoal);
+    
+    // Use provided amount or calculate default
+    const targetAmount = marriageGoal.targetAmount || 1500000;
+    const targetYear = marriageGoal.targetYear || (currentYear + 20);
+    
     existingGoals.push({
       id: `existing-marriage-${Date.now()}`,
       type: 'marriage',
@@ -129,8 +188,8 @@ export const parseExistingGoalsFromClient = (clientData) => {
       status: 'existing',
       isSelected: true,
       data: {
-        targetAmount: marriageGoal.targetAmount || 1500000,
-        targetYear: marriageGoal.targetYear || (currentYear + 20),
+        targetAmount: targetAmount,
+        targetYear: targetYear,
         currentAge: marriageGoal.daughterCurrentAge || marriageGoal.currentAge || 8,
         originalData: marriageGoal
       }
@@ -141,32 +200,39 @@ export const parseExistingGoalsFromClient = (clientData) => {
 
 
   // Custom Goals - enhanced parsing with full client-data.json structure support
-  if (goals.customGoals?.length > 0) {
+  if (goals.customGoals && Array.isArray(goals.customGoals) && goals.customGoals.length > 0) {
     console.log('✅ [goalDataHelpers] Found custom goals:', goals.customGoals);
     goals.customGoals.forEach((customGoal, index) => {
       // Handle both array template structure and direct goal data
       const goalData = customGoal.template || customGoal;
       
-      existingGoals.push({
-        id: `existing-custom-${index}-${Date.now()}`,
-        type: 'custom',
-        source: 'client',
-        status: 'existing',
-        isSelected: true,
-        data: {
-          goalName: goalData.goalName || `Custom Goal ${index + 1}`,
-          targetAmount: goalData.targetAmount || 1000000,
-          targetYear: goalData.targetYear || (currentYear + 5),
-          priority: goalData.priority || 'Medium',
-          flexibility: 'Medium', // Default flexibility
-          notes: `Client-specified custom goal #${index + 1} from onboarding`,
-          originalData: {
-            ...customGoal,
-            sourceForm: `step7_goalsAndRiskProfile.financialGoals.customGoals[${index}]`,
-            index
+      // Only process goals that have meaningful data
+      if (goalData && (goalData.goalName || goalData.targetAmount)) {
+        console.log(`✅ [goalDataHelpers] Processing custom goal ${index + 1}:`, goalData);
+        
+        existingGoals.push({
+          id: `existing-custom-${index}-${Date.now()}`,
+          type: 'custom',
+          source: 'client',
+          status: 'existing',
+          isSelected: true,
+          data: {
+            goalName: goalData.goalName || `Custom Goal ${index + 1}`,
+            targetAmount: goalData.targetAmount || 1000000,
+            targetYear: goalData.targetYear || (currentYear + 5),
+            priority: goalData.priority || 'Medium',
+            flexibility: 'Medium', // Default flexibility
+            notes: `Client-specified custom goal #${index + 1} from onboarding`,
+            originalData: {
+              ...customGoal,
+              sourceForm: `step7_goalsAndRiskProfile.financialGoals.customGoals[${index}]`,
+              index
+            }
           }
-        }
-      });
+        });
+      } else {
+        console.log(`ℹ️ [goalDataHelpers] Skipping custom goal ${index + 1} - no meaningful data:`, goalData);
+      }
     });
   } else {
     console.log('ℹ️ [goalDataHelpers] No custom goals found:', goals.customGoals);

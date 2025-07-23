@@ -43,144 +43,160 @@ const GoalSelectionPanel = ({
       return;
     }
 
-    console.log('📊 [GoalSelectionPanel] Processing goals with intelligent defaults');
+    console.log('📊 [GoalSelectionPanel] Processing client goals first, then AI suggestions');
+    
+    // Debug: Log the actual client data structure
+    console.log('🔍 [GoalSelectionPanel] Client data structure debug:', {
+      hasClientData: !!clientData,
+      hasEnhancedFinancialGoals: !!clientData?.enhancedFinancialGoals,
+      enhancedFinancialGoals: clientData?.enhancedFinancialGoals,
+      clientDataKeys: clientData ? Object.keys(clientData) : []
+    });
+    
+    // First, get existing client goals using the dedicated function
+    const existingClientGoals = parseExistingGoalsFromClient(clientData);
     
     // Get intelligent defaults based on client profile
     const intelligentDefaults = calculateIntelligentGoalDefaults(clientData);
     const dataValidation = validateClientDataForGoalPlanning(clientData);
     
-    console.log('🧠 Intelligent defaults calculated:', intelligentDefaults);
-    console.log('📊 Data validation result:', dataValidation);
+    console.log('🎯 [GoalSelectionPanel] Existing client goals:', existingClientGoals);
+    console.log('🧠 [GoalSelectionPanel] Intelligent defaults:', intelligentDefaults);
+    console.log('📊 [GoalSelectionPanel] Data validation:', dataValidation);
 
     const goals = [];
-    const financialGoals = clientData?.enhancedFinancialGoals || {};
+    const processedGoalTypes = new Set(); // Track which goal types we've processed from client data
 
-    // Emergency Fund - use intelligent default if no client data
-    if (financialGoals.emergencyFund?.targetAmount) {
-      goals.push({
-        id: 'emergency',
-        title: 'EMERGENCY FUND',
-        description: 'Build emergency fund for financial security',
-        icon: '🛡️',
-        targetAmount: financialGoals.emergencyFund.targetAmount,
-        targetYear: new Date().getFullYear() + 1,
-        priority: financialGoals.emergencyFund.priority || 'High',
+    // Step 1: Process existing client goals first (highest priority)
+    const preSelectedGoalIds = new Set(); // Track which goals should be pre-selected
+    
+    existingClientGoals.forEach(clientGoal => {
+      const goalData = clientGoal.data;
+      let goalIcon = '🎯';
+      let goalTitle = '';
+      let goalDescription = '';
+      
+      // Map client goal types to display format
+      switch (clientGoal.type) {
+        case 'custom':
+          if (goalData.goalName === 'Emergency Fund') {
+            goalIcon = '🛡️';
+            goalTitle = 'EMERGENCY FUND';
+            goalDescription = 'Build emergency fund for financial security';
+            processedGoalTypes.add('emergencyFund');
+          } else {
+            goalIcon = '🎯';
+            goalTitle = (goalData.goalName || 'CUSTOM GOAL').toUpperCase();
+            goalDescription = `Custom financial goal: ${goalData.goalName || 'Personal Goal'}`;
+          }
+          break;
+        case 'childEducation':
+          goalIcon = '🎓';
+          goalTitle = 'CHILD EDUCATION';
+          goalDescription = 'Fund your child\'s higher education';
+          processedGoalTypes.add('childEducation');
+          break;
+        case 'carPurchase':
+          if (goalData.category === 'Home Purchase') {
+            goalIcon = '🏠';
+            goalTitle = 'HOME PURCHASE';
+            goalDescription = 'Save for your dream home';
+            processedGoalTypes.add('homePurchase');
+          } else {
+            goalIcon = '🚗';
+            goalTitle = (goalData.category || 'CAR PURCHASE').toUpperCase();
+            goalDescription = `Purchase ${goalData.category || 'vehicle'}`;
+            processedGoalTypes.add('carPurchase');
+          }
+          break;
+        case 'marriage':
+          goalIcon = '💒';
+          goalTitle = 'MARRIAGE OF DAUGHTER';
+          goalDescription = 'Save for your daughter\'s wedding';
+          processedGoalTypes.add('marriageOfDaughter');
+          break;
+      }
+
+      const processedGoal = {
+        id: `client-${clientGoal.id}`,
+        title: goalTitle || 'Client Goal',
+        description: goalDescription || 'Client-specified financial goal',
+        icon: goalIcon || '🎯',
+        targetAmount: Number(goalData.targetAmount) || 1000000,
+        targetYear: Number(goalData.targetYear) || (new Date().getFullYear() + 5),
+        priority: goalData.priority || 'Medium',
         hasData: true,
-        source: 'client_data'
-      });
-    } else if (intelligentDefaults.emergencyFund.targetAmount > 0) {
+        source: 'client_data',
+        type: clientGoal.type || 'custom',
+        originalClientGoal: clientGoal // Keep reference to original data
+      };
+      
+      goals.push(processedGoal);
+      
+      // Pre-select client goals since they specifically set them up
+      if (clientGoal.isSelected !== false) {
+        preSelectedGoalIds.add(processedGoal.id);
+      }
+    });
+
+    // Step 2: Add AI-suggested goals for missing goal types
+    if (!processedGoalTypes.has('emergencyFund') && intelligentDefaults.emergencyFund.targetAmount > 0) {
       goals.push({
         id: 'emergency-suggested',
-        title: 'EMERGENCY FUND (Suggested)',
+        title: 'EMERGENCY FUND (AI Suggested)',
         description: 'Build emergency fund based on your expenses',
         icon: '🛡️',
-        targetAmount: intelligentDefaults.emergencyFund.targetAmount,
+        targetAmount: Number(intelligentDefaults.emergencyFund.targetAmount) || 300000,
         targetYear: new Date().getFullYear() + 1,
         priority: 'High',
         hasData: true,
-        source: 'intelligent_default'
+        source: 'intelligent_default',
+        type: 'emergencyFund'
       });
     }
 
-    // Child Education - use intelligent defaults
-    const hasChildEducationData = financialGoals.childEducation?.isApplicable === true && 
-                                 financialGoals.childEducation?.details;
-    
-    if (hasChildEducationData) {
-      const details = financialGoals.childEducation.details;
-      goals.push({
-        id: 'childEducation',
-        title: 'CHILD EDUCATION',
-        description: 'Fund your child\'s higher education',
-        icon: '🎓',
-        targetAmount: details.targetAmount || intelligentDefaults.childEducation.targetAmount,
-        targetYear: details.targetYear || intelligentDefaults.childEducation.targetYear,
-        hasData: true,
-        source: 'client_data'
-      });
-    } else {
+    if (!processedGoalTypes.has('childEducation')) {
       goals.push({
         id: 'childEducation-suggested',
         title: `CHILD EDUCATION (${intelligentDefaults.childEducation.educationLevel})`,
-        description: 'Fund your child\'s higher education - suggested based on your income',
+        description: 'Fund your child\'s higher education - AI suggested based on your income',
         icon: '🎓',
-        targetAmount: intelligentDefaults.childEducation.targetAmount,
-        targetYear: intelligentDefaults.childEducation.targetYear,
+        targetAmount: Number(intelligentDefaults.childEducation.targetAmount) || 2500000,
+        targetYear: Number(intelligentDefaults.childEducation.targetYear) || (new Date().getFullYear() + 15),
+        priority: 'Medium',
         hasData: true,
-        source: 'intelligent_default'
+        source: 'intelligent_default',
+        type: 'childEducation'
       });
     }
 
-    // Marriage of Daughter - use intelligent defaults
-    const hasMarriageData = financialGoals.marriageOfDaughter?.isApplicable === true;
-    
-    if (hasMarriageData) {
-      goals.push({
-        id: 'marriage',
-        title: 'MARRIAGE OF DAUGHTER',
-        description: 'Save for your daughter\'s wedding',
-        icon: '💒',
-        targetAmount: financialGoals.marriageOfDaughter.targetAmount || intelligentDefaults.marriage.targetAmount,
-        targetYear: financialGoals.marriageOfDaughter.targetYear || intelligentDefaults.marriage.targetYear,
-        hasData: true,
-        source: 'client_data'
-      });
-    } else {
+    if (!processedGoalTypes.has('marriageOfDaughter')) {
       goals.push({
         id: 'marriage-suggested',
-        title: 'MARRIAGE OF DAUGHTER (Suggested)',
+        title: 'MARRIAGE OF DAUGHTER (AI Suggested)',
         description: 'Save for your daughter\'s wedding - suggested based on your income',
         icon: '💒',
-        targetAmount: intelligentDefaults.marriage.targetAmount,
-        targetYear: intelligentDefaults.marriage.targetYear,
+        targetAmount: Number(intelligentDefaults.marriage.targetAmount) || 1500000,
+        targetYear: Number(intelligentDefaults.marriage.targetYear) || (new Date().getFullYear() + 20),
+        priority: 'Medium',
         hasData: true,
-        source: 'intelligent_default'
+        source: 'intelligent_default',
+        type: 'marriageOfDaughter'
       });
     }
 
-    // Car Purchase - use intelligent defaults
-    goals.push({
-      id: 'carPurchase-suggested',
-      title: `${intelligentDefaults.carPurchase.category.toUpperCase()} PURCHASE`,
-      description: `Purchase ${intelligentDefaults.carPurchase.category.toLowerCase()} - suggested based on your income`,
-      icon: '🚗',
-      targetAmount: intelligentDefaults.carPurchase.targetAmount,
-      targetYear: intelligentDefaults.carPurchase.targetYear,
-      hasData: true,
-      source: 'intelligent_default'
-    });
-
-    // Home Purchase - if available in client data
-    if (financialGoals.homePurchase?.isApplicable === true && financialGoals.homePurchase?.details) {
-      const details = financialGoals.homePurchase.details;
+    if (!processedGoalTypes.has('carPurchase')) {
       goals.push({
-        id: 'homePurchase',
-        title: 'HOME PURCHASE',
-        description: 'Save for your dream home',
-        icon: '🏠',
-        targetAmount: details.targetAmount || 5000000,
-        targetYear: details.targetYear || (new Date().getFullYear() + 5),
+        id: 'carPurchase-suggested',
+        title: `${intelligentDefaults.carPurchase.category.toUpperCase()} PURCHASE (AI Suggested)`,
+        description: `Purchase ${intelligentDefaults.carPurchase.category.toLowerCase()} - suggested based on your income`,
+        icon: '🚗',
+        targetAmount: Number(intelligentDefaults.carPurchase.targetAmount) || 1500000,
+        targetYear: Number(intelligentDefaults.carPurchase.targetYear) || (new Date().getFullYear() + 3),
+        priority: 'Medium',
         hasData: true,
-        source: 'client_data'
-      });
-    }
-
-    // Custom Goals from client data
-    if (financialGoals.customGoals?.length > 0) {
-      financialGoals.customGoals.forEach((goal, index) => {
-        if (goal && (goal.goalName || goal.targetAmount)) {
-          goals.push({
-            id: `custom-${index}`,
-            title: (goal.goalName || `CUSTOM GOAL ${index + 1}`).toUpperCase(),
-            description: `Custom financial goal: ${goal.goalName || 'Personal Goal'}`,
-            icon: '🎯',
-            targetAmount: goal.targetAmount || intelligentDefaults.custom.targetAmount,
-            targetYear: goal.targetYear || intelligentDefaults.custom.targetYear,
-            priority: goal.priority || 'Medium',
-            hasData: true,
-            source: 'client_data'
-          });
-        }
+        source: 'intelligent_default',
+        type: 'carPurchase'
       });
     }
 
@@ -190,18 +206,25 @@ const GoalSelectionPanel = ({
       title: 'CUSTOM GOAL',
       description: 'Create your personalized financial goal',
       icon: '⚙️',
+      targetAmount: 0, // Will be set when user adds custom goal
+      targetYear: new Date().getFullYear() + 5,
+      priority: 'Medium',
       hasData: false,
-      source: 'new'
+      source: 'new',
+      type: 'custom'
     });
 
-    console.log('📋 [GoalSelectionPanel] Goals with intelligent defaults:', {
+    console.log('📋 [GoalSelectionPanel] Final goals processed:', {
       totalGoals: goals.length,
       clientDataGoals: goals.filter(g => g.source === 'client_data').length,
       intelligentDefaults: goals.filter(g => g.source === 'intelligent_default').length,
-      dataQualityScore: dataValidation.score
+      preSelectedCount: preSelectedGoalIds.size,
+      dataQualityScore: dataValidation.score,
+      processedGoalTypes: Array.from(processedGoalTypes)
     });
 
     setAvailableGoals(goals);
+    setSelectedGoalIds(preSelectedGoalIds); // Pre-select client's goals 
   }, [clientData]);
 
   const handleGoalClick = (goal) => {
@@ -245,10 +268,12 @@ const GoalSelectionPanel = ({
         title: newGoal.name.toUpperCase(),
         description: `Custom financial goal: ${newGoal.name}`,
         icon: '⚙️',
-        targetAmount: parseFloat(newGoal.amount) || 0,
-        targetYear: parseInt(newGoal.year) || new Date().getFullYear() + 5,
+        targetAmount: Number(parseFloat(newGoal.amount)) || 1000000,
+        targetYear: Number(parseInt(newGoal.year)) || (new Date().getFullYear() + 5),
+        priority: 'Medium',
         hasData: true,
-        source: 'new'
+        source: 'new',
+        type: 'custom'
       };
       
       // Add to goals list (insert before the "add new" card)
@@ -465,12 +490,13 @@ const GoalSelectionPanel = ({
                   <Chip 
                     size="small" 
                     label={
-                      goal.source === 'client_data' ? 'From Your Data' :
-                      goal.source === 'intelligent_default' ? 'AI Suggested' : 'New'
+                      goal.source === 'client_data' ? '👤 Your Goal' :
+                      goal.source === 'intelligent_default' ? '🤖 AI Suggested' : '⚙️ New'
                     }
                     sx={{ 
                       fontSize: '10px',
-                      height: '20px',
+                      height: '22px',
+                      fontWeight: 600,
                       bgcolor: goal.source === 'client_data' ? '#dcfce7' : 
                               goal.source === 'intelligent_default' ? '#dbeafe' : '#f3f4f6',
                       color: goal.source === 'client_data' ? '#166534' : 
@@ -530,7 +556,7 @@ const GoalSelectionPanel = ({
             lineHeight: 1.6
           }}
         >
-          Select the financial goals from your data that you want to plan for. You can edit goal details and add custom goals as needed.
+          Your existing financial goals are shown first and pre-selected. AI-suggested goals are provided as additional options. You can edit any goal or add custom ones.
         </Typography>
       </Box>
 
@@ -935,19 +961,56 @@ const GoalSelectionPanel = ({
           variant="contained"
           size="large"
           onClick={() => {
-            // Get selected goals data
+            // Get selected goals data with full validation and sanitization
             const selectedGoalsData = availableGoals
               .filter(goal => selectedGoalIds.has(goal.id) && goal.hasData)
-              .map(goal => ({
-                id: goal.id,
-                title: goal.title,
-                description: goal.description,
-                icon: goal.icon,
-                targetAmount: goal.targetAmount,
-                targetYear: goal.targetYear,
-                priority: goal.priority || 'Medium',
-                hasData: goal.hasData
-              }));
+              .map((goal, index) => {
+                console.log(`🔍 [GoalSelectionPanel] Validating goal ${index + 1}:`, goal);
+                
+                // Sanitize and validate all goal properties with proper defaults
+                const sanitizedGoal = {
+                  id: goal.id || `goal-${Date.now()}-${index}`,
+                  title: goal.title || 'Untitled Goal',
+                  description: goal.description || 'No description provided',
+                  icon: goal.icon || '🎯',
+                  targetAmount: Number(goal.targetAmount) || 0,
+                  targetYear: Number(goal.targetYear) || (new Date().getFullYear() + 5),
+                  priority: goal.priority || 'Medium',
+                  hasData: Boolean(goal.hasData),
+                  source: goal.source || 'unknown',
+                  originalClientGoal: goal.originalClientGoal || null,
+                  type: goal.originalClientGoal?.type || goal.type || 'custom'
+                };
+                
+                // Additional validation
+                if (sanitizedGoal.targetAmount <= 0) {
+                  console.warn(`⚠️ [GoalSelectionPanel] Goal ${sanitizedGoal.title} has invalid targetAmount: ${goal.targetAmount}, using default`);
+                  sanitizedGoal.targetAmount = 1000000; // Default 10L
+                }
+                
+                if (sanitizedGoal.targetYear <= new Date().getFullYear()) {
+                  console.warn(`⚠️ [GoalSelectionPanel] Goal ${sanitizedGoal.title} has invalid targetYear: ${goal.targetYear}, using default`);
+                  sanitizedGoal.targetYear = new Date().getFullYear() + 5;
+                }
+                
+                console.log(`✅ [GoalSelectionPanel] Sanitized goal ${index + 1}:`, sanitizedGoal);
+                return sanitizedGoal;
+              });
+            
+            // Final validation before sending to next step
+            console.log('📤 [GoalSelectionPanel] Sending sanitized goals to AI planning:', {
+              goalCount: selectedGoalsData.length,
+              totalTargetAmount: selectedGoalsData.reduce((sum, g) => sum + g.targetAmount, 0),
+              sources: selectedGoalsData.map(g => g.source),
+              allHaveValidAmounts: selectedGoalsData.every(g => g.targetAmount > 0),
+              allHaveValidYears: selectedGoalsData.every(g => g.targetYear > new Date().getFullYear()),
+              goalSummary: selectedGoalsData.map(g => ({
+                title: g.title,
+                amount: g.targetAmount,
+                year: g.targetYear,
+                source: g.source
+              }))
+            });
             
             if (onContinue) {
               onContinue(selectedGoalsData);
