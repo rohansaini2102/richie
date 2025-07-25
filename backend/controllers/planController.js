@@ -77,39 +77,60 @@ function parseAIResponse(content) {
     console.log('⚠️ [Parser] Advanced cleanup failed');
   }
 
-  // Strategy 5: Generate fallback structure if parsing completely fails
-  console.log('❌ [Parser] All parsing strategies failed, generating fallback response');
+  // Strategy 5: Generate fallback structure for goal-based planning
+  console.log('❌ [Parser] All parsing strategies failed, generating goal-based fallback response');
   
-  // Extract key information from text if possible
+  // Generate proper goal-based planning fallback structure
   const fallbackResponse = {
-    debtStrategy: {
-      prioritizedDebts: [],
-      overallStrategy: extractTextValue(content, ['strategy', 'debt strategy', 'recommendation']) || 
-                      'AI response could not be parsed, but analysis was attempted.'
-    },
-    financialMetrics: {
-      currentEMIRatio: extractNumberValue(content, ['emi ratio', 'emi-to-income']) || 0,
-      targetEMIRatio: 40,
-      monthlySurplus: extractNumberValue(content, ['surplus', 'available']) || 0,
-      totalInterestSavings: extractNumberValue(content, ['savings', 'save']) || 0,
-      debtFreeTimeline: extractTextValue(content, ['timeline', 'payoff', 'debt-free']) || 'Not specified',
-      financialHealthScore: extractNumberValue(content, ['health score', 'score']) || 0
+    individualGoalAnalysis: [
+      {
+        goalId: "fallback_goal",
+        goalName: "Goal Analysis Unavailable",
+        analysis: {
+          feasibility: "Medium",
+          requiredMonthlySIP: 0,
+          recommendedAssetAllocation: {
+            equity: 60,
+            debt: 40
+          },
+          expectedReturn: 12,
+          riskLevel: "Moderate",
+          taxEfficiency: {
+            strategy: "Standard tax-saving approach",
+            potentialSavings: 0
+          },
+          milestones: []
+        },
+        fundRecommendations: []
+      }
+    ],
+    multiGoalOptimization: {
+      totalRequiredSIP: 0,
+      availableSurplus: 0,
+      feasibilityStatus: "Analysis unavailable",
+      priorityMatrix: [],
+      phaseStrategy: [],
+      conflicts: []
     },
     recommendations: {
-      immediateActions: extractListItems(content, 'immediate') || ['Review and optimize current debt payments'],
-      mediumTermActions: extractListItems(content, 'medium') || ['Focus on building emergency fund'],
-      longTermActions: extractListItems(content, 'long') || ['Develop long-term investment strategy']
+      immediateActions: ["Review AI response formatting", "Try analysis again"],
+      optimizationSuggestions: ["Ensure proper data formatting"],
+      alternativeScenarios: []
     },
-    warnings: extractListItems(content, 'warning') || [],
-    opportunities: extractListItems(content, 'opportunity') || [],
+    riskAssessment: {
+      overallRisk: "Moderate",
+      diversificationScore: 50,
+      liquidityPosition: "Assessment unavailable",
+      warnings: ["AI response could not be parsed properly"]
+    },
     generatedBy: 'fallback-parser',
     originalContentLength: content.length,
-    parsingError: 'AI response format could not be parsed as valid JSON'
+    parsingError: 'AI response format could not be parsed as valid JSON - goal-based planning fallback used'
   };
 
   console.log('🔄 [Parser] Generated fallback response:', {
-    hasStrategy: !!fallbackResponse.debtStrategy.overallStrategy,
-    hasMetrics: !!fallbackResponse.financialMetrics,
+    hasIndividualAnalysis: !!fallbackResponse.individualGoalAnalysis,
+    hasMultiGoalOptimization: !!fallbackResponse.multiGoalOptimization,
     hasRecommendations: !!fallbackResponse.recommendations
   });
 

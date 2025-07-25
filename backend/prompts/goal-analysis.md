@@ -37,7 +37,11 @@ Where:
 - **40-50 years**: 60% Equity, 40% Debt
 - **50+ years**: 40% Equity, 60% Debt
 
-## Response Format Requirements
+## CRITICAL: Response Format Requirements
+
+**MANDATORY**: Your response MUST be valid JSON only. Do not include any text before or after the JSON.
+
+**REQUIRED**: Start your response with `{` and end with `}`. No markdown code blocks, no explanations.
 
 Provide your analysis as a structured JSON response:
 
@@ -167,3 +171,10 @@ When analyzing multiple goals:
 5. Provide alternative scenarios for optimization
 
 Remember: Your goal is to create a practical, achievable financial plan that helps clients systematically work towards their life goals while maintaining financial stability and appropriate risk management.
+
+## FINAL REMINDER: JSON ONLY RESPONSE
+Your response must be a complete, valid JSON object starting with `{` and ending with `}`. 
+- No explanatory text before or after the JSON
+- No markdown code blocks (```json)
+- No incomplete JSON structures
+- Ensure all brackets and braces are properly closed

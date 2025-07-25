@@ -435,7 +435,7 @@ Provide detailed analysis including:
 5. Timeline-based implementation plan
 6. Risk assessment and warnings
 
-Format the response as structured JSON for easy parsing.`;
+CRITICAL: Respond with ONLY valid JSON. Start with { and end with }. No explanations, no markdown blocks.`;
 
     console.log('📝 [ClaudeAI] User message prepared:', {
       messageLength: userMessage.length + ' chars'

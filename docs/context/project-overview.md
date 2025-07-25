@@ -1,22 +1,23 @@
-# RICHIEAT - Project Overview
+# RichieAI - Project Overview
 
 ## Project Information
-- **Project Name:** RICHIEAT
+- **Project Name:** RichieAI (RICHIEAT)
 - **Type:** Financial Advisory Platform
-- **Technology Stack:** React + Vite + Tailwind CSS + MongoDB + Express + Node.js
+- **Technology Stack:** React 19.1.0 + Vite 7.0 + Tailwind CSS 4.1.11 + MongoDB Atlas + Express 5.1.0 + Node.js
 - **Target Users:** SEBI-registered financial advisors in India
-- **Repository:** /home/rohan/richiai2/
+- **Repository:** /home/rohan/richeai-master/
 
 ## Project Structure
 ```
-richiai2/
-├── frontend/              # React Frontend (Vite)
-├── backend/              # Node.js Backend (Express)
+richeai-master/
+├── frontend/              # React 19.1.0 Frontend (Vite 7.0)
+├── backend/              # Node.js Backend (Express 5.1.0)
 ├── docs/                 # Project Documentation
 │   ├── context/         # Project context files
 │   ├── claude/          # AI conversation memory
 │   ├── progress/        # Progress tracking
-│   └── architecture/    # Technical architecture
+│   ├── architecture/    # Technical architecture
+│   └── flow/            # Planning and workflow docs
 └── README.md
 ```
 
