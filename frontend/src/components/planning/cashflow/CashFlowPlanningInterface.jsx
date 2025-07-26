@@ -31,7 +31,23 @@ const CashFlowPlanningInterface = ({
     if (!clientData && clientId) {
       loadClientData();
     } else if (clientData) {
-      // If client data is provided, trigger initial AI analysis
+      // PRIORITY 1: Check localStorage first - NEVER call API if data exists
+      const cacheKey = `cashflow_analysis_${clientId}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          console.log('✅ [CashFlowPlanningInterface] Using localStorage cached analysis - NO API CALL');
+          setAiSuggestions(parsed.suggestions);
+          return; // IMPORTANT: Never proceed to API if cached data exists
+        } catch (e) {
+          console.warn('⚠️ [CashFlowPlanningInterface] Invalid cached data, clearing cache');
+          localStorage.removeItem(cacheKey);
+        }
+      }
+      
+      console.log('⚠️ [CashFlowPlanningInterface] No localStorage cache found - proceeding with API call');
       requestAISuggestions(clientData);
     }
   }, [clientId]);
@@ -41,7 +57,24 @@ const CashFlowPlanningInterface = ({
       setLoading(true);
       const clientData = await clientAPI.getClientById(clientId);
       setClientData(clientData);
-      // Trigger initial AI analysis
+      
+      // Check localStorage before making API call
+      const cacheKey = `cashflow_analysis_${clientId}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          console.log('✅ [CashFlowPlanningInterface] Using cached AI suggestions from loadClientData');
+          setAiSuggestions(parsed.suggestions);
+          return; // Don't make API call if cached data exists
+        } catch (e) {
+          console.warn('⚠️ [CashFlowPlanningInterface] Invalid cached data in loadClientData');
+          localStorage.removeItem(cacheKey);
+        }
+      }
+      
+      // Only call API if no cached data
       requestAISuggestions(clientData);
     } catch (err) {
       console.error('Error loading client data:', err);
@@ -59,7 +92,12 @@ const CashFlowPlanningInterface = ({
       // Sync with backend
       await clientAPI.updateClient(clientId, updatedData);
       
-      // Trigger AI analysis with updated data
+      // Clear cached data since client data changed, then make new API call
+      const cacheKey = `cashflow_analysis_${clientId}`;
+      localStorage.removeItem(cacheKey);
+      console.log('🗑️ [CashFlowPlanningInterface] Cleared cache due to client data update');
+      
+      // Only trigger AI analysis if really needed
       requestAISuggestions(updatedData);
     } catch (err) {
       console.error('Error updating client data:', err);
@@ -120,6 +158,18 @@ const CashFlowPlanningInterface = ({
       }
       
       setAiSuggestions(response);
+      
+      // Save successful response to localStorage for future use
+      if (response?.success && response?.analysis) {
+        const cacheKey = `cashflow_analysis_${clientId}`;
+        const cacheData = {
+          suggestions: response,
+          timestamp: Date.now(),
+          clientId: clientId
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        console.log('💾 [CashFlowPlanningInterface] AI suggestions saved to localStorage');
+      }
     } catch (error) {
       const responseTime = Date.now() - startTime;
       console.error('❌ [CashFlowPlanningInterface] Failed to get AI suggestions:', {

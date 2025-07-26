@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import { formatCurrency, formatLargeAmount } from './utils/goalFormatters';
 import { calculateAge } from './utils/goalCalculations';
+import { calculateTotalEMIs } from '../cashflow/utils/calculations';
 
 const EditableClientDataGoal = ({ clientData, onDataUpdate }) => {
   const [editingField, setEditingField] = useState(null);
@@ -230,13 +231,69 @@ const EditableClientDataGoal = ({ clientData, onDataUpdate }) => {
     );
   };
 
-  // Extract financial data
-  const monthlyIncome = clientData?.calculatedFinancials?.monthlyIncome || 
-                       clientData?.totalMonthlyIncome || 0;
-  const monthlyExpenses = clientData?.calculatedFinancials?.totalMonthlyExpenses || 
-                         clientData?.totalMonthlyExpenses || 0;
-  const monthlySurplus = monthlyIncome - monthlyExpenses;
+  // Extract financial data with debugging - prioritize current user input
+  const directIncome = parseFloat(clientData?.totalMonthlyIncome) || 0;
+  const calculatedIncome = parseFloat(clientData?.calculatedFinancials?.monthlyIncome) || 0;
+  
+  // Priority: Direct user input > Calculated values > 0
+  const monthlyIncome = directIncome || calculatedIncome || 0;
+  
+  // Try multiple sources for monthly expenses - prioritize current user input
+  const directExpenses = parseFloat(clientData?.totalMonthlyExpenses) || 0;
+  const calculatedExpenses = parseFloat(clientData?.calculatedFinancials?.totalMonthlyExpenses) || 0;
+  
+  // Calculate expense breakdown total if available
+  let expenseBreakdownTotal = 0;
+  if (clientData?.expenseBreakdown?.details) {
+    const breakdown = clientData.expenseBreakdown.details;
+    expenseBreakdownTotal = Object.values(breakdown).reduce((sum, value) => {
+      return sum + (parseFloat(value) || 0);
+    }, 0);
+  }
+  
+  // Priority: Direct user input > Expense breakdown > Calculated values > 0
+  let monthlyExpenses = directExpenses || expenseBreakdownTotal || calculatedExpenses || 0;
+  
+  const totalEMIs = calculateTotalEMIs(clientData?.debtsAndLiabilities);
+  const monthlySurplus = monthlyIncome - monthlyExpenses - totalEMIs;
   const monthlyInvestmentCapacity = monthlySurplus > 0 ? monthlySurplus * 0.8 : 0;
+  
+  // Determine data source for display
+  const incomeDataSource = directIncome ? 'User Input' : calculatedIncome ? 'Calculated' : 'Unknown';
+  const expenseDataSource = directExpenses ? 'User Input' : 
+                           expenseBreakdownTotal ? 'Breakdown' : 
+                           calculatedExpenses ? 'Calculated' : 'Unknown';
+
+  // Debug logging for financial data
+  console.log('🔍 [EditableClientDataGoal] Financial data extraction:', {
+    INCOME: {
+      '1_directIncome': directIncome,
+      '2_calculatedIncome': calculatedIncome,
+      '3_FINAL_monthlyIncome': monthlyIncome,
+      '4_incomeDataSource': incomeDataSource,
+      rawDirectIncome: clientData?.totalMonthlyIncome,
+      rawCalculatedIncome: clientData?.calculatedFinancials?.monthlyIncome
+    },
+    EXPENSES: {
+      '1_directExpenses': directExpenses,
+      '2_expenseBreakdownTotal': expenseBreakdownTotal,
+      '3_calculatedExpenses': calculatedExpenses,
+      '4_FINAL_monthlyExpenses': monthlyExpenses,
+      '5_expenseDataSource': expenseDataSource,
+      rawDirectExpenses: clientData?.totalMonthlyExpenses,
+      rawCalculatedExpenses: clientData?.calculatedFinancials?.totalMonthlyExpenses
+    },
+    SUMMARY: {
+      monthlyIncome,
+      monthlyExpenses,
+      totalEMIs,
+      monthlySurplus,
+      monthlyInvestmentCapacity
+    },
+    hasClientData: !!clientData,
+    hasCalculatedFinancials: !!clientData?.calculatedFinancials,
+    hasExpenseBreakdown: !!clientData?.expenseBreakdown?.details
+  });
 
   const renderEditablePersonalInfo = () => {
     return (
@@ -267,34 +324,139 @@ const EditableClientDataGoal = ({ clientData, onDataUpdate }) => {
   };
 
   const renderEditableFinancialSummary = () => {
-    const savingsRate = monthlyIncome > 0 ? ((monthlySurplus / monthlyIncome) * 100).toFixed(1) : 0;
-    
     return (
       <Box>
-        {/* Key Metrics Cards */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        {/* Key Metrics Cards - Row 1 */}
+        <Grid container spacing={2} sx={{ mb: 2 }}>
           <Grid item xs={12} md={3}>
-            <Card sx={{ bgcolor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-              <CardContent sx={{ p: 2, textAlign: 'center' }}>
-                <TrendingUp sx={{ color: '#16a34a', mb: 1 }} />
-                <Typography variant="body2" sx={{ color: '#15803d', mb: 1 }}>
+            <Card sx={{ 
+              bgcolor: '#f0fdf4', 
+              border: '2px solid #16a34a',
+              minHeight: '120px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+            }}>
+              <CardContent sx={{ 
+                p: 2, 
+                textAlign: 'center',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center'
+              }}>
+                <TrendingUp sx={{ color: '#16a34a', mb: 1, fontSize: '2rem' }} />
+                <Typography variant="body2" sx={{ 
+                  color: '#15803d !important', 
+                  mb: 1,
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  lineHeight: 1.2
+                }}>
                   Monthly Income
                 </Typography>
-                <Typography variant="h6" sx={{ color: '#14532d', fontWeight: 700 }}>
+                <Typography variant="h6" sx={{ 
+                  color: '#14532d !important', 
+                  fontWeight: 700,
+                  fontSize: '1.25rem',
+                  lineHeight: 1.2
+                }}>
                   {formatCurrency(monthlyIncome)}
+                </Typography>
+                {/* Debug info - remove after testing */}
+                <Typography variant="caption" sx={{ 
+                  color: '#666 !important', 
+                  fontSize: '10px', 
+                  mt: 1, 
+                  display: 'block',
+                  fontWeight: 500 
+                }}>
+                  {monthlyIncome === 0 
+                    ? 'No income data found' 
+                    : `Source: ${incomeDataSource}`
+                  }
                 </Typography>
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={12} md={3}>
-            <Card sx={{ bgcolor: '#fef2f2', border: '1px solid #fecaca' }}>
-              <CardContent sx={{ p: 2, textAlign: 'center' }}>
-                <TrendingDown sx={{ color: '#dc2626', mb: 1 }} />
-                <Typography variant="body2" sx={{ color: '#dc2626', mb: 1 }}>
+            <Card sx={{ 
+              bgcolor: '#fef2f2', 
+              border: '2px solid #dc2626',
+              minHeight: '120px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+            }}>
+              <CardContent sx={{ 
+                p: 2, 
+                textAlign: 'center', 
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center'
+              }}>
+                <TrendingDown sx={{ color: '#dc2626', mb: 1, fontSize: '2rem' }} />
+                <Typography 
+                  variant="body2" 
+                  component="div"
+                  sx={{ 
+                    color: '#dc2626 !important', 
+                    mb: 1,
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    lineHeight: 1.2,
+                    display: 'block !important',
+                    visibility: 'visible !important',
+                    opacity: 1,
+                    textAlign: 'center'
+                  }}
+                >
                   Monthly Expenses
                 </Typography>
-                <Typography variant="h6" sx={{ color: '#991b1b', fontWeight: 700 }}>
-                  {formatCurrency(monthlyExpenses)}
+                {/* Fallback text in case Typography has issues */}
+                <div style={{ 
+                  color: '#dc2626', 
+                  fontSize: '14px', 
+                  fontWeight: '600',
+                  marginBottom: '8px',
+                  display: 'block'
+                }}>
+                  MONTHLY EXPENSES (fallback)
+                </div>
+                <Typography variant="h6" sx={{ 
+                  color: '#991b1b !important', 
+                  fontWeight: 700,
+                  fontSize: '1.25rem',
+                  lineHeight: 1.2
+                }}>
+                  {monthlyExpenses > 0 ? formatCurrency(monthlyExpenses) : '₹0'}
+                </Typography>
+                {/* Debug info - remove after testing */}
+                <Typography variant="caption" sx={{ 
+                  color: '#666 !important', 
+                  fontSize: '10px', 
+                  mt: 1, 
+                  display: 'block',
+                  fontWeight: 500 
+                }}>
+                  {monthlyExpenses === 0 
+                    ? 'No expense data found' 
+                    : `Source: ${expenseDataSource}`
+                  }
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Card sx={{ bgcolor: '#fff7ed', border: '1px solid #fed7aa' }}>
+              <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                <Percent sx={{ color: '#ea580c', mb: 1 }} />
+                <Typography variant="body2" sx={{ color: '#c2410c', mb: 1 }}>
+                  Monthly EMIs
+                </Typography>
+                <Typography variant="h6" sx={{ color: '#9a3412', fontWeight: 700 }}>
+                  {formatCurrency(totalEMIs)}
                 </Typography>
               </CardContent>
             </Card>
@@ -307,7 +469,7 @@ const EditableClientDataGoal = ({ clientData, onDataUpdate }) => {
               <CardContent sx={{ p: 2, textAlign: 'center' }}>
                 <TrendingUp sx={{ color: monthlySurplus >= 0 ? '#2563eb' : '#dc2626', mb: 1 }} />
                 <Typography variant="body2" sx={{ color: monthlySurplus >= 0 ? '#1e40af' : '#dc2626', mb: 1 }}>
-                  Monthly Surplus
+                  Net Surplus
                 </Typography>
                 <Typography variant="h6" sx={{ color: monthlySurplus >= 0 ? '#1e3a8a' : '#991b1b', fontWeight: 700 }}>
                   {formatCurrency(monthlySurplus)}
@@ -315,15 +477,48 @@ const EditableClientDataGoal = ({ clientData, onDataUpdate }) => {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} md={3}>
+        </Grid>
+
+        {/* Investment Capacity Card - Row 2 */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={4}>
             <Card sx={{ bgcolor: '#f3f4f6', border: '1px solid #d1d5db' }}>
               <CardContent sx={{ p: 2, textAlign: 'center' }}>
                 <TrackChanges sx={{ color: '#6b7280', mb: 1 }} />
                 <Typography variant="body2" sx={{ color: '#6b7280', mb: 1 }}>
-                  Investment Capacity
+                  Investment Capacity (80% of Surplus)
                 </Typography>
                 <Typography variant="h6" sx={{ color: '#374151', fontWeight: 700 }}>
                   {formatCurrency(monthlyInvestmentCapacity)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card sx={{ bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                <Assessment sx={{ color: '#64748b', mb: 1 }} />
+                <Typography variant="body2" sx={{ color: '#64748b', mb: 1 }}>
+                  EMI Ratio
+                </Typography>
+                <Typography variant="h6" sx={{ 
+                  color: monthlyIncome > 0 && (totalEMIs / monthlyIncome * 100) > 40 ? '#dc2626' : '#374151', 
+                  fontWeight: 700 
+                }}>
+                  {monthlyIncome > 0 ? ((totalEMIs / monthlyIncome) * 100).toFixed(1) : 0}%
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card sx={{ bgcolor: '#f0f9ff', border: '1px solid #bae6fd' }}>
+              <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                <TrendingUp sx={{ color: '#0369a1', mb: 1 }} />
+                <Typography variant="body2" sx={{ color: '#0369a1', mb: 1 }}>
+                  Savings Rate
+                </Typography>
+                <Typography variant="h6" sx={{ color: '#075985', fontWeight: 700 }}>
+                  {monthlyIncome > 0 ? ((monthlySurplus / monthlyIncome) * 100).toFixed(1) : 0}%
                 </Typography>
               </CardContent>
             </Card>
@@ -333,17 +528,28 @@ const EditableClientDataGoal = ({ clientData, onDataUpdate }) => {
         {/* Editable Financial Fields */}
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
-            {renderEditableField('totalMonthlyIncome', 'Monthly Income', monthlyIncome, true, '₹')}
+            {renderEditableField('totalMonthlyIncome', 'Monthly Income', clientData?.totalMonthlyIncome, true, '₹')}
             {renderEditableField('incomeType', 'Income Type', clientData?.incomeType)}
           </Grid>
           <Grid item xs={12} md={6}>
-            {renderEditableField('totalMonthlyExpenses', 'Monthly Expenses', monthlyExpenses, true, '₹')}
+            {renderEditableField('totalMonthlyExpenses', 'Monthly Expenses', clientData?.totalMonthlyExpenses, true, '₹')}
             <Box display="flex" alignItems="center" py={1}>
               <Typography variant="body2" sx={{ fontWeight: 500, color: '#374151', flex: 1, mr: 2 }}>
-                Savings Rate
+                Total Monthly EMIs
               </Typography>
               <Typography variant="body1" sx={{ fontWeight: 600, color: '#111827' }}>
-                {savingsRate}%
+                {formatCurrency(totalEMIs)}
+              </Typography>
+            </Box>
+            <Box display="flex" alignItems="center" py={1}>
+              <Typography variant="body2" sx={{ fontWeight: 500, color: '#374151', flex: 1, mr: 2 }}>
+                Net Monthly Surplus
+              </Typography>
+              <Typography variant="body1" sx={{ 
+                fontWeight: 600, 
+                color: monthlySurplus >= 0 ? '#16a34a' : '#dc2626' 
+              }}>
+                {formatCurrency(monthlySurplus)}
               </Typography>
             </Box>
           </Grid>
@@ -865,7 +1071,18 @@ const EditableClientDataGoal = ({ clientData, onDataUpdate }) => {
       {monthlyInvestmentCapacity <= 0 && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           <Typography variant="body2">
-            Current expenses exceed or equal income. Consider optimizing expenses before setting financial goals.
+            <strong>Insufficient surplus for investments.</strong> Current expenses and EMIs ({formatCurrency(monthlyExpenses + totalEMIs)}) 
+            exceed or equal income ({formatCurrency(monthlyIncome)}). Consider optimizing expenses or reducing EMI burden before setting financial goals.
+          </Typography>
+        </Alert>
+      )}
+
+      {/* High EMI Ratio Alert */}
+      {monthlyIncome > 0 && (totalEMIs / monthlyIncome * 100) > 40 && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          <Typography variant="body2">
+            <strong>High EMI ratio detected:</strong> Your EMIs ({formatCurrency(totalEMIs)}) constitute {((totalEMIs / monthlyIncome) * 100).toFixed(1)}% 
+            of your income, which exceeds the recommended 40% limit. Consider debt restructuring for better financial health.
           </Typography>
         </Alert>
       )}

@@ -123,4 +123,10 @@ router.put(
   planController.updateGoalStrategy
 );
 
+// Generate and download PDF report for goal-based plan
+router.get(
+  '/:planId/pdf',
+  planController.generateGoalPlanPDF
+);
+
 module.exports = router;

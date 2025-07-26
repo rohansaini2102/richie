@@ -60,6 +60,24 @@ const DebtPlanningInterface = ({ clientId, clientData, planId, onPlanUpdate }) =
     });
     
     if (clientData) {
+      // PRIORITY 1: Check localStorage first - NEVER call API if data exists
+      const cacheKey = `debt_analysis_${clientId}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          console.log('✅ [DebtPlanningInterface] Using localStorage cached debt analysis - NO API CALL');
+          setAiAnalysis(parsed.analysis);
+          setDebtStrategy(parsed.analysis.debtStrategy);
+          return; // IMPORTANT: Never proceed to API if cached data exists
+        } catch (e) {
+          console.warn('⚠️ [DebtPlanningInterface] Invalid cached data, clearing cache');
+          localStorage.removeItem(cacheKey);
+        }
+      }
+      
+      console.log('⚠️ [DebtPlanningInterface] No localStorage cache found - proceeding with API call');
       analyzeDebtStrategy();
     } else {
       console.warn('⚠️ [DebtPlanningInterface] No client data provided, skipping analysis');
@@ -89,7 +107,17 @@ const DebtPlanningInterface = ({ clientId, clientData, planId, onPlanUpdate }) =
       if (response.success) {
         setAiAnalysis(response.analysis);
         setDebtStrategy(response.analysis.debtStrategy);
-        console.log('🎯 [DebtPlanningInterface] AI analysis completed successfully');
+        
+        // Save to localStorage for future use (prevents repeated API calls)
+        const cacheKey = `debt_analysis_${clientId}`;
+        const cacheData = {
+          analysis: response.analysis,
+          timestamp: Date.now(),
+          clientId: clientId
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        
+        console.log('🎯 [DebtPlanningInterface] AI analysis completed and saved to localStorage');
       } else {
         console.error('❌ [DebtPlanningInterface] AI analysis failed:', response.error);
         setError(response.error || 'Failed to analyze debt strategy');

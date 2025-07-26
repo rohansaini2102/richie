@@ -10,7 +10,7 @@ const financialPlanSchema = new mongoose.Schema({
   },
   advisorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Advisor',
     required: true
   },
 

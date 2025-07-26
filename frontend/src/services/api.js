@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   timeout: 30000, // Increased timeout for large form submissions
   headers: {
     'Content-Type': 'application/json',
@@ -832,6 +832,73 @@ export const planAPI = {
       });
       
       // Re-throw the error so calling code can handle it
+      throw error;
+    }
+  },
+
+  // Generate goal-based plan PDF report
+  generateGoalPlanPDF: async (planId) => {
+    console.log('📄 [API] Generating goal plan PDF:', { 
+      planId,
+      endpoint: `/plans/${planId}/pdf`,
+      hasToken: !!localStorage.getItem('token')
+    });
+    
+    const startTime = Date.now();
+    
+    try {
+      console.log('📤 [API] Making PDF request to backend...');
+      
+      const response = await api.get(`/plans/${planId}/pdf`, {
+        responseType: 'blob', // Important for PDF downloads
+        headers: {
+          'Accept': 'application/pdf'
+        },
+        timeout: 60000 // 60 second timeout for PDF generation
+      });
+      
+      const duration = Date.now() - startTime;
+      
+      console.log('✅ [API] PDF generated successfully:', {
+        planId,
+        duration: duration + 'ms',
+        pdfSize: response.data.size + ' bytes',
+        contentType: response.headers['content-type'],
+        responseStatus: response.status,
+        responseHeaders: {
+          contentType: response.headers['content-type'],
+          contentLength: response.headers['content-length'],
+          contentDisposition: response.headers['content-disposition']
+        }
+      });
+      
+      return response.data; // This will be a Blob
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      console.error('❌ [API] PDF generation failed:', {
+        planId,
+        duration: duration + 'ms',
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        responseData: error.response?.data,
+        requestUrl: `/plans/${planId}/pdf`,
+        hasAuthToken: !!localStorage.getItem('token'),
+        errorCode: error.code,
+        errorType: error.constructor.name
+      });
+      
+      // Try to read error response if it's not a blob
+      if (error.response?.data && error.response.data instanceof Blob) {
+        try {
+          const errorText = await error.response.data.text();
+          console.error('❌ [API] PDF error response body:', errorText);
+        } catch (blobError) {
+          console.error('❌ [API] Could not read blob error response:', blobError);
+        }
+      }
+      
       throw error;
     }
   },
