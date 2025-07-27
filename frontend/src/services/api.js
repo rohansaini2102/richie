@@ -1306,6 +1306,49 @@ export const meetingAPI = {
     return response.data;
   },
 
+  // Recording management
+  startRecording: async (meetingId, recordingOptions = {}) => {
+    console.log('🎥 STARTING RECORDING:', { meetingId, recordingOptions });
+    
+    const response = await api.post(`/meetings/${meetingId}/recording/start`, recordingOptions);
+    
+    console.log('✅ RECORDING STARTED:', {
+      meetingId,
+      recordingId: response.data.recording?.id,
+      status: response.data.recording?.status
+    });
+    
+    return response.data;
+  },
+
+  stopRecording: async (meetingId, stoppedBy) => {
+    console.log('🛑 STOPPING RECORDING:', { meetingId, stoppedBy });
+    
+    const response = await api.post(`/meetings/${meetingId}/recording/stop`, { stoppedBy });
+    
+    console.log('✅ RECORDING STOPPED:', {
+      meetingId,
+      status: response.data.recording?.status
+    });
+    
+    return response.data;
+  },
+
+  // Check domain features
+  checkDomainFeatures: async () => {
+    console.log('🔍 CHECKING DOMAIN FEATURES');
+    
+    const response = await api.get('/meetings/features/check');
+    
+    console.log('✅ DOMAIN FEATURES:', {
+      transcriptionEnabled: response.data.features?.transcription?.enabled,
+      recordingEnabled: response.data.features?.recording?.enabled,
+      requiresUpgrade: response.data.plan?.requiresUpgrade
+    });
+    
+    return response.data;
+  },
+
   // Check meeting service health
   checkMeetingHealth: async () => {
     console.log('🏥 CHECKING MEETING SERVICE HEALTH');

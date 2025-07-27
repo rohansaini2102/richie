@@ -114,6 +114,35 @@ const meetingSchema = new mongoose.Schema({
       includeRawResponse: Boolean
     }
   },
+  recording: {
+    status: {
+      type: String,
+      enum: ['not_started', 'active', 'completed', 'error'],
+      default: 'not_started'
+    },
+    recordingId: String, // Daily.co recording ID
+    startedAt: Date,
+    stoppedAt: Date,
+    startedBy: String,
+    layout: String,
+    downloadUrl: String,
+    duration: Number, // in seconds
+    fileSize: Number, // in bytes
+    settings: {
+      recordVideo: {
+        type: Boolean,
+        default: true
+      },
+      recordAudio: {
+        type: Boolean,
+        default: true
+      },
+      recordScreen: {
+        type: Boolean,
+        default: false
+      }
+    }
+  },
   notes: {
     type: String,
     default: ''
@@ -258,6 +287,40 @@ meetingSchema.methods.addAISummary = function(summaryData) {
     aiGenerated: true,
     generatedAt: new Date()
   };
+  return this.save();
+};
+
+// Method to start recording
+meetingSchema.methods.startRecording = function(recordingData) {
+  this.recording.status = 'active';
+  this.recording.recordingId = recordingData.recordingId;
+  this.recording.startedAt = new Date();
+  this.recording.startedBy = recordingData.startedBy;
+  this.recording.layout = recordingData.layout || 'default';
+  this.recording.settings = {
+    recordVideo: recordingData.recordVideo !== false,
+    recordAudio: recordingData.recordAudio !== false,
+    recordScreen: recordingData.recordScreen || false
+  };
+  return this.save();
+};
+
+// Method to stop recording
+meetingSchema.methods.stopRecording = function(stoppedBy) {
+  this.recording.status = 'completed';
+  this.recording.stoppedAt = new Date();
+  this.recording.stoppedBy = stoppedBy;
+  if (this.recording.startedAt) {
+    this.recording.duration = Math.round((this.recording.stoppedAt - this.recording.startedAt) / 1000); // seconds
+  }
+  return this.save();
+};
+
+// Method to update recording with download info
+meetingSchema.methods.updateRecordingInfo = function(recordingInfo) {
+  this.recording.downloadUrl = recordingInfo.downloadUrl;
+  this.recording.fileSize = recordingInfo.fileSize;
+  this.recording.duration = recordingInfo.duration;
   return this.save();
 };
 

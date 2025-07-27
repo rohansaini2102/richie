@@ -26,6 +26,8 @@ const MeetingsList = ({ refreshTrigger }) => {
   const [copied, setCopied] = useState(null);
   const [selectedTranscriptMeeting, setSelectedTranscriptMeeting] = useState(null);
   const [joinedMeeting, setJoinedMeeting] = useState(null);
+  const [showDirectJoin, setShowDirectJoin] = useState(false);
+  const [directJoinUrl, setDirectJoinUrl] = useState('');
 
   useEffect(() => {
     loadMeetings();
@@ -36,16 +38,49 @@ const MeetingsList = ({ refreshTrigger }) => {
       setIsLoading(true);
       setError(null);
       
+      // Check authentication
+      const token = localStorage.getItem('token'); // Changed from 'authToken' to 'token'
+      console.log('🔐 Loading meetings - Auth check:', {
+        hasToken: !!token,
+        tokenLength: token?.length || 0,
+        filter: filter
+      });
+      
+      if (!token) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+      
       const params = {};
       if (filter !== 'all') {
         params.status = filter;
       }
       
+      console.log('📡 Calling meeting API with params:', params);
       const response = await meetingAPI.getAdvisorMeetings(params);
+      
+      console.log('✅ Meetings loaded successfully:', {
+        count: response.meetings?.length || 0,
+        meetings: response.meetings
+      });
+      
       setMeetings(response.meetings || []);
     } catch (error) {
-      console.error('Failed to load meetings:', error);
-      setError('Failed to load meetings. Please try again.');
+      console.error('❌ Failed to load meetings:', {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      
+      // Provide specific error messages
+      if (error.response?.status === 401) {
+        setError('Authentication failed. Please log in again.');
+      } else if (error.response?.status === 403) {
+        setError('You do not have permission to view meetings.');
+      } else if (error.message.includes('Not authenticated')) {
+        setError(error.message);
+      } else {
+        setError(`Failed to load meetings: ${error.message || 'Please try again.'}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -73,6 +108,12 @@ const MeetingsList = ({ refreshTrigger }) => {
   };
 
   const handleJoinMeeting = (meeting) => {
+    console.log('🚀 Joining meeting:', {
+      meetingId: meeting.id,
+      roomName: meeting.roomName,
+      advisorLink: meeting.advisorMeetingLink,
+      status: meeting.status
+    });
     setJoinedMeeting(meeting);
   };
 
@@ -142,6 +183,12 @@ const MeetingsList = ({ refreshTrigger }) => {
 
   // Render meeting room if user joined
   if (joinedMeeting) {
+    console.log('🎬 Rendering MeetingRoom with:', {
+      meetingUrl: joinedMeeting.advisorMeetingLink,
+      meetingId: joinedMeeting.id,
+      hasOnLeave: !!handleLeaveMeeting
+    });
+    
     return (
       <MeetingRoom
         meetingUrl={joinedMeeting.advisorMeetingLink}
@@ -151,7 +198,7 @@ const MeetingsList = ({ refreshTrigger }) => {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && !error) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center justify-center py-12">
@@ -199,8 +246,47 @@ const MeetingsList = ({ refreshTrigger }) => {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-700 text-sm">{error}</p>
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-red-800">Error loading meetings</h3>
+              <p className="mt-1 text-sm text-red-700">{error}</p>
+              {error.includes('Not authenticated') && (
+                <p className="mt-2 text-xs text-red-600">
+                  Token status: {localStorage.getItem('token') ? 'Found' : 'Missing'} | 
+                  User: {localStorage.getItem('user') ? 'Logged in' : 'Not logged in'}
+                </p>
+              )}
+              <div className="mt-3 flex gap-3">
+                <button
+                  onClick={loadMeetings}
+                  className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors flex items-center gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Retry
+                </button>
+                <button
+                  onClick={() => setShowDirectJoin(true)}
+                  className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition-colors"
+                >
+                  Join with Direct Link
+                </button>
+                {error.includes('Not authenticated') && (
+                  <a
+                    href="/login"
+                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                  >
+                    Go to Login
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -314,17 +400,15 @@ const MeetingsList = ({ refreshTrigger }) => {
                 
                 {/* Action Buttons */}
                 <div className="flex flex-col gap-2 ml-4">
-                  {/* Join Meeting Button */}
-                  {(meeting.status === 'scheduled' || meeting.status === 'active') && (
-                    <button
-                      onClick={() => handleJoinMeeting(meeting)}
-                      className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
-                      title="Join meeting"
-                    >
-                      <Video className="h-3 w-3" />
-                      Join
-                    </button>
-                  )}
+                  {/* Join Meeting Button - Always show for testing */}
+                  <button
+                    onClick={() => handleJoinMeeting(meeting)}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    title={`Join meeting (Status: ${meeting.status})`}
+                  >
+                    <Video className="h-4 w-4" />
+                    Join Meeting
+                  </button>
                   
                   {/* Status Control Buttons */}
                   {meeting.status === 'scheduled' && (
@@ -373,6 +457,53 @@ const MeetingsList = ({ refreshTrigger }) => {
           meetingId={selectedTranscriptMeeting}
           onClose={() => setSelectedTranscriptMeeting(null)}
         />
+      )}
+
+      {/* Direct Join Dialog */}
+      {showDirectJoin && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Join Meeting with Direct Link</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Enter a Daily.co meeting URL to join directly. This is useful if the meeting list is not loading.
+            </p>
+            <input
+              type="url"
+              value={directJoinUrl}
+              onChange={(e) => setDirectJoinUrl(e.target.value)}
+              placeholder="https://yourdomain.daily.co/meeting-room"
+              className="w-full p-2 border border-gray-300 rounded-md mb-4 focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowDirectJoin(false);
+                  setDirectJoinUrl('');
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (directJoinUrl.includes('daily.co')) {
+                    setJoinedMeeting({
+                      id: 'direct-join',
+                      advisorMeetingLink: directJoinUrl
+                    });
+                    setShowDirectJoin(false);
+                  } else {
+                    alert('Please enter a valid Daily.co meeting URL');
+                  }
+                }}
+                disabled={!directJoinUrl}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                Join Meeting
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

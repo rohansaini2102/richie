@@ -90,6 +90,25 @@ router.post('/:meetingId/transcript/summary', (req, res, next) => {
   next();
 }, meetingController.generateTranscriptSummary);
 
+// Recording management routes
+router.post('/:meetingId/recording/start', (req, res, next) => {
+  logger.info('🎥 [MeetingRoutes] Start recording request', {
+    advisorId: req.advisor?.id,
+    meetingId: req.params.meetingId,
+    recordingOptions: req.body
+  });
+  next();
+}, meetingController.startRecording);
+
+router.post('/:meetingId/recording/stop', (req, res, next) => {
+  logger.info('🛑 [MeetingRoutes] Stop recording request', {
+    advisorId: req.advisor?.id,
+    meetingId: req.params.meetingId,
+    stoppedBy: req.body?.stoppedBy
+  });
+  next();
+}, meetingController.stopRecording);
+
 // Save transcript message (for real-time transcription)
 router.post('/transcript/message', (req, res, next) => {
   logger.info('📝 [MeetingRoutes] Save transcript message request', {
@@ -100,6 +119,14 @@ router.post('/transcript/message', (req, res, next) => {
   });
   next();
 }, meetingController.saveTranscriptMessage);
+
+// Check domain features endpoint
+router.get('/features/check', (req, res, next) => {
+  logger.info('🔍 [MeetingRoutes] Check domain features request', {
+    advisorId: req.advisor?.id
+  });
+  next();
+}, meetingController.checkDomainFeatures);
 
 // Health check endpoint for meeting service
 router.get('/health/check', (req, res) => {

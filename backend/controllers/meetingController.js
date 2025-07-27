@@ -60,7 +60,7 @@ exports.createMeeting = async (req, res) => {
       dailyApiKey: DAILY_API_KEY ? 'Present' : 'Missing'
     });
 
-    // Create Daily.co room with transcription support (paid plan)
+    // Create Daily.co room with transcription support
     const roomResponse = await axios.post(
       'https://api.daily.co/v1/rooms',
       {
@@ -73,8 +73,9 @@ exports.createMeeting = async (req, res) => {
           enable_chat: true,
           start_video_off: false,
           start_audio_off: false,
-          // Enable transcription for paid plan
-          enable_transcription: true
+          // Enable transcription features
+          enable_transcription: true,
+          enable_transcription_storage: true
         }
       },
       {
@@ -723,6 +724,228 @@ exports.updateMeetingStatus = async (req, res) => {
   }
 };
 
+// Start recording for a meeting
+exports.startRecording = async (req, res) => {
+  try {
+    const { meetingId } = req.params;
+    const recordingData = req.body;
+    const advisorId = req.advisor.id;
+
+    logger.info('🎥 [MeetingController] Starting recording', {
+      meetingId,
+      advisorId,
+      recordingOptions: recordingData
+    });
+
+    const meeting = await Meeting.findOne({ 
+      _id: meetingId, 
+      advisorId 
+    });
+
+    if (!meeting) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Meeting not found' 
+      });
+    }
+
+    // Start recording via Daily.co API
+    const recordingResponse = await axios.post(
+      `https://api.daily.co/v1/rooms/${meeting.roomName}/start-recording`,
+      {
+        properties: {
+          layout: recordingData.layout || 'default',
+          record_video: recordingData.recordVideo !== false,
+          record_audio: recordingData.recordAudio !== false,
+          record_screen: recordingData.recordScreen || false
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${DAILY_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    // Update meeting with recording info
+    await meeting.startRecording({
+      recordingId: recordingResponse.data.recording_id,
+      startedBy: advisorId,
+      layout: recordingData.layout || 'default'
+    });
+
+    logger.info('✅ [MeetingController] Recording started', {
+      meetingId,
+      recordingId: recordingResponse.data.recording_id
+    });
+
+    res.json({ 
+      success: true,
+      message: 'Recording started successfully',
+      recording: {
+        id: recordingResponse.data.recording_id,
+        status: 'active',
+        startedAt: new Date()
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ [MeetingController] Error starting recording', {
+      meetingId: req.params.meetingId,
+      error: error.message,
+      apiError: error.response?.data
+    });
+
+    res.status(500).json({ 
+      success: false,
+      error: error.response?.data?.error || 'Failed to start recording' 
+    });
+  }
+};
+
+// Stop recording for a meeting
+exports.stopRecording = async (req, res) => {
+  try {
+    const { meetingId } = req.params;
+    const { stoppedBy } = req.body;
+    const advisorId = req.advisor.id;
+
+    logger.info('🛑 [MeetingController] Stopping recording', {
+      meetingId,
+      advisorId,
+      stoppedBy
+    });
+
+    const meeting = await Meeting.findOne({ 
+      _id: meetingId, 
+      advisorId 
+    });
+
+    if (!meeting) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Meeting not found' 
+      });
+    }
+
+    // Stop recording via Daily.co API
+    const recordingResponse = await axios.post(
+      `https://api.daily.co/v1/rooms/${meeting.roomName}/stop-recording`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${DAILY_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    // Update meeting with recording stop info
+    await meeting.stopRecording(stoppedBy || advisorId);
+
+    logger.info('✅ [MeetingController] Recording stopped', {
+      meetingId,
+      recordingId: meeting.recording?.recordingId
+    });
+
+    res.json({ 
+      success: true,
+      message: 'Recording stopped successfully',
+      recording: {
+        status: 'completed',
+        stoppedAt: new Date()
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ [MeetingController] Error stopping recording', {
+      meetingId: req.params.meetingId,
+      error: error.message,
+      apiError: error.response?.data
+    });
+
+    res.status(500).json({ 
+      success: false,
+      error: error.response?.data?.error || 'Failed to stop recording' 
+    });
+  }
+};
+
+// Check Daily.co domain features
+exports.checkDomainFeatures = async (req, res) => {
+  try {
+    logger.info('🔍 [MeetingController] Checking domain features', {
+      advisorId: req.advisor?.id
+    });
+
+    // Get domain configuration
+    const domainResponse = await axios.get(
+      'https://api.daily.co/v1/',
+      {
+        headers: {
+          'Authorization': `Bearer ${DAILY_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const domain = domainResponse.data;
+    
+    const features = {
+      transcription: {
+        enabled: domain.config?.enable_transcription === true,
+        storage: domain.config?.enable_transcription_storage === true
+      },
+      recording: {
+        enabled: domain.config?.enable_auto_recording !== null || 
+                 domain.config?.recordings_bucket !== null,
+        bucket: domain.config?.recordings_bucket
+      },
+      liveStreaming: {
+        enabled: domain.config?.max_live_streams > 0,
+        maxStreams: domain.config?.max_live_streams
+      },
+      chat: {
+        enabled: domain.config?.enable_chat === true,
+        advanced: domain.config?.enable_advanced_chat === true
+      },
+      breakoutRooms: {
+        enabled: domain.config?.enable_breakout_rooms === true
+      }
+    };
+
+    logger.info('✅ [MeetingController] Domain features checked', {
+      transcriptionEnabled: features.transcription.enabled,
+      recordingEnabled: features.recording.enabled,
+      domain: domain.domain_name
+    });
+
+    res.json({
+      success: true,
+      domain: domain.domain_name,
+      features,
+      plan: {
+        transcription: features.transcription.enabled,
+        recording: features.recording.enabled,
+        requiresUpgrade: !features.transcription.enabled && !features.recording.enabled
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ [MeetingController] Error checking domain features', {
+      error: error.message,
+      apiError: error.response?.data
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check domain features',
+      details: error.response?.data || error.message
+    });
+  }
+};
+
 // Helper function to create meeting tokens
 const createMeetingTokens = async (roomName, advisorId, clientId, client, requestId) => {
   try {
@@ -733,7 +956,7 @@ const createMeetingTokens = async (roomName, advisorId, clientId, client, reques
       clientId
     });
 
-    // Create advisor token (free tier compatible)
+    // Create advisor token with transcription permissions
     const advisorTokenResponse = await axios.post(
       'https://api.daily.co/v1/meeting-tokens',
       {
@@ -741,7 +964,11 @@ const createMeetingTokens = async (roomName, advisorId, clientId, client, reques
           room_name: roomName,
           user_name: 'Advisor',
           user_id: advisorId,
-          is_owner: true
+          is_owner: true,
+          // Grant transcription admin permissions to advisor
+          permissions: {
+            canAdmin: ['transcription']
+          }
         }
       },
       {
