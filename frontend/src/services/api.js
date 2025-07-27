@@ -1150,5 +1150,176 @@ export const apiUtils = {
   }
 };
 
+// Meeting Management API
+export const meetingAPI = {
+  // Create a scheduled meeting
+  createMeeting: async (meetingData) => {
+    console.log('📅 CREATING MEETING:', {
+      clientId: meetingData.clientId,
+      scheduledAt: meetingData.scheduledAt,
+      meetingType: meetingData.meetingType || 'scheduled'
+    });
+    
+    const response = await api.post('/meetings/create', meetingData);
+    
+    console.log('✅ MEETING CREATED:', {
+      meetingId: response.data.meeting?.id,
+      roomUrl: response.data.meeting?.roomUrl,
+      clientMeetingLink: response.data.meeting?.clientMeetingLink
+    });
+    
+    return response.data;
+  },
+
+  // Create an instant meeting
+  createInstantMeeting: async (clientId) => {
+    console.log('⚡ CREATING INSTANT MEETING:', { clientId });
+    
+    const response = await api.post('/meetings/instant', { clientId });
+    
+    console.log('✅ INSTANT MEETING CREATED:', {
+      meetingId: response.data.meeting?.id,
+      roomUrl: response.data.meeting?.roomUrl,
+      clientMeetingLink: response.data.meeting?.clientMeetingLink
+    });
+    
+    return response.data;
+  },
+
+  // Get all meetings for the current advisor
+  getAdvisorMeetings: async (params = {}) => {
+    const queryParams = new URLSearchParams({
+      limit: params.limit || 20,
+      status: params.status || '',
+      type: params.type || ''
+    });
+    
+    console.log('📋 FETCHING ADVISOR MEETINGS:', params);
+    
+    const response = await api.get(`/meetings/advisor?${queryParams}`);
+    
+    console.log('✅ MEETINGS FETCHED:', {
+      meetingCount: response.data.meetings?.length || 0
+    });
+    
+    return response.data;
+  },
+
+  // Get a specific meeting by ID
+  getMeetingById: async (meetingId) => {
+    console.log('🔍 FETCHING MEETING:', { meetingId });
+    
+    const response = await api.get(`/meetings/${meetingId}`);
+    
+    console.log('✅ MEETING FETCHED:', {
+      meetingId,
+      status: response.data.meeting?.status,
+      roomUrl: response.data.meeting?.roomUrl
+    });
+    
+    return response.data;
+  },
+
+  // Update meeting status
+  updateMeetingStatus: async (meetingId, status) => {
+    console.log('🔄 UPDATING MEETING STATUS:', { meetingId, status });
+    
+    const response = await api.patch(`/meetings/${meetingId}/status`, { status });
+    
+    console.log('✅ MEETING STATUS UPDATED:', { meetingId, status });
+    
+    return response.data;
+  },
+
+  // Save transcript message (for real-time transcription)
+  saveTranscriptMessage: async (transcriptData) => {
+    console.log('📝 SAVING TRANSCRIPT MESSAGE:', {
+      meetingId: transcriptData.meetingId,
+      participantName: transcriptData.participantName,
+      isFinal: transcriptData.isFinal
+    });
+    
+    const response = await api.post('/meetings/transcript/message', transcriptData);
+    
+    console.log('✅ TRANSCRIPT MESSAGE SAVED:', {
+      meetingId: transcriptData.meetingId
+    });
+    
+    return response.data;
+  },
+
+  // Start transcription for a meeting
+  startTranscription: async (meetingId, transcriptionData) => {
+    console.log('🎙️ STARTING TRANSCRIPTION:', { meetingId, transcriptionData });
+    
+    const response = await api.post(`/meetings/${meetingId}/transcription/start`, transcriptionData);
+    
+    console.log('✅ TRANSCRIPTION STARTED:', {
+      meetingId,
+      status: response.data.transcript?.status
+    });
+    
+    return response.data;
+  },
+
+  // Stop transcription for a meeting
+  stopTranscription: async (meetingId, stoppedBy) => {
+    console.log('🛑 STOPPING TRANSCRIPTION:', { meetingId, stoppedBy });
+    
+    const response = await api.post(`/meetings/${meetingId}/transcription/stop`, { stoppedBy });
+    
+    console.log('✅ TRANSCRIPTION STOPPED:', {
+      meetingId,
+      messageCount: response.data.transcript?.messageCount
+    });
+    
+    return response.data;
+  },
+
+  // Get meeting transcript
+  getMeetingTranscript: async (meetingId) => {
+    console.log('📄 GETTING MEETING TRANSCRIPT:', { meetingId });
+    
+    const response = await api.get(`/meetings/${meetingId}/transcript`);
+    
+    console.log('✅ TRANSCRIPT RETRIEVED:', {
+      meetingId,
+      transcriptStatus: response.data.transcript?.status,
+      messageCount: response.data.transcript?.realTimeMessages?.length || 0
+    });
+    
+    return response.data;
+  },
+
+  // Generate AI summary for transcript
+  generateTranscriptSummary: async (meetingId) => {
+    console.log('🤖 GENERATING TRANSCRIPT SUMMARY:', { meetingId });
+    
+    const response = await api.post(`/meetings/${meetingId}/transcript/summary`);
+    
+    console.log('✅ SUMMARY GENERATED:', {
+      meetingId,
+      keyPointsCount: response.data.summary?.keyPoints?.length || 0,
+      actionItemsCount: response.data.summary?.actionItems?.length || 0
+    });
+    
+    return response.data;
+  },
+
+  // Check meeting service health
+  checkMeetingHealth: async () => {
+    console.log('🏥 CHECKING MEETING SERVICE HEALTH');
+    
+    const response = await api.get('/meetings/health/check');
+    
+    console.log('✅ MEETING HEALTH CHECK:', {
+      status: response.data.status,
+      dailyApiConfigured: response.data.dailyApiConfigured
+    });
+    
+    return response.data;
+  }
+};
+
 // Export default API instance for custom requests
 export default api;

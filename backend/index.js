@@ -196,11 +196,12 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/plans', require('./routes/plans'));
+app.use('/api/meetings', require('./routes/meetings'));
 app.use('/api/logs', require('./routes/logging'));
 
 // Log routes initialization
 comprehensiveLogger.logSystemEvent('API_ROUTES_INITIALIZED', {
-  routes: ['/api/auth', '/api/clients', '/api/admin', '/api/plans', '/api/logs'],
+  routes: ['/api/auth', '/api/clients', '/api/admin', '/api/plans', '/api/meetings', '/api/logs'],
   timestamp: new Date().toISOString()
 });
 

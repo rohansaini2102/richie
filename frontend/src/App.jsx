@@ -13,6 +13,7 @@ import ClientOnboardingForm from './components/client/ClientOnboardingForm'
 import ClientDetailView from './components/client/ClientDetailView'
 import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
+import { MeetingsPage } from './components/meetings'
 
 function App() {
   return (
@@ -65,6 +66,7 @@ function App() {
               <Route path="/profile" element={<AdvisorProfile />} />
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/clients/:clientId" element={<ClientDetailView />} />
+              <Route path="/meetings" element={<MeetingsPage />} />
             </Route>
             
             {/* Redirect any unknown routes to home */}

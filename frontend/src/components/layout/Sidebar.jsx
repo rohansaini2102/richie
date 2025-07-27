@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Users } from 'lucide-react';
+import { Home, Users, Video } from 'lucide-react';
 
 function Sidebar() {
   const location = useLocation();
@@ -14,6 +14,11 @@ function Sidebar() {
       name: 'Clients',
       path: '/clients',
       icon: Users,
+    },
+    {
+      name: 'Meetings',
+      path: '/meetings',
+      icon: Video,
     },
   ];
 
