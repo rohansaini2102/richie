@@ -75,11 +75,8 @@ router.post(
   planController.clonePlan
 );
 
-// Export plan as PDF
-router.get(
-  '/:planId/export/pdf',
-  planController.exportPlanAsPDF
-);
+// Note: PDF export functionality moved to frontend using jsPDF
+// Route removed as PDF generation now happens client-side
 
 // AI-powered debt analysis
 router.post(
@@ -123,10 +120,45 @@ router.put(
   planController.updateGoalStrategy
 );
 
-// Generate and download PDF report for goal-based plan
+// Legacy PDF generation endpoint (deprecated - use jsPDF with storage instead)
+// router.get('/:planId/pdf', planController.generateGoalPlanPDF);
+
+// PDF Storage Management Routes
+
+// Store PDF in database
+router.post(
+  '/:planId/pdf/store',
+  planController.storePDFReport
+);
+
+// Get latest PDF report by type
 router.get(
-  '/:planId/pdf',
-  planController.generateGoalPlanPDF
+  '/:planId/pdf/latest/:reportType',
+  planController.getLatestPDFReport
+);
+
+// Get specific PDF report by ID
+router.get(
+  '/:planId/pdf/report/:reportId',
+  planController.getPDFReportById
+);
+
+// Get all PDF reports for a plan
+router.get(
+  '/:planId/pdf/all',
+  planController.getAllPDFReports
+);
+
+// Delete specific PDF report
+router.delete(
+  '/:planId/pdf/report/:reportId',
+  planController.deletePDFReport
+);
+
+// Get PDF storage statistics
+router.get(
+  '/:planId/pdf/stats',
+  planController.getPDFStorageStats
 );
 
 module.exports = router;

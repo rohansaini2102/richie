@@ -4,6 +4,7 @@ import { clientAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 import { PlanCreationModal, CashFlowPlanning, PlanHistory } from '../planning';
 import ClientLOESection from './ClientLOESection';
+import ClientPDFReportsSection from './ClientPDFReportsSection';
 import { 
   User, 
   Mail, 
@@ -194,11 +195,10 @@ function ClientDetailView() {
       clientId: plan?.clientId
     });
     
-    setSelectedPlanId(plan._id);
-    setShowCashFlowPlanning(true);
-    
-    console.log('📺 [ClientDetailView] Opening CashFlowPlanning component');
-    toast.success('Financial plan created successfully');
+    // PDF is automatically generated and opened by the planning interface
+    // No need to open CashFlowPlanning component anymore
+    console.log('📄 [ClientDetailView] Plan created - PDF auto-generated and opened');
+    toast.success('Financial plan created successfully! PDF report has been generated.');
   };
 
   const handleSelectPlan = (planId) => {
@@ -1307,6 +1307,13 @@ function ClientDetailView() {
             <PlanHistory 
               clientId={clientId} 
               onSelectPlan={handleSelectPlan}
+            />
+
+            {/* PDF Reports Section */}
+            <ClientPDFReportsSection 
+              clientId={clientId}
+              clientName={`${client?.firstName || ''} ${client?.lastName || ''}`.trim()}
+              onOpenPlanModal={() => setShowPlanModal(true)}
             />
           </div>
         </div>

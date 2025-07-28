@@ -34,7 +34,8 @@ import {
 import { calculateTotalEMIs } from '../cashflow/utils/calculations';
 import { planAPI } from '../../../services/api';
 import aiRecommendationsCache from '../../../services/aiRecommendationsCache';
-import SimplePDFGenerator from './SimplePDFGenerator';
+import GoalPlanPDFGeneratorComponent, { GoalPlanPDFGenerator } from './GoalPlanPDFGenerator';
+import axios from 'axios';
 
 const GoalPlanningInterface = ({ 
   selectedGoals, 
@@ -49,7 +50,6 @@ const GoalPlanningInterface = ({
   const [showSuccess, setShowSuccess] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [savedPlanId, setSavedPlanId] = useState(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
   const [lastAnalysisTimestamp, setLastAnalysisTimestamp] = useState(null);
   const [goalsHash, setGoalsHash] = useState(null);
   const [isPlanSaved, setIsPlanSaved] = useState(false);
@@ -310,6 +310,74 @@ const GoalPlanningInterface = ({
     console.log('🗑️ [GoalPlanningInterface] All cache cleared:', cleared + ' entries');
   };
 
+  // Store PDF in database
+  const storePDFInDatabase = async (pdfBlob, planId, clientData) => {
+    try {
+      console.log('📄 [PDF Storage] Starting storage process:', {
+        blobSize: pdfBlob.size,
+        blobType: pdfBlob.type,
+        planId: planId
+      });
+
+      // Convert blob to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise((resolve, reject) => {
+        reader.onloadend = () => {
+          console.log('📄 [PDF Storage] Base64 conversion completed');
+          resolve(reader.result);
+        };
+        reader.onerror = (error) => {
+          console.error('❌ [PDF Storage] FileReader error:', error);
+          reject(error);
+        };
+      });
+      reader.readAsDataURL(pdfBlob);
+      const base64Data = await base64Promise;
+
+      // Validate base64 data
+      if (!base64Data || !base64Data.startsWith('data:application/pdf;base64,')) {
+        throw new Error('Invalid base64 PDF data generated');
+      }
+
+      // Calculate content summary
+      const contentSummary = {
+        goalsCount: editedGoals?.length || 0,
+        totalSIPAmount: editedGoals?.reduce((sum, goal) => sum + (goal.monthlySIP || 0), 0) || 0,
+        hasRecommendations: !!recommendations
+      };
+
+      const fileName = `Goal_Plan_${clientData.firstName}_${clientData.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+      // Get auth headers
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
+      const response = await axios.post(
+        `http://localhost:5000/api/plans/${planId}/pdf/store`,
+        {
+          reportType: 'goal_based',
+          pdfData: base64Data,
+          fileName: fileName,
+          contentSummary: contentSummary
+        },
+        { headers }
+      );
+
+      if (response.data.success) {
+        console.log('✅ [PDF Storage] PDF stored successfully:', response.data.report);
+        return response.data.report;
+      } else {
+        throw new Error(response.data.error || 'Failed to store PDF');
+      }
+    } catch (error) {
+      console.error('❌ [PDF Storage] Error storing PDF:', error);
+      throw error;
+    }
+  };
+
   // Save the plan
   const handleSavePlan = async () => {
     console.log('💾 [DEBUG] Save Plan button clicked:', {
@@ -360,6 +428,50 @@ const GoalPlanningInterface = ({
           isPlanSaved: true
         });
         
+        // AUTO-GENERATE AND STORE PDF AFTER PLAN SAVE
+        try {
+          console.log('📄 [PDF Auto-Gen] Starting automatic PDF generation after plan save...');
+          
+          // Prepare data for PDF generation
+          const pdfData = {
+            clientData: clientData,
+            editedGoals: editedGoals,
+            recommendations: recommendations,
+            metrics: {
+              totalGoals: editedGoals.length,
+              totalRequiredSIP: editedGoals.reduce((sum, goal) => sum + (goal.monthlySIP || 0), 0),
+              availableSurplus: (clientData.totalMonthlyIncome || 0) - (clientData.totalMonthlyExpenses || 0),
+              feasible: true
+            },
+            cacheInfo: {
+              planId: newPlanId,
+              planType: 'goal_based',
+              generatedAt: new Date()
+            }
+          };
+
+          // Generate PDF using frontend generator
+          const generator = new GoalPlanPDFGenerator();
+          const doc = generator.generatePDF(pdfData);
+          
+          // Get PDF as blob
+          const pdfBlob = doc.output('blob');
+          console.log('📄 [PDF Auto-Gen] PDF generated, storing in database...');
+          
+          // Store PDF in database
+          await storePDFInDatabase(pdfBlob, newPlanId, clientData);
+          
+          // Open PDF in new tab
+          const pdfURL = URL.createObjectURL(pdfBlob);
+          window.open(pdfURL, '_blank');
+          setTimeout(() => URL.revokeObjectURL(pdfURL), 100);
+          
+          console.log('✅ [PDF Auto-Gen] PDF generated, stored, and opened successfully');
+        } catch (pdfError) {
+          console.error('❌ [PDF Auto-Gen] Error generating PDF after plan save:', pdfError);
+          // Don't fail the entire save process if PDF generation fails
+        }
+        
         if (onSave) {
           onSave(response.plan);
         }
@@ -404,103 +516,6 @@ const GoalPlanningInterface = ({
     };
   };
 
-  // PDF Generation Functions
-  const handleViewPDF = async () => {
-    console.log('🎯 [DEBUG] View PDF button clicked:', {
-      savedPlanId,
-      hasSavedPlanId: !!savedPlanId,
-      clientId: clientData?._id,
-      pdfLoading
-    });
-
-    if (!savedPlanId) {
-      console.error('❌ [DEBUG] No saved plan ID available for PDF generation');
-      setError('Please save the plan first to generate PDF report');
-      return;
-    }
-
-    setPdfLoading(true);
-    try {
-      console.log('📤 [DEBUG] Calling PDF API with plan ID:', savedPlanId);
-      const pdfBlob = await planAPI.generateGoalPlanPDF(savedPlanId);
-      
-      console.log('✅ [DEBUG] PDF blob received:', {
-        blobSize: pdfBlob.size,
-        blobType: pdfBlob.type
-      });
-      
-      // Create a blob URL and open in new tab
-      const pdfURL = window.URL.createObjectURL(pdfBlob);
-      window.open(pdfURL, '_blank');
-      
-      // Clean up the URL after a delay
-      setTimeout(() => window.URL.revokeObjectURL(pdfURL), 100);
-    } catch (err) {
-      console.error('❌ [DEBUG] Error viewing PDF:', {
-        error: err.message,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        responseData: err.response?.data,
-        savedPlanId
-      });
-      setError('Failed to generate PDF report. Please try again.');
-    } finally {
-      setPdfLoading(false);
-    }
-  };
-
-  const handleDownloadPDF = async () => {
-    console.log('🎯 [DEBUG] Download PDF button clicked:', {
-      savedPlanId,
-      hasSavedPlanId: !!savedPlanId,
-      clientId: clientData?._id,
-      clientName: `${clientData?.firstName}_${clientData?.lastName}`,
-      pdfLoading
-    });
-
-    if (!savedPlanId) {
-      console.error('❌ [DEBUG] No saved plan ID available for PDF download');
-      setError('Please save the plan first to download PDF report');
-      return;
-    }
-
-    setPdfLoading(true);
-    try {
-      console.log('📤 [DEBUG] Calling PDF API for download with plan ID:', savedPlanId);
-      const pdfBlob = await planAPI.generateGoalPlanPDF(savedPlanId);
-      
-      console.log('✅ [DEBUG] PDF blob received for download:', {
-        blobSize: pdfBlob.size,
-        blobType: pdfBlob.type
-      });
-      
-      // Create download link
-      const pdfURL = window.URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      const fileName = `Goal_Plan_Report_${clientData.firstName}_${clientData.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
-      link.href = pdfURL;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      console.log('✅ [DEBUG] PDF download initiated:', fileName);
-      
-      // Clean up the URL
-      window.URL.revokeObjectURL(pdfURL);
-    } catch (err) {
-      console.error('❌ [DEBUG] Error downloading PDF:', {
-        error: err.message,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        responseData: err.response?.data,
-        savedPlanId
-      });
-      setError('Failed to download PDF report. Please try again.');
-    } finally {
-      setPdfLoading(false);
-    }
-  };
 
   const metrics = calculateSummaryMetrics();
 
@@ -551,39 +566,6 @@ const GoalPlanningInterface = ({
               Save Plan
             </Button>
             
-            <Button
-              variant="outlined"
-              startIcon={pdfLoading ? <CircularProgress size={16} /> : <ViewIcon />}
-              onClick={handleViewPDF}
-              disabled={!savedPlanId || pdfLoading}
-              sx={{ 
-                borderColor: '#2563eb',
-                color: '#2563eb',
-                '&:hover': {
-                  borderColor: '#1d4ed8',
-                  bgcolor: '#eff6ff'
-                }
-              }}
-            >
-              {pdfLoading ? 'Generating...' : 'View Report'}
-            </Button>
-            
-            <Button
-              variant="outlined"
-              startIcon={pdfLoading ? <CircularProgress size={16} /> : <DownloadIcon />}
-              onClick={handleDownloadPDF}
-              disabled={!savedPlanId || pdfLoading}
-              sx={{ 
-                borderColor: '#059669',
-                color: '#059669',
-                '&:hover': {
-                  borderColor: '#047857',
-                  bgcolor: '#f0fdf4'
-                }
-              }}
-            >
-              {pdfLoading ? 'Generating...' : 'Download PDF'}
-            </Button>
           </Box>
         </Box>
       </Paper>
@@ -716,13 +698,15 @@ const GoalPlanningInterface = ({
         </Paper>
       </Box>
 
-      {/* Simple PDF Generator - No Dependencies */}
+      {/* Enhanced jsPDF Generator with Database Storage */}
       <Box sx={{ mx: 2, mb: 2 }}>
-        <SimplePDFGenerator
+        <GoalPlanPDFGeneratorComponent
           clientData={clientData}
           editedGoals={editedGoals}
           recommendations={recommendations}
           metrics={metrics}
+          cacheInfo={cacheInfo}
+          planId={savedPlanId}
           disabled={loading}
         />
       </Box>

@@ -121,6 +121,129 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
     }
   }, [planId, clientId]);
 
+  // Utility functions with enhanced validation
+  const calculateTotalEMIs = (debts) => {
+    if (!debts || typeof debts !== 'object') {
+      console.warn('Invalid debts object provided to calculateTotalEMIs:', debts);
+      return 0;
+    }
+    
+    let total = 0;
+    const debtTypes = ['homeLoan', 'personalLoan', 'carLoan', 'educationLoan', 'creditCards', 'businessLoan', 'goldLoan', 'otherLoans'];
+    
+    debtTypes.forEach(type => {
+      const debt = debts[type];
+      if (debt && (debt.hasLoan || debt.hasDebt)) {
+        const emi = parseFloat(debt.monthlyEMI) || parseFloat(debt.monthlyPayment) || 0;
+        if (emi > 0) {
+          total += emi;
+        }
+      }
+    });
+    
+    return Math.max(0, total); // Ensure non-negative
+  };
+
+  const calculateFinancialHealthScore = (metrics) => {
+    if (!metrics || typeof metrics !== 'object') {
+      console.warn('Invalid metrics provided to calculateFinancialHealthScore:', metrics);
+      return 0;
+    }
+
+    let score = 0;
+    const maxScore = 10;
+    
+    // Ensure all metrics have valid values
+    const monthlyIncome = parseFloat(metrics.monthlyIncome) || 0;
+    const monthlyExpenses = parseFloat(metrics.monthlyExpenses) || 0;
+    const emiRatio = parseFloat(metrics.emiRatio) || 0;
+    const savingsRate = parseFloat(metrics.savingsRate) || 0;
+
+    // Income stability (2 points)
+    if (monthlyIncome > 0) score += 2;
+
+    // Expense management (2 points) - only calculate if income > 0
+    if (monthlyIncome > 0) {
+      const expenseRatio = monthlyExpenses / monthlyIncome;
+      if (expenseRatio < 0.5) score += 2;
+      else if (expenseRatio < 0.7) score += 1;
+    }
+
+    // Debt management (3 points)
+    if (emiRatio === 0) score += 3;
+    else if (emiRatio < 30) score += 2;
+    else if (emiRatio < 40) score += 1;
+
+    // Savings (2 points)
+    if (savingsRate > 20) score += 2;
+    else if (savingsRate > 10) score += 1;
+
+    // Emergency fund (1 point)
+    if (metrics.hasEmergencyFund) score += 1;
+
+    return Math.min(Math.max(score, 0), maxScore); // Ensure between 0 and 10
+  };
+
+  const prioritizeDebts = (debts) => {
+    if (!debts || typeof debts !== 'object') {
+      console.warn('Invalid debts object provided to prioritizeDebts:', debts);
+      return [];
+    }
+    
+    const debtList = [];
+    const debtTypes = {
+      'creditCards': 'Credit Card',
+      'personalLoan': 'Personal Loan',
+      'businessLoan': 'Business Loan',
+      'carLoan': 'Car Loan',
+      'educationLoan': 'Education Loan',
+      'goldLoan': 'Gold Loan',
+      'homeLoan': 'Home Loan',
+      'otherLoans': 'Other Loans'
+    };
+
+    Object.entries(debtTypes).forEach(([key, name]) => {
+      const debt = debts[key];
+      if (debt && (debt.hasLoan || debt.hasDebt)) {
+        const outstandingAmount = parseFloat(debt.outstandingAmount) || parseFloat(debt.totalOutstanding) || 0;
+        const currentEMI = parseFloat(debt.monthlyEMI) || parseFloat(debt.monthlyPayment) || 0;
+        const interestRate = parseFloat(debt.interestRate) || parseFloat(debt.averageInterestRate) || 0;
+        
+        // Only include debts with positive outstanding amount
+        if (outstandingAmount > 0) {
+          debtList.push({
+            debtType: name,
+            outstandingAmount,
+            currentEMI,
+            recommendedEMI: currentEMI,
+            interestRate,
+            priorityRank: 0,
+            reason: '',
+            projectedSavings: 0,
+            revisedTenure: parseFloat(debt.remainingTenure) || 0
+          });
+        }
+      }
+    });
+
+    // Sort by interest rate (highest first)
+    debtList.sort((a, b) => b.interestRate - a.interestRate);
+
+    // Assign priority ranks and reasons
+    debtList.forEach((debt, index) => {
+      debt.priorityRank = index + 1;
+      if (debt.interestRate >= 15) {
+        debt.reason = 'High interest rate - Priority repayment recommended';
+      } else if (debt.interestRate >= 10) {
+        debt.reason = 'Moderate interest rate - Standard repayment';
+      } else {
+        debt.reason = 'Low interest rate - Maintain minimum payment';
+      }
+    });
+
+    return debtList;
+  };
+
   // Calculate financial metrics whenever client data changes
   const financialMetrics = useMemo(() => {
     console.log('🧮 [Financial Metrics] Calculating with editedClient:', {
@@ -696,128 +819,6 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
     }
   };
 
-  // Utility functions with enhanced validation
-  const calculateTotalEMIs = (debts) => {
-    if (!debts || typeof debts !== 'object') {
-      console.warn('Invalid debts object provided to calculateTotalEMIs:', debts);
-      return 0;
-    }
-    
-    let total = 0;
-    const debtTypes = ['homeLoan', 'personalLoan', 'carLoan', 'educationLoan', 'creditCards', 'businessLoan', 'goldLoan', 'otherLoans'];
-    
-    debtTypes.forEach(type => {
-      const debt = debts[type];
-      if (debt && (debt.hasLoan || debt.hasDebt)) {
-        const emi = parseFloat(debt.monthlyEMI) || parseFloat(debt.monthlyPayment) || 0;
-        if (emi > 0) {
-          total += emi;
-        }
-      }
-    });
-    
-    return Math.max(0, total); // Ensure non-negative
-  };
-
-  const calculateFinancialHealthScore = (metrics) => {
-    if (!metrics || typeof metrics !== 'object') {
-      console.warn('Invalid metrics provided to calculateFinancialHealthScore:', metrics);
-      return 0;
-    }
-
-    let score = 0;
-    const maxScore = 10;
-    
-    // Ensure all metrics have valid values
-    const monthlyIncome = parseFloat(metrics.monthlyIncome) || 0;
-    const monthlyExpenses = parseFloat(metrics.monthlyExpenses) || 0;
-    const emiRatio = parseFloat(metrics.emiRatio) || 0;
-    const savingsRate = parseFloat(metrics.savingsRate) || 0;
-
-    // Income stability (2 points)
-    if (monthlyIncome > 0) score += 2;
-
-    // Expense management (2 points) - only calculate if income > 0
-    if (monthlyIncome > 0) {
-      const expenseRatio = monthlyExpenses / monthlyIncome;
-      if (expenseRatio < 0.5) score += 2;
-      else if (expenseRatio < 0.7) score += 1;
-    }
-
-    // Debt management (3 points)
-    if (emiRatio === 0) score += 3;
-    else if (emiRatio < 30) score += 2;
-    else if (emiRatio < 40) score += 1;
-
-    // Savings (2 points)
-    if (savingsRate > 20) score += 2;
-    else if (savingsRate > 10) score += 1;
-
-    // Emergency fund (1 point)
-    if (metrics.hasEmergencyFund) score += 1;
-
-    return Math.min(Math.max(score, 0), maxScore); // Ensure between 0 and 10
-  };
-
-  const prioritizeDebts = (debts) => {
-    if (!debts || typeof debts !== 'object') {
-      console.warn('Invalid debts object provided to prioritizeDebts:', debts);
-      return [];
-    }
-    
-    const debtList = [];
-    const debtTypes = {
-      'creditCards': 'Credit Card',
-      'personalLoan': 'Personal Loan',
-      'businessLoan': 'Business Loan',
-      'carLoan': 'Car Loan',
-      'educationLoan': 'Education Loan',
-      'goldLoan': 'Gold Loan',
-      'homeLoan': 'Home Loan',
-      'otherLoans': 'Other Loans'
-    };
-
-    Object.entries(debtTypes).forEach(([key, name]) => {
-      const debt = debts[key];
-      if (debt && (debt.hasLoan || debt.hasDebt)) {
-        const outstandingAmount = parseFloat(debt.outstandingAmount) || parseFloat(debt.totalOutstanding) || 0;
-        const currentEMI = parseFloat(debt.monthlyEMI) || parseFloat(debt.monthlyPayment) || 0;
-        const interestRate = parseFloat(debt.interestRate) || parseFloat(debt.averageInterestRate) || 0;
-        
-        // Only include debts with positive outstanding amount
-        if (outstandingAmount > 0) {
-          debtList.push({
-            debtType: name,
-            outstandingAmount,
-            currentEMI,
-            recommendedEMI: currentEMI,
-            interestRate,
-            priorityRank: 0,
-            reason: '',
-            projectedSavings: 0,
-            revisedTenure: parseFloat(debt.remainingTenure) || 0
-          });
-        }
-      }
-    });
-
-    // Sort by interest rate (highest first)
-    debtList.sort((a, b) => b.interestRate - a.interestRate);
-
-    // Assign priority ranks and reasons
-    debtList.forEach((debt, index) => {
-      debt.priorityRank = index + 1;
-      if (debt.interestRate >= 15) {
-        debt.reason = 'High interest rate - Priority repayment recommended';
-      } else if (debt.interestRate >= 10) {
-        debt.reason = 'Moderate interest rate - Standard repayment';
-      } else {
-        debt.reason = 'Low interest rate - Maintain minimum payment';
-      }
-    });
-
-    return debtList;
-  };
 
   const addCustomVariable = () => {
     if (newCustomVariable.name && newCustomVariable.value) {

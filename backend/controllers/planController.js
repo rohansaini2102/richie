@@ -588,32 +588,8 @@ exports.clonePlan = async (req, res) => {
   }
 };
 
-// Export plan as PDF (placeholder - implement with PDF library)
-exports.exportPlanAsPDF = async (req, res) => {
-  try {
-    const { planId } = req.params;
-    const advisorId = req.advisor.id;
-
-    const plan = await FinancialPlan.findOne({ _id: planId, advisorId })
-      .populate('clientId')
-      .populate('advisorId');
-
-    if (!plan) {
-      return res.status(404).json({ error: 'Plan not found' });
-    }
-
-    // TODO: Implement PDF generation
-    // For now, return a message
-    res.json({ 
-      success: true, 
-      message: 'PDF export functionality to be implemented',
-      planId: plan._id
-    });
-  } catch (error) {
-    logger.error('Error exporting plan as PDF:', error);
-    res.status(500).json({ error: 'Failed to export plan' });
-  }
-};
+// Note: PDF export functionality has been moved to frontend using jsPDF
+// This endpoint is no longer needed as PDF generation now happens client-side
 
 // Helper function to initialize cash flow plan
 function initializeCashFlowPlan(client) {
@@ -1838,6 +1814,414 @@ exports.generateGoalPlanPDF = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to generate PDF report: ' + error.message
+    });
+  }
+};
+
+// PDF Storage Management Methods
+
+// Store PDF in database
+exports.storePDFReport = async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const { reportType, pdfData, fileName, contentSummary } = req.body;
+
+    console.log('📄 [PDF Storage] Storing PDF report:', {
+      planId,
+      reportType,
+      fileName,
+      dataSize: pdfData?.length || 0,
+      advisorId: req.advisor.id
+    });
+
+    // Validate required fields
+    if (!reportType || !pdfData || !fileName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: reportType, pdfData, fileName'
+      });
+    }
+
+    // Find the plan
+    const plan = await FinancialPlan.findById(planId);
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found'
+      });
+    }
+
+    // Verify ownership
+    if (plan.advisorId.toString() !== req.advisor.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: Plan belongs to different advisor'
+      });
+    }
+
+    // Convert base64 PDF data to Buffer
+    let pdfBuffer;
+    try {
+      // Remove data URL prefix if present
+      const base64Data = pdfData.replace(/^data:application\/pdf;base64,/, '');
+      pdfBuffer = Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid PDF data format'
+      });
+    }
+
+    // Add PDF report to plan
+    const pdfReport = plan.addPDFReport(pdfBuffer, {
+      reportType,
+      fileName,
+      generatedBy: req.advisor.id,
+      clientId: plan.clientId,
+      generationMethod: 'frontend_jspdf',
+      contentSummary: contentSummary || {}
+    });
+
+    // Save the plan
+    await plan.save();
+
+    console.log('✅ [PDF Storage] PDF report stored successfully:', {
+      planId,
+      reportId: pdfReport._id,
+      version: pdfReport.version,
+      fileSize: pdfReport.fileSize
+    });
+
+    res.json({
+      success: true,
+      message: 'PDF report stored successfully',
+      report: {
+        id: pdfReport._id,
+        reportType: pdfReport.reportType,
+        version: pdfReport.version,
+        generatedAt: pdfReport.generatedAt,
+        fileName: pdfReport.fileName,
+        fileSize: pdfReport.fileSize
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [PDF Storage] Error storing PDF:', error);
+    logger.error('Failed to store PDF report', {
+      error: error.message,
+      planId: req.params.planId,
+      advisorId: req.user?._id
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to store PDF report: ' + error.message
+    });
+  }
+};
+
+// Get latest PDF report by type
+exports.getLatestPDFReport = async (req, res) => {
+  try {
+    const { planId, reportType } = req.params;
+
+    console.log('📄 [PDF Retrieval] Getting latest PDF:', {
+      planId,
+      reportType,
+      advisorId: req.advisor.id
+    });
+
+    const plan = await FinancialPlan.findById(planId);
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found'
+      });
+    }
+
+    // Verify ownership
+    if (plan.advisorId.toString() !== req.advisor.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: Plan belongs to different advisor'
+      });
+    }
+
+    const latestReport = plan.getLatestPDFReport(reportType);
+    if (!latestReport) {
+      return res.status(404).json({
+        success: false,
+        error: `No PDF reports found for type: ${reportType}`
+      });
+    }
+
+    // Set headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${latestReport.fileName}"`);
+    res.setHeader('Content-Length', latestReport.fileSize);
+
+    console.log('✅ [PDF Retrieval] Sending latest PDF:', {
+      reportId: latestReport._id,
+      version: latestReport.version,
+      fileSize: latestReport.fileSize
+    });
+
+    res.send(latestReport.pdfData);
+
+  } catch (error) {
+    console.error('❌ [PDF Retrieval] Error getting latest PDF:', error);
+    logger.error('Failed to get latest PDF report', {
+      error: error.message,
+      planId: req.params.planId,
+      reportType: req.params.reportType
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve PDF report: ' + error.message
+    });
+  }
+};
+
+// Get specific PDF report by ID
+exports.getPDFReportById = async (req, res) => {
+  try {
+    const { planId, reportId } = req.params;
+
+    console.log('📄 [PDF Retrieval] Getting PDF by ID:', {
+      planId,
+      reportId,
+      advisorId: req.advisor.id
+    });
+
+    const plan = await FinancialPlan.findById(planId);
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found'
+      });
+    }
+
+    // Verify ownership
+    if (plan.advisorId.toString() !== req.advisor.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: Plan belongs to different advisor'
+      });
+    }
+
+    const report = plan.getPDFReportById(reportId);
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'PDF report not found'
+      });
+    }
+
+    // Set headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${report.fileName}"`);
+    res.setHeader('Content-Length', report.fileSize);
+
+    console.log('✅ [PDF Retrieval] Sending PDF by ID:', {
+      reportId: report._id,
+      version: report.version,
+      fileSize: report.fileSize
+    });
+
+    res.send(report.pdfData);
+
+  } catch (error) {
+    console.error('❌ [PDF Retrieval] Error getting PDF by ID:', error);
+    logger.error('Failed to get PDF report by ID', {
+      error: error.message,
+      planId: req.params.planId,
+      reportId: req.params.reportId
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve PDF report: ' + error.message
+    });
+  }
+};
+
+// Get all PDF reports for a plan
+exports.getAllPDFReports = async (req, res) => {
+  try {
+    const { planId } = req.params;
+
+    console.log('📄 [PDF List] Getting all PDFs for plan:', {
+      planId,
+      advisorId: req.advisor.id
+    });
+
+    const plan = await FinancialPlan.findById(planId);
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found'
+      });
+    }
+
+    // Verify ownership
+    if (plan.advisorId.toString() !== req.advisor.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: Plan belongs to different advisor'
+      });
+    }
+
+    // Return PDF metadata without binary data
+    const pdfReports = plan.pdfReports.map(report => ({
+      id: report._id,
+      reportType: report.reportType,
+      version: report.version,
+      generatedAt: report.generatedAt,
+      fileName: report.fileName,
+      fileSize: report.fileSize,
+      metadata: report.metadata
+    }));
+
+    console.log('✅ [PDF List] Retrieved PDF list:', {
+      planId,
+      count: pdfReports.length
+    });
+
+    res.json({
+      success: true,
+      reports: pdfReports,
+      totalCount: pdfReports.length
+    });
+
+  } catch (error) {
+    console.error('❌ [PDF List] Error getting PDF list:', error);
+    logger.error('Failed to get PDF reports list', {
+      error: error.message,
+      planId: req.params.planId
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve PDF reports: ' + error.message
+    });
+  }
+};
+
+// Delete specific PDF report
+exports.deletePDFReport = async (req, res) => {
+  try {
+    const { planId, reportId } = req.params;
+
+    console.log('📄 [PDF Delete] Deleting PDF report:', {
+      planId,
+      reportId,
+      advisorId: req.advisor.id
+    });
+
+    const plan = await FinancialPlan.findById(planId);
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found'
+      });
+    }
+
+    // Verify ownership
+    if (plan.advisorId.toString() !== req.advisor.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: Plan belongs to different advisor'
+      });
+    }
+
+    const deletedReport = plan.deletePDFReport(reportId);
+    if (!deletedReport) {
+      return res.status(404).json({
+        success: false,
+        error: 'PDF report not found'
+      });
+    }
+
+    await plan.save();
+
+    console.log('✅ [PDF Delete] PDF report deleted:', {
+      reportId: deletedReport._id,
+      fileName: deletedReport.fileName,
+      fileSize: deletedReport.fileSize
+    });
+
+    res.json({
+      success: true,
+      message: 'PDF report deleted successfully',
+      deletedReport: {
+        id: deletedReport._id,
+        fileName: deletedReport.fileName,
+        reportType: deletedReport.reportType,
+        version: deletedReport.version
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [PDF Delete] Error deleting PDF:', error);
+    logger.error('Failed to delete PDF report', {
+      error: error.message,
+      planId: req.params.planId,
+      reportId: req.params.reportId
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete PDF report: ' + error.message
+    });
+  }
+};
+
+// Get PDF storage statistics
+exports.getPDFStorageStats = async (req, res) => {
+  try {
+    const { planId } = req.params;
+
+    console.log('📄 [PDF Stats] Getting storage stats:', {
+      planId,
+      advisorId: req.advisor.id
+    });
+
+    const plan = await FinancialPlan.findById(planId);
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found'
+      });
+    }
+
+    // Verify ownership
+    if (plan.advisorId.toString() !== req.advisor.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: Plan belongs to different advisor'
+      });
+    }
+
+    const stats = plan.getPDFStorageStats();
+
+    console.log('✅ [PDF Stats] Retrieved storage stats:', stats);
+
+    res.json({
+      success: true,
+      stats: stats
+    });
+
+  } catch (error) {
+    console.error('❌ [PDF Stats] Error getting storage stats:', error);
+    logger.error('Failed to get PDF storage stats', {
+      error: error.message,
+      planId: req.params.planId
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve storage stats: ' + error.message
     });
   }
 };

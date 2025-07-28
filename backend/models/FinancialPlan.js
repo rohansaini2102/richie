@@ -271,6 +271,62 @@ const financialPlanSchema = new mongoose.Schema({
     description: String,
     previousValue: mongoose.Schema.Types.Mixed,
     newValue: mongoose.Schema.Types.Mixed
+  }],
+
+  // PDF Reports Storage
+  pdfReports: [{
+    reportType: {
+      type: String,
+      enum: ['goal_based', 'cash_flow', 'hybrid'],
+      required: true
+    },
+    generatedAt: {
+      type: Date,
+      default: Date.now,
+      required: true
+    },
+    version: {
+      type: Number,
+      default: 1
+    },
+    pdfData: {
+      type: Buffer,
+      required: true
+    },
+    fileSize: {
+      type: Number,
+      required: true
+    },
+    fileName: {
+      type: String,
+      required: true
+    },
+    metadata: {
+      generatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Advisor',
+        required: true
+      },
+      clientId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Client',
+        required: true
+      },
+      planVersion: {
+        type: Number,
+        default: 1
+      },
+      generationMethod: {
+        type: String,
+        enum: ['frontend_jspdf', 'backend_pdflib'],
+        default: 'frontend_jspdf'
+      },
+      contentSummary: {
+        goalsCount: Number,
+        totalSIPAmount: Number,
+        hasRecommendations: Boolean
+      }
+    }
   }]
 }, {
   timestamps: true
@@ -281,6 +337,7 @@ financialPlanSchema.index({ clientId: 1, status: 1 });
 financialPlanSchema.index({ advisorId: 1, status: 1 });
 financialPlanSchema.index({ planType: 1, status: 1 });
 financialPlanSchema.index({ 'reviewSchedule.nextReviewDate': 1 });
+financialPlanSchema.index({ 'pdfReports.reportType': 1, 'pdfReports.version': -1 });
 
 // Virtual for calculating plan age
 financialPlanSchema.virtual('planAge').get(function() {
@@ -435,6 +492,89 @@ financialPlanSchema.methods.addChangeHistory = function(changeData) {
     previousValue: changeData.previousValue,
     newValue: changeData.newValue
   });
+};
+
+// Method to add PDF report
+financialPlanSchema.methods.addPDFReport = function(pdfData, metadata) {
+  const version = this.pdfReports.filter(report => 
+    report.reportType === metadata.reportType
+  ).length + 1;
+
+  const pdfReport = {
+    reportType: metadata.reportType,
+    generatedAt: new Date(),
+    version: version,
+    pdfData: pdfData,
+    fileSize: pdfData.length,
+    fileName: metadata.fileName || `${metadata.reportType}_plan_v${version}.pdf`,
+    metadata: {
+      generatedBy: metadata.generatedBy,
+      clientId: metadata.clientId,
+      planVersion: this.version,
+      generationMethod: metadata.generationMethod || 'frontend_jspdf',
+      contentSummary: metadata.contentSummary || {}
+    }
+  };
+
+  this.pdfReports.push(pdfReport);
+  return pdfReport;
+};
+
+// Method to get latest PDF report by type
+financialPlanSchema.methods.getLatestPDFReport = function(reportType) {
+  const reports = this.pdfReports.filter(report => 
+    report.reportType === reportType
+  );
+  
+  if (reports.length === 0) return null;
+  
+  return reports.reduce((latest, current) => 
+    current.version > latest.version ? current : latest
+  );
+};
+
+// Method to get PDF report by ID
+financialPlanSchema.methods.getPDFReportById = function(reportId) {
+  return this.pdfReports.find(report => 
+    report._id.toString() === reportId.toString()
+  );
+};
+
+// Method to delete PDF report
+financialPlanSchema.methods.deletePDFReport = function(reportId) {
+  const index = this.pdfReports.findIndex(report => 
+    report._id.toString() === reportId.toString()
+  );
+  
+  if (index !== -1) {
+    const deletedReport = this.pdfReports[index];
+    this.pdfReports.splice(index, 1);
+    return deletedReport;
+  }
+  
+  return null;
+};
+
+// Method to get PDF storage statistics
+financialPlanSchema.methods.getPDFStorageStats = function() {
+  const totalSize = this.pdfReports.reduce((sum, report) => sum + report.fileSize, 0);
+  const reportsByType = {};
+  
+  this.pdfReports.forEach(report => {
+    if (!reportsByType[report.reportType]) {
+      reportsByType[report.reportType] = 0;
+    }
+    reportsByType[report.reportType]++;
+  });
+  
+  return {
+    totalReports: this.pdfReports.length,
+    totalSize: totalSize,
+    totalSizeMB: Math.round((totalSize / (1024 * 1024)) * 100) / 100,
+    reportsByType: reportsByType,
+    latestReport: this.pdfReports.length > 0 ? 
+      this.pdfReports[this.pdfReports.length - 1].generatedAt : null
+  };
 };
 
 // Pre-save middleware to update version on changes

@@ -666,18 +666,8 @@ export const planAPI = {
     return response.data;
   },
 
-  // Export plan as PDF
-  exportPlanAsPDF: async (planId) => {
-    console.log('📄 EXPORTING PLAN AS PDF:', { planId });
-    
-    const response = await api.get(`/plans/${planId}/export/pdf`, {
-      responseType: 'blob'
-    });
-    
-    console.log('✅ PLAN PDF EXPORTED:', { planId });
-    
-    return response.data;
-  },
+  // Note: PDF export functionality moved to frontend using jsPDF
+  // This method is deprecated - PDF generation now happens client-side in PlanHistory component
 
   // AI-powered debt analysis
   analyzeDebt: async (clientId, clientData) => {
