@@ -17,7 +17,7 @@ const financialPlanSchema = new mongoose.Schema({
   // Plan metadata
   planType: {
     type: String,
-    enum: ['cash_flow', 'goal_based', 'hybrid'],
+    enum: ['cash_flow', 'goal_based', 'hybrid', 'adaptive'],
     required: true,
     default: 'cash_flow'
   },

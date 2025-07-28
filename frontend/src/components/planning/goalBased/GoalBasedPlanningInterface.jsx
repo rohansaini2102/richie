@@ -319,7 +319,7 @@ const GoalBasedPlanningInterface = ({
   // Enhanced loading state with skeleton
   if (loading) {
     return (
-      <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
+      <Box sx={{ maxWidth: 1800, mx: 'auto', p: 5, minHeight: '90vh' }}>
         {/* Header Skeleton */}
         <Box sx={{ mb: 4 }}>
           <Skeleton variant="text" width={400} height={40} sx={{ mb: 1 }} />
@@ -360,7 +360,7 @@ const GoalBasedPlanningInterface = ({
   if (!clientData && !clientId) {
     return (
       <ErrorBoundary onGoBack={onCancel}>
-        <Box sx={{ maxWidth: 800, mx: 'auto', p: 3 }}>
+        <Box sx={{ maxWidth: 1000, mx: 'auto', p: 4 }}>
           <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="h6" sx={{ color: '#dc2626', mb: 2 }}>
               ⚠️ Missing Client Information
@@ -389,7 +389,7 @@ const GoalBasedPlanningInterface = ({
       }}
       onGoBack={onCancel}
     >
-      <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3 }}>
+      <Box sx={{ maxWidth: 1800, mx: 'auto', p: 5, minHeight: '90vh' }}>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#111827', mb: 1 }}>
@@ -401,7 +401,7 @@ const GoalBasedPlanningInterface = ({
         </Box>
 
       {/* Progress Stepper */}
-      <Paper sx={{ p: 3, mb: 4 }}>
+      <Paper sx={{ p: 4, mb: 5 }}>
         <Stepper activeStep={currentStep} alternativeLabel>
           {steps.map((label, index) => (
             <Step key={label}>
@@ -415,7 +415,7 @@ const GoalBasedPlanningInterface = ({
       {clientData && (() => {
         const validation = validateClientDataForGoalPlanning(clientData);
         return (
-          <Paper sx={{ p: 2, mb: 3, bgcolor: validation.canProceed ? '#f0fdf4' : '#fef3c7', border: `1px solid ${validation.canProceed ? '#bbf7d0' : '#fcd34d'}` }}>
+          <Paper sx={{ p: 3, mb: 4, bgcolor: validation.canProceed ? '#f0fdf4' : '#fef3c7', border: `1px solid ${validation.canProceed ? '#bbf7d0' : '#fcd34d'}` }}>
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
               📊 Data Quality Assessment
             </Typography>
@@ -458,7 +458,7 @@ const GoalBasedPlanningInterface = ({
         <Fade in={!!error}>
           <Alert 
             severity="error" 
-            sx={{ mb: 3 }} 
+            sx={{ mb: 4 }} 
             onClose={() => setError('')}
             variant="filled"
           >
@@ -475,7 +475,7 @@ const GoalBasedPlanningInterface = ({
         <Fade in={validationErrors.length > 0}>
           <Alert 
             severity="warning" 
-            sx={{ mb: 3 }}
+            sx={{ mb: 4 }}
             onClose={() => setValidationErrors([])}
             variant="outlined"
           >
@@ -494,7 +494,7 @@ const GoalBasedPlanningInterface = ({
       )}
 
       {/* Step Content with Loading States */}
-      <Box sx={{ mb: 4, position: 'relative' }}>
+      <Box sx={{ mb: 5, position: 'relative' }}>
         {/* Step Loading Overlay */}
         {stepLoading && (
           <Box sx={{
@@ -603,7 +603,7 @@ const GoalBasedPlanningInterface = ({
 
       {/* Navigation Buttons - Only show for steps 0 and 1, step 2 handles its own navigation */}
       {currentStep < 2 && (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 5 }}>
           <Box>
             {currentStep === 0 && (
               <Button

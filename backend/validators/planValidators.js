@@ -8,7 +8,7 @@ exports.validatePlanCreation = [
   
   body('planType')
     .optional()
-    .isIn(['cash_flow', 'goal_based', 'hybrid'])
+    .isIn(['cash_flow', 'goal_based', 'hybrid', 'adaptive'])
     .withMessage('Invalid plan type'),
 
   // Middleware to check validation results

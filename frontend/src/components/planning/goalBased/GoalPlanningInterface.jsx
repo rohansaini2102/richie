@@ -54,6 +54,7 @@ const GoalPlanningInterface = ({
   const [goalsHash, setGoalsHash] = useState(null);
   const [isPlanSaved, setIsPlanSaved] = useState(false);
   const [cacheInfo, setCacheInfo] = useState({ fromCache: false, ageMinutes: 0 });
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   // Create a hash of goals to detect meaningful changes
   const createGoalsHash = (goals) => {
@@ -516,6 +517,115 @@ const GoalPlanningInterface = ({
     };
   };
 
+  // PDF Generation Functions
+  const generateAndPreviewPDF = async () => {
+    try {
+      setPdfGenerating(true);
+      console.log('🎯 [PDF] Starting PDF preview...');
+
+      const generator = new GoalPlanPDFGenerator();
+      const doc = generator.generatePDF({
+        clientData,
+        editedGoals,
+        recommendations,
+        metrics: calculateSummaryMetrics(),
+        cacheInfo,
+        advisorData: {
+          name: 'Financial Advisor',
+          company: 'RichEAI Financial Services',
+          email: 'advisor@richeai.com',
+          phone: '+91-9876543210'
+        }
+      });
+
+      const pdfBlob = doc.output('blob');
+      const pdfURL = URL.createObjectURL(pdfBlob);
+      window.open(pdfURL, '_blank');
+      
+      setTimeout(() => URL.revokeObjectURL(pdfURL), 100);
+      console.log('✅ [PDF] Preview opened');
+    } catch (error) {
+      console.error('❌ [PDF] Error generating preview:', error);
+      setError('Failed to generate PDF preview');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
+  const generateAndDownloadPDF = async () => {
+    try {
+      setPdfGenerating(true);
+      console.log('🎯 [PDF] Starting PDF download...');
+
+      const generator = new GoalPlanPDFGenerator();
+      const doc = generator.generatePDF({
+        clientData,
+        editedGoals,
+        recommendations,
+        metrics: calculateSummaryMetrics(),
+        cacheInfo,
+        advisorData: {
+          name: 'Financial Advisor',
+          company: 'RichEAI Financial Services',
+          email: 'advisor@richeai.com',
+          phone: '+91-9876543210'
+        }
+      });
+
+      const fileName = `Goal_Plan_${clientData.firstName}_${clientData.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+
+      console.log('✅ [PDF] Downloaded successfully');
+    } catch (error) {
+      console.error('❌ [PDF] Error generating download:', error);
+      setError('Failed to download PDF');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
+  const generateAndSavePDF = async () => {
+    if (!savedPlanId) {
+      setError('Please save the plan first before storing PDF');
+      return;
+    }
+
+    try {
+      setPdfGenerating(true);
+      console.log('🎯 [PDF] Starting PDF save to database...');
+
+      const generator = new GoalPlanPDFGenerator();
+      const doc = generator.generatePDF({
+        clientData,
+        editedGoals,
+        recommendations,
+        metrics: calculateSummaryMetrics(),
+        cacheInfo,
+        advisorData: {
+          name: 'Financial Advisor',
+          company: 'RichEAI Financial Services',
+          email: 'advisor@richeai.com',
+          phone: '+91-9876543210'
+        }
+      });
+
+      const pdfBlob = doc.output('blob');
+      await storePDFInDatabase(pdfBlob, savedPlanId, clientData);
+      
+      // Open PDF after saving
+      const pdfURL = URL.createObjectURL(pdfBlob);
+      window.open(pdfURL, '_blank');
+      setTimeout(() => URL.revokeObjectURL(pdfURL), 100);
+      
+      console.log('✅ [PDF] Saved to database and opened');
+    } catch (error) {
+      console.error('❌ [PDF] Error saving to database:', error);
+      setError('Failed to save PDF to database');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
 
   const metrics = calculateSummaryMetrics();
 
@@ -535,7 +645,7 @@ const GoalPlanningInterface = ({
               {clientData.firstName} {clientData.lastName}
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             <Tooltip title={
               cacheInfo.fromCache
                 ? `Refresh AI recommendations (using cached data ${cacheInfo.ageMinutes}m old)`
@@ -565,13 +675,69 @@ const GoalPlanningInterface = ({
             >
               Save Plan
             </Button>
+            {!savedPlanId && (
+              <Tooltip title="Save the plan to enable PDF database storage">
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  💡 Save to enable DB storage
+                </Typography>
+              </Tooltip>
+            )}
             
+            {/* PDF Actions */}
+            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+            <Button
+              variant="outlined"
+              size="medium"
+              startIcon={<PdfIcon />}
+              onClick={generateAndPreviewPDF}
+              disabled={pdfGenerating || !clientData || !editedGoals?.length}
+              sx={{ 
+                minWidth: 100,
+                borderColor: '#2563eb',
+                color: '#2563eb',
+                '&:hover': {
+                  borderColor: '#1d4ed8',
+                  bgcolor: '#eff6ff'
+                }
+              }}
+            >
+              {pdfGenerating ? 'Generating...' : 'Preview'}
+            </Button>
+
+            <Button
+              variant="contained"
+              size="medium"
+              startIcon={<DownloadIcon />}
+              onClick={generateAndDownloadPDF}
+              disabled={pdfGenerating || !clientData || !editedGoals?.length}
+              sx={{ 
+                minWidth: 100,
+                bgcolor: '#059669',
+                '&:hover': { bgcolor: '#047857' }
+              }}
+            >
+              {pdfGenerating ? 'Generating...' : 'Download'}
+            </Button>
+
+            {savedPlanId && (
+              <Button
+                variant="contained"
+                color="primary"
+                size="medium"
+                startIcon={pdfGenerating ? <CircularProgress size={16} /> : <SaveIcon />}
+                onClick={generateAndSavePDF}
+                disabled={pdfGenerating || !clientData || !editedGoals?.length}
+                sx={{ minWidth: 120 }}
+              >
+                {pdfGenerating ? 'Saving...' : 'Save to DB'}
+              </Button>
+            )}
           </Box>
         </Box>
       </Paper>
 
       {/* Summary Metrics */}
-      <Paper sx={{ p: 2, mx: 2, mt: 2, bgcolor: metrics.feasible ? 'success.light' : 'warning.light' }}>
+      <Paper sx={{ p: 1.5, mx: 1.5, mt: 1.5, bgcolor: metrics.feasible ? 'success.light' : 'warning.light' }}>
         <Grid container spacing={3}>
           <Grid item xs={3}>
             <Typography variant="body2" color="text.secondary">
@@ -609,10 +775,10 @@ const GoalPlanningInterface = ({
       </Paper>
 
       {/* Main Content */}
-      <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden', p: 2, gap: 2 }}>
+      <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden', p: 1.5, gap: 1.5 }}>
         {/* Left Panel - Editable Goals */}
-        <Paper sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+        <Paper sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, fontSize: '1.1rem' }}>
             Goal Details & Configuration
           </Typography>
           
@@ -637,7 +803,7 @@ const GoalPlanningInterface = ({
         </Paper>
 
         {/* Right Panel - AI Recommendations */}
-        <Paper sx={{ width: 400, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Paper sx={{ width: 480, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {/* Cache Status Indicator */}
           {(recommendations || analysisLoading) && (
             <Box sx={{ 
@@ -698,18 +864,6 @@ const GoalPlanningInterface = ({
         </Paper>
       </Box>
 
-      {/* Enhanced jsPDF Generator with Database Storage */}
-      <Box sx={{ mx: 2, mb: 2 }}>
-        <GoalPlanPDFGeneratorComponent
-          clientData={clientData}
-          editedGoals={editedGoals}
-          recommendations={recommendations}
-          metrics={metrics}
-          cacheInfo={cacheInfo}
-          planId={savedPlanId}
-          disabled={loading}
-        />
-      </Box>
 
       {/* Error Snackbar */}
       <Snackbar

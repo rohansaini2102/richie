@@ -1550,42 +1550,22 @@ const GoalPlanPDFGeneratorComponent = ({
   };
 
   return (
-    <Paper elevation={3} sx={{ p: 3, mt: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        📄 PDF Report Generation & Management
-      </Typography>
-      
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Generate comprehensive financial plan PDF reports. Preview and download work immediately, database storage requires saving the plan first.
-      </Typography>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {successMessage && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
-          {successMessage}
-        </Alert>
-      )}
-
-      {/* PDF Generation Buttons */}
-      <Box sx={{ mb: 3 }}>
-        {/* Primary Actions - Work without saving plan */}
-        <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.primary', fontWeight: 600 }}>
-          📄 Generate PDF Report (No plan saving required)
+    <Paper elevation={3} sx={{ p: 2, mt: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h6" sx={{ fontSize: '1.1rem' }}>
+          📄 PDF Report Generation
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+        
+        {/* All PDF actions in one row */}
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
           <Button
             variant="outlined"
-            size="large"
+            size="medium"
             startIcon={<PdfIcon />}
             onClick={generateAndPreviewPDF}
             disabled={disabled || generating || !clientData || !editedGoals?.length}
             sx={{ 
-              minWidth: 150,
+              minWidth: 120,
               borderColor: '#2563eb',
               color: '#2563eb',
               '&:hover': {
@@ -1594,58 +1574,52 @@ const GoalPlanPDFGeneratorComponent = ({
               }
             }}
           >
-            {generating ? 'Generating...' : 'Preview PDF'}
+            {generating ? 'Generating...' : 'Preview'}
           </Button>
 
           <Button
             variant="contained"
-            size="large"
+            size="medium"
             startIcon={<DownloadIcon />}
             onClick={generateAndDownloadPDF}
             disabled={disabled || generating || !clientData || !editedGoals?.length}
             sx={{ 
-              minWidth: 150,
+              minWidth: 120,
               bgcolor: '#059669',
               '&:hover': { bgcolor: '#047857' }
             }}
           >
-            {generating ? 'Generating...' : 'Download PDF'}
+            {generating ? 'Generating...' : 'Download'}
           </Button>
-        </Box>
 
-        {/* Database Storage - Requires saved plan */}
-        {planId ? (
-          <>
-            <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 600 }}>
-              💾 Database Storage (Plan saved)
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={generating ? <CircularProgress size={16} /> : <SaveIcon />}
-                onClick={generateAndSavePDF}
-                disabled={disabled || generating || !clientData || !editedGoals?.length}
-                sx={{ minWidth: 180 }}
-              >
-                {generating ? 'Saving & Opening...' : 'Save & View PDF'}
-              </Button>
-            </Box>
-          </>
-        ) : (
-          <>
-            <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 600 }}>
-              💾 Database Storage (Requires saved plan)
-            </Typography>
-            <Alert severity="info" sx={{ mb: 0 }}>
-              <Typography variant="body2">
-                <strong>Save your plan first</strong> to unlock database storage, report history, and management features.
-                Preview and download work immediately without saving.
-              </Typography>
-            </Alert>
-          </>
-        )}
+          {planId && (
+            <Button
+              variant="contained"
+              color="primary"
+              size="medium"
+              startIcon={generating ? <CircularProgress size={16} /> : <SaveIcon />}
+              onClick={generateAndSavePDF}
+              disabled={disabled || generating || !clientData || !editedGoals?.length}
+              sx={{ minWidth: 140 }}
+            >
+              {generating ? 'Saving...' : 'Save to DB'}
+            </Button>
+          )}
+        </Box>
       </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {successMessage && (
+        <Alert severity="success" sx={{ mb: 1 }} onClose={() => setSuccessMessage(null)}>
+          {successMessage}
+        </Alert>
+      )}
+
 
       {/* Stored Reports Section */}
       {planId && (

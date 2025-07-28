@@ -390,18 +390,21 @@ const GoalSelectionPanel = ({
         key={goal.id}
         onClick={() => handleGoalClick(goal)}
         sx={{
-          border: isSelected ? '2px solid #16a34a' : '2px solid #e5e7eb',
+          border: isSelected ? '2px solid #16a34a' : '1px solid #e5e7eb',
           borderRadius: '16px',
-          padding: '24px',
+          padding: '20px 16px',
           textAlign: 'center',
           cursor: 'pointer',
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-          background: isSelected ? '#f0f9ff' : 'white',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          background: isSelected ? 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)' : 'white',
           position: 'relative',
           height: '100%',
+          minHeight: '220px',
+          boxShadow: isSelected ? '0 4px 15px rgba(22, 163, 74, 0.12)' : '0 1px 4px rgba(0, 0, 0, 0.05)',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-            transform: 'translateY(-2px)'
+            boxShadow: isSelected ? '0 6px 20px rgba(22, 163, 74, 0.15)' : '0 4px 12px rgba(0, 0, 0, 0.08)',
+            transform: 'translateY(-2px)',
+            borderColor: isSelected ? '#15803d' : '#2563eb'
           }
         }}
       >
@@ -420,7 +423,9 @@ const GoalSelectionPanel = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 14
+              fontSize: 14,
+              fontWeight: 'bold',
+              boxShadow: '0 2px 6px rgba(22, 163, 74, 0.2)'
             }}
           >
             ✓
@@ -446,7 +451,7 @@ const GoalSelectionPanel = ({
 
         <CardContent sx={{ p: 0 }}>
           {/* Goal Icon */}
-          <Box sx={{ fontSize: '48px', mb: 2 }}>
+          <Box sx={{ fontSize: '40px', mb: 2 }}>
             {goal.icon}
           </Box>
 
@@ -454,10 +459,11 @@ const GoalSelectionPanel = ({
           <Typography 
             variant="h6" 
             sx={{ 
-              fontSize: '18px',
+              fontSize: '16px',
               fontWeight: 700,
-              mb: 2,
-              color: '#111827'
+              mb: 1.5,
+              color: '#111827',
+              lineHeight: 1.2
             }}
           >
             {goal.title}
@@ -467,10 +473,10 @@ const GoalSelectionPanel = ({
           <Typography 
             variant="body2" 
             sx={{ 
-              fontSize: '14px',
+              fontSize: '13px',
               color: '#6b7280',
-              lineHeight: 1.5,
-              mb: 3
+              lineHeight: 1.4,
+              mb: 2
             }}
           >
             {goal.description}
@@ -478,12 +484,12 @@ const GoalSelectionPanel = ({
 
           {/* Goal Details for existing goals */}
           {goal.hasData && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="body2" sx={{ color: '#111827', fontWeight: 600 }}>
+            <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(0,0,0,0.03)', borderRadius: 1 }}>
+              <Typography variant="h6" sx={{ color: '#111827', fontWeight: 700, fontSize: '15px', mb: 0.5 }}>
                 ₹{goal.targetAmount?.toLocaleString('en-IN')}
               </Typography>
-              <Typography variant="body2" sx={{ color: '#6b7280' }}>
-                Target: {goal.targetYear}
+              <Typography variant="body2" sx={{ color: '#6b7280', fontWeight: 500, fontSize: '12px' }}>
+                Target Year: {goal.targetYear}
               </Typography>
               {goal.source && (
                 <Box sx={{ mt: 1 }}>
@@ -511,20 +517,25 @@ const GoalSelectionPanel = ({
           {/* Action Button */}
           <Button
             variant={isSelected ? "contained" : "outlined"}
+            size="medium"
             sx={{
               backgroundColor: goal.hasData ? (isSelected ? '#16a34a' : 'transparent') : '#2563eb',
               color: goal.hasData ? (isSelected ? 'white' : '#2563eb') : 'white',
               borderColor: goal.hasData ? '#2563eb' : '#2563eb',
               fontWeight: 600,
-              fontSize: '14px',
+              fontSize: '13px',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              minWidth: '120px',
               '&:hover': {
-                backgroundColor: goal.hasData ? (isSelected ? '#15803d' : '#2563eb') : '#1d4ed8'
+                backgroundColor: goal.hasData ? (isSelected ? '#15803d' : '#2563eb') : '#1d4ed8',
+                transform: 'scale(1.02)'
               }
             }}
           >
             {goal.hasData 
-              ? (isSelected ? '✅ Selected' : '[+ Add Goal]') 
-              : '[+ Add Goal]'
+              ? (isSelected ? '✅ Selected' : '+ Select') 
+              : '+ Add Goal'
             }
           </Button>
         </CardContent>
@@ -533,7 +544,7 @@ const GoalSelectionPanel = ({
   };
 
   return (
-    <Box sx={{ padding: '32px', maxWidth: '1000px', margin: '0 auto' }}>
+    <Box sx={{ padding: '20px', width: '100%' }}>
       {/* Header */}
       <Box sx={{ textAlign: 'center', mb: 4 }}>
         <Typography 
@@ -607,7 +618,7 @@ const GoalSelectionPanel = ({
         sx={{ mb: 4 }}
       >
         {availableGoals.map(goal => (
-          <Grid item xs={12} sm={6} md={4} key={goal.id}>
+          <Grid item xs={12} sm={6} md={4} lg={3} key={goal.id}>
             {renderGoalCard(goal)}
           </Grid>
         ))}

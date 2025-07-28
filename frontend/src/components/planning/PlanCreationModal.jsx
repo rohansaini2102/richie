@@ -284,12 +284,12 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
     <Dialog 
       open={open} 
       onClose={handleClose} 
-      maxWidth={activeStep === 2 ? "xl" : "md"} 
+      maxWidth={(activeStep === 2 || (activeStep === 1 && selectedPlanType === 'goal_based')) ? "xl" : "md"} 
       fullWidth
       PaperProps={{
         sx: {
-          height: activeStep === 2 ? '90vh' : 'auto',
-          maxHeight: activeStep === 2 ? '90vh' : '80vh'
+          height: (activeStep === 2 || (activeStep === 1 && selectedPlanType === 'goal_based')) ? '90vh' : 'auto',
+          maxHeight: (activeStep === 2 || (activeStep === 1 && selectedPlanType === 'goal_based')) ? '90vh' : '80vh'
         }
       }}
     >
@@ -300,7 +300,7 @@ const PlanCreationModal = ({ open, onClose, clientId, clientName, clientData, on
         </Box>
       </DialogTitle>
 
-      <DialogContent sx={{ p: activeStep === 2 ? 0 : 3 }}>
+      <DialogContent sx={{ p: (activeStep === 2 || (activeStep === 1 && selectedPlanType === 'goal_based')) ? 0 : 3 }}>
         {activeStep < 2 && (
           <Stepper activeStep={activeStep} sx={{ mb: 3 }}>
             {steps.map((label) => (
