@@ -279,6 +279,28 @@ export const clientAPI = {
     return response.data;
   },
 
+  // Send client onboarding with meeting
+  sendClientOnboardingWithMeeting: async (invitationData) => {
+    console.log('🎯 SENDING CLIENT ONBOARDING WITH MEETING:', {
+      clientEmail: invitationData.clientEmail,
+      clientName: `${invitationData.clientFirstName} ${invitationData.clientLastName || ''}`.trim(),
+      scheduledAt: invitationData.scheduledAt,
+      hasNotes: !!invitationData.notes
+    });
+    
+    const response = await api.post('/clients/manage/onboard-with-meeting', invitationData);
+    
+    console.log('✅ ONBOARDING WITH MEETING SENT:', {
+      invitationId: response.data.data?.invitation?.id,
+      meetingId: response.data.data?.meeting?.id,
+      clientEmail: invitationData.clientEmail,
+      scheduledAt: response.data.data?.meeting?.scheduledAt,
+      onboardingUrl: response.data.data?.invitation?.onboardingUrl
+    });
+    
+    return response.data;
+  },
+
   // Get client invitations
   getInvitations: async (params = {}) => {
     const queryParams = new URLSearchParams({

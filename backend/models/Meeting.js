@@ -11,7 +11,10 @@ const meetingSchema = new mongoose.Schema({
   clientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Client',
-    required: true,
+    required: function() {
+      // clientId is required for regular meetings, but optional for onboarding meetings
+      return !this.isOnboardingMeeting;
+    },
     index: true
   },
   roomName: {
@@ -49,8 +52,17 @@ const meetingSchema = new mongoose.Schema({
   },
   meetingType: {
     type: String,
-    enum: ['scheduled', 'instant'],
+    enum: ['scheduled', 'instant', 'onboarding'],
     default: 'scheduled'
+  },
+  isOnboardingMeeting: {
+    type: Boolean,
+    default: false
+  },
+  invitationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ClientInvitation',
+    index: true
   },
   tokens: {
     advisorToken: String,

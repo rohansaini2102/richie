@@ -1,13 +1,19 @@
 const Client = require('../models/Client');
 const ClientInvitation = require('../models/ClientInvitation');
+const Meeting = require('../models/Meeting');
 const Advisor = require('../models/Advisor');
 const { logger, logAuth, logApi, logSecurity } = require('../utils/logger');
 const nodemailer = require('nodemailer');
+const axios = require('axios');
 const CASParser = require('../services/cas-parser');
 const { OnboardingCASController } = require('./OnboardingCASController');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+
+// Daily.co configuration
+const DAILY_API_KEY = process.env.DAILY_API_KEY;
+const DAILY_DOMAIN = process.env.DAILY_DOMAIN;
 
 // Enhanced logging utilities for form tracking
 const FormLogger = {
@@ -139,6 +145,129 @@ const getInvitationEmailTemplate = (advisorName, advisorFirm, clientName, invita
             <p style="font-size: 11px; color: #6b7280;">
               If you cannot click the button above, copy and paste this link into your browser:<br>
               <a href="${invitationUrl}">${invitationUrl}</a>
+            </p>
+          </div>
+          
+          <div class="footer">
+            <p>© 2025 Richie AI. All rights reserved.</p>
+            <p>This email was sent to you by your financial advisor. If you received this email by mistake, please ignore it.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+};
+
+// Enhanced email template for onboarding with meeting
+const getOnboardingWithMeetingEmailTemplate = (advisorName, advisorFirm, clientName, onboardingUrl, meetingUrl, meetingDate, expiryHours) => {
+  const formattedDate = meetingDate.toLocaleString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  });
+
+  return {
+    subject: `Complete Your Financial Profile & Join Your Meeting - ${advisorFirm || 'Richie AI'}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #1e3a5f; color: white; padding: 20px; text-align: center; }
+          .content { background-color: #f9f9f9; padding: 30px; }
+          .button { background-color: #f97316; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 5px; }
+          .button-meeting { background-color: #10b981; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 5px; }
+          .footer { background-color: #e5e7eb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }
+          .warning { background-color: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; margin: 20px 0; }
+          .meeting-info { background-color: #dbeafe; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #3b82f6; }
+          .process-steps { background-color: #e0f2fe; padding: 15px; border-radius: 5px; margin: 20px 0; }
+          .step-number { background-color: #f97316; color: white; border-radius: 50%; width: 25px; height: 25px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🏆 Richie AI</h1>
+            <p>Your Comprehensive Financial Planning Journey Starts Now</p>
+          </div>
+          
+          <div class="content">
+            <h2>Hello ${clientName || 'Valued Client'},</h2>
+            
+            <p>Welcome! You have been invited by <strong>${advisorName}</strong> ${advisorFirm ? `from <strong>${advisorFirm}</strong>` : ''} to begin your comprehensive financial planning journey with us.</p>
+            
+            <div class="meeting-info">
+              <h3>📅 Your Scheduled Meeting</h3>
+              <p><strong>Date & Time:</strong> ${formattedDate}</p>
+              <p><strong>Meeting Type:</strong> Financial Planning Consultation</p>
+              <p>Your advisor will guide you through your financial profile and discuss your goals during this meeting.</p>
+            </div>
+            
+            <div class="process-steps">
+              <h3>🎯 Your 2-Step Process</h3>
+              <div style="margin-bottom: 15px;">
+                <span class="step-number">1</span>
+                <strong>Complete Your Financial Profile First</strong>
+                <p style="margin-left: 35px; margin-top: 5px;">Fill out our comprehensive 5-stage onboarding form before your meeting. This ensures your advisor can provide personalized advice during your consultation.</p>
+              </div>
+              <div>
+                <span class="step-number">2</span>
+                <strong>Join Your Video Meeting</strong>
+                <p style="margin-left: 35px; margin-top: 5px;">At the scheduled time, join your video meeting to discuss your financial goals and receive personalized recommendations.</p>
+              </div>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <div>
+                <a href="${onboardingUrl}" class="button">📋 Complete Financial Profile</a>
+              </div>
+              <div>
+                <a href="${meetingUrl}" class="button-meeting">🎥 Join Meeting (at scheduled time)</a>
+              </div>
+            </div>
+            
+            <div class="warning">
+              <strong>⏰ Important:</strong> Please complete your financial profile BEFORE your scheduled meeting. The onboarding link expires in ${expiryHours} hours for security reasons.
+            </div>
+            
+            <div style="background-color: #f0f9ff; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <h3>📋 What's Included in Your Financial Profile:</h3>
+              <ul>
+                <li><strong>Stage 1:</strong> Personal Information & KYC Details</li>
+                <li><strong>Stage 2:</strong> Comprehensive Income & Expense Analysis</li>
+                <li><strong>Stage 3:</strong> Financial Goals & Retirement Planning</li>
+                <li><strong>Stage 4:</strong> Complete Assets & Liabilities Assessment</li>
+                <li><strong>Stage 5:</strong> Investment Profile & Portfolio Upload</li>
+              </ul>
+            </div>
+            
+            <p><strong>🔒 Your Privacy & Security:</strong></p>
+            <ul>
+              <li>Bank-grade encryption protects all your information</li>
+              <li>Data is only shared with your designated advisor</li>
+              <li>Secure video meetings with end-to-end protection</li>
+              <li>Compliant with financial industry regulations</li>
+            </ul>
+            
+            <p>If you have any questions or technical issues, please contact your advisor or our support team before your scheduled meeting.</p>
+            
+            <p>We look forward to helping you achieve your financial goals!</p>
+            
+            <p>Best regards,<br>
+            <strong>The Richie AI Team</strong></p>
+            
+            <hr>
+            <p style="font-size: 11px; color: #6b7280;">
+              <strong>Links for reference:</strong><br>
+              Financial Profile: <a href="${onboardingUrl}">${onboardingUrl}</a><br>
+              Meeting Room: <a href="${meetingUrl}">${meetingUrl}</a>
             </p>
           </div>
           
@@ -551,6 +680,241 @@ const sendClientInvitation = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to send client invitation',
+      error: error.message
+    });
+  }
+};
+
+// Combined client onboarding + meeting creation
+const sendClientOnboardingWithMeeting = async (req, res) => {
+  const startTime = Date.now();
+  const { method, url } = req;
+  const advisorId = req.advisor.id;
+  const clientIp = req.ip || req.connection.remoteAddress;
+  
+  try {
+    const { clientEmail, clientFirstName, clientLastName, scheduledAt, notes } = req.body;
+    
+    FormLogger.logEvent('ONBOARDING_WITH_MEETING_REQUEST', {
+      advisorId,
+      clientEmail,
+      clientName: `${clientFirstName} ${clientLastName}`.trim(),
+      scheduledAt
+    });
+    
+    // Validate required fields
+    if (!clientEmail || !scheduledAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Client email and meeting scheduled time are required'
+      });
+    }
+    
+    // Check if client already exists
+    const existingClient = await Client.findOne({ 
+      email: clientEmail.toLowerCase(), 
+      advisor: advisorId 
+    });
+    
+    if (existingClient) {
+      FormLogger.logError('ONBOARDING_MEETING_DUPLICATE_CLIENT', new Error('Client already exists'), {
+        advisorId,
+        clientEmail
+      });
+      return res.status(400).json({
+        success: false,
+        message: 'Client already exists in your account'
+      });
+    }
+    
+    // Get advisor details
+    const advisor = await Advisor.findById(advisorId);
+    if (!advisor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Advisor not found'
+      });
+    }
+    
+    // Create client invitation first
+    const invitation = new ClientInvitation({
+      clientEmail: clientEmail.toLowerCase(),
+      clientFirstName,
+      clientLastName,
+      advisor: advisorId,
+      notes,
+      invitationSource: 'onboarding_with_meeting'
+    });
+    
+    await invitation.save();
+    
+    // Create Daily.co room for the meeting
+    const timestamp = Date.now();
+    const roomName = `onboarding-meeting-${advisorId}-${timestamp}`;
+    
+    logger.info('🏠 [ClientController] Creating Daily.co room for onboarding meeting', {
+      roomName,
+      advisorId,
+      clientEmail
+    });
+    
+    const roomResponse = await axios.post(
+      'https://api.daily.co/v1/rooms',
+      {
+        name: roomName,
+        privacy: 'private',
+        properties: {
+          max_participants: 5,
+          exp: Math.floor(Date.now() / 1000) + 86400 * 7, // 7 day expiry for onboarding
+          enable_screenshare: true,
+          enable_chat: true,
+          start_video_off: false,
+          start_audio_off: false,
+          enable_transcription: true,
+          enable_transcription_storage: true
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${DAILY_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    // Create meeting tokens
+    const [advisorTokenResponse, clientTokenResponse] = await Promise.all([
+      // Advisor token with owner privileges
+      axios.post(
+        'https://api.daily.co/v1/meeting-tokens',
+        {
+          properties: {
+            room_name: roomName,
+            user_name: `${advisor.firstName} ${advisor.lastName}`,
+            user_id: advisorId,
+            is_owner: true
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${DAILY_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      ),
+      // Client token
+      axios.post(
+        'https://api.daily.co/v1/meeting-tokens',
+        {
+          properties: {
+            room_name: roomName,
+            user_name: clientFirstName ? `${clientFirstName} ${clientLastName || ''}`.trim() : 'Client',
+            user_id: invitation._id.toString()
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${DAILY_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+    ]);
+    
+    // Create meeting record
+    const meeting = new Meeting({
+      advisorId,
+      clientId: null, // Will be set after client completes onboarding
+      roomName,
+      roomUrl: roomResponse.data.url,
+      dailyRoomId: roomResponse.data.id,
+      scheduledAt: new Date(scheduledAt),
+      meetingType: 'onboarding',
+      isOnboardingMeeting: true,
+      invitationId: invitation._id,
+      tokens: {
+        advisorToken: advisorTokenResponse.data.token,
+        clientToken: clientTokenResponse.data.token
+      }
+    });
+    
+    await meeting.save();
+    
+    // Generate URLs
+    const onboardingUrl = invitation.generateInvitationUrl();
+    const clientMeetingUrl = `${roomResponse.data.url}?t=${clientTokenResponse.data.token}`;
+    const advisorMeetingUrl = `${roomResponse.data.url}?t=${advisorTokenResponse.data.token}`;
+    
+    // Send enhanced email with both links
+    const transporter = createEmailTransporter();
+    const emailTemplate = getOnboardingWithMeetingEmailTemplate(
+      `${advisor.firstName} ${advisor.lastName}`,
+      advisor.firmName,
+      clientFirstName ? `${clientFirstName} ${clientLastName || ''}`.trim() : '',
+      onboardingUrl,
+      clientMeetingUrl,
+      new Date(scheduledAt),
+      process.env.INVITATION_EXPIRY_HOURS || 48
+    );
+    
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: clientEmail,
+      subject: emailTemplate.subject,
+      html: emailTemplate.html
+    });
+    
+    // Mark invitation as sent
+    await invitation.markAsSent();
+    
+    const duration = Date.now() - startTime;
+    logApi.response(method, url, 200, duration, advisorId);
+    
+    FormLogger.logEvent('ONBOARDING_WITH_MEETING_SUCCESS', {
+      advisorId,
+      clientEmail,
+      invitationId: invitation._id,
+      meetingId: meeting._id,
+      scheduledAt
+    });
+    
+    res.json({
+      success: true,
+      message: 'Client onboarding and meeting invitation sent successfully!',
+      data: {
+        invitation: {
+          id: invitation._id,
+          clientEmail: clientEmail,
+          expiresAt: invitation.expiresAt,
+          onboardingUrl: onboardingUrl
+        },
+        meeting: {
+          id: meeting._id,
+          roomUrl: meeting.roomUrl,
+          scheduledAt: meeting.scheduledAt,
+          clientMeetingUrl: clientMeetingUrl,
+          advisorMeetingUrl: advisorMeetingUrl
+        }
+      }
+    });
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    FormLogger.logError('ONBOARDING_WITH_MEETING_ERROR', error, { advisorId });
+    logApi.error(method, url, error, advisorId);
+    
+    // Handle Daily.co API errors specifically
+    if (error.response?.status) {
+      return res.status(error.response.status).json({
+        success: false,
+        message: 'Failed to create meeting room',
+        details: error.response.data
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send client onboarding with meeting invitation',
       error: error.message
     });
   }
@@ -2288,6 +2652,7 @@ module.exports = {
   getClients,
   getClientById,
   sendClientInvitation,
+  sendClientOnboardingWithMeeting,
   getClientInvitations,
   updateClient,
   deleteClient,

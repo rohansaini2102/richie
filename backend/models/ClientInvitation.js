@@ -108,7 +108,7 @@ const clientInvitationSchema = new mongoose.Schema({
   // Invitation Metadata
   invitationSource: {
     type: String,
-    enum: ['manual', 'bulk_upload', 'api', 'referral'],
+    enum: ['manual', 'bulk_upload', 'api', 'referral', 'onboarding_with_meeting'],
     default: 'manual'
   },
   

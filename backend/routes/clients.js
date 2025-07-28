@@ -9,6 +9,7 @@ const {
   getClients,
   getClientById,
   sendClientInvitation,
+  sendClientOnboardingWithMeeting,
   getClientInvitations,
   updateClient,
   deleteClient,
@@ -111,6 +112,7 @@ const handleMulterError = (error, req, res, next) => {
 router.get('/manage', auth, getClients);
 router.get('/manage/invitations', auth, getClientInvitations);
 router.post('/manage/invitations', auth, sendClientInvitation);
+router.post('/manage/onboard-with-meeting', auth, sendClientOnboardingWithMeeting);
 router.get('/manage/:id', auth, getClientById);
 router.put('/manage/:id', auth, updateClient);
 router.delete('/manage/:id', auth, deleteClient);
