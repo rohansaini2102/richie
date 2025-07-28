@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Users, Video } from 'lucide-react';
+import { Home, Users, Video, BarChart3 } from 'lucide-react';
 
 function Sidebar() {
   const location = useLocation();
@@ -20,7 +20,12 @@ function Sidebar() {
       path: '/meetings',
       icon: Video,
     },
-  ];
+    {
+      name: 'A/B Testing',
+      path: '/ab-testing',
+      icon: BarChart3,
+    },
+  ];;
 
   const isActive = (path) => {
     return location.pathname === path;

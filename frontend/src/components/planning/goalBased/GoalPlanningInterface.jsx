@@ -285,6 +285,15 @@ const GoalPlanningInterface = ({
         setRecommendations(null);
         
         console.log('🗑️ [GoalPlanningInterface] Cache invalidated due to goal changes');
+        
+        // Automatically fetch new recommendations after goal update if plan not saved
+        if (!isPlanSaved && updated.length > 0) {
+          console.log('🔄 [GoalPlanningInterface] Auto-fetching new recommendations after goal update');
+          // Use setTimeout to ensure state updates are processed first
+          setTimeout(() => {
+            fetchAIRecommendations(updated);
+          }, 100);
+        }
       }
       
       return updated;

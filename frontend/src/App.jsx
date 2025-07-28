@@ -15,6 +15,7 @@ import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
 import { MeetingsPage } from './components/meetings'
 import LOESignaturePage from './components/loe/LOESignaturePage'
+import ABTestingDashboard from './components/abTesting/ABTestingDashboard'
 
 function App() {
   return (
@@ -69,6 +70,7 @@ function App() {
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/clients/:clientId" element={<ClientDetailView />} />
               <Route path="/meetings" element={<MeetingsPage />} />
+              <Route path="/ab-testing" element={<ABTestingDashboard />} />
             </Route>
             
             {/* Redirect any unknown routes to home */}

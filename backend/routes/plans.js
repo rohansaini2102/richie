@@ -161,4 +161,36 @@ router.get(
   planController.getPDFStorageStats
 );
 
+// A/B Testing Routes
+
+// Get all plans for a specific client
+router.get(
+  '/client/:clientId/all',
+  planController.getClientPlans
+);
+
+// Compare two plans
+router.post(
+  '/ab-test/compare',
+  planController.comparePlans
+);
+
+// Get comparison history for a client
+router.get(
+  '/ab-test/history/:clientId',
+  planController.getComparisonHistory
+);
+
+// Update comparison decision (select winner)
+router.put(
+  '/ab-test/comparison/:comparisonId/decision',
+  planController.updateComparisonDecision
+);
+
+// Get PDF for a specific plan (A/B Testing)
+router.get(
+  '/ab-test/:planId/pdf/:reportType',
+  planController.getPlanPDF
+);
+
 module.exports = router;

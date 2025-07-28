@@ -272,6 +272,23 @@ const financialPlanSchema = new mongoose.Schema({
     previousValue: mongoose.Schema.Types.Mixed,
     newValue: mongoose.Schema.Types.Mixed
   }],
+  // A/B Test Comparisons
+  abTestComparisons: [{
+    comparisonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ABTestComparison'
+    },
+    comparedWithPlanId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FinancialPlan'
+    },
+    comparisonDate: {
+      type: Date,
+      default: Date.now
+    },
+    wasSelectedAsWinner: Boolean,
+    aiRecommendation: String
+  }],
 
   // PDF Reports Storage
   pdfReports: [{

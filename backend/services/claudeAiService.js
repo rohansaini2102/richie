@@ -459,6 +459,194 @@ CRITICAL: Respond with ONLY valid JSON. Start with { and end with }. No explanat
     return response;
   }
 
+  async comparePlans(planA, planB) {
+    try {
+      console.log('🤖 [ClaudeAI] Starting plan comparison');
+      
+      const comparisonPrompt = this.buildComparisonPrompt(planA, planB);
+      
+      const response = await this.makeRequest(
+        'You are a financial planning expert analyzing and comparing financial plans.',
+        comparisonPrompt
+      );
+      
+      const analysis = this.parseComparisonResponse(response.content);
+      
+      console.log('✅ [ClaudeAI] Plan comparison completed successfully');
+      return analysis;
+      
+    } catch (error) {
+      console.error('❌ [ClaudeAI] Plan comparison failed:', error);
+      throw new Error(`Plan comparison failed: ${error.message}`);
+    }
+  }
+
+  buildComparisonPrompt(planA, planB) {
+    const clientData = planA.clientDataSnapshot || planB.clientDataSnapshot;
+    const planType = planA.planType;
+    
+    const basePrompt = `
+As a financial planning expert, analyze and compare these two ${planType} financial plans for the same client.
+
+CLIENT CONTEXT:
+${this.formatClientDataForAnalysis(clientData)}
+
+PLAN A DETAILS:
+- Plan Type: ${planA.planType}
+- Version: ${planA.version}
+- Created: ${planA.createdAt}
+- Status: ${planA.status}
+- Key Metrics: ${JSON.stringify(planA.clientDataSnapshot?.calculatedMetrics, null, 2)}
+- Advisor Recommendations: ${planA.advisorRecommendations?.keyPoints?.join(', ') || 'None'}
+- AI Recommendations: ${planA.aiRecommendations?.debtStrategy || 'None'}
+
+PLAN B DETAILS:
+- Plan Type: ${planB.planType}
+- Version: ${planB.version}
+- Created: ${planB.createdAt}
+- Status: ${planB.status}
+- Key Metrics: ${JSON.stringify(planB.clientDataSnapshot?.calculatedMetrics, null, 2)}
+- Advisor Recommendations: ${planB.advisorRecommendations?.keyPoints?.join(', ') || 'None'}
+- AI Recommendations: ${planB.aiRecommendations?.debtStrategy || 'None'}
+
+${this.getComparisonCriteria(planType)}
+
+Please provide a detailed comparison in JSON format with the following structure:
+{
+  "executiveSummary": "Brief overview of the comparison results",
+  "keyDifferences": [
+    {
+      "aspect": "Key difference category",
+      "planAValue": "Plan A approach/value",
+      "planBValue": "Plan B approach/value", 
+      "significance": "High/Medium/Low significance"
+    }
+  ],
+  "planAStrengths": ["List of Plan A strengths"],
+  "planAWeaknesses": ["List of Plan A weaknesses"],
+  "planBStrengths": ["List of Plan B strengths"],
+  "planBWeaknesses": ["List of Plan B weaknesses"],
+  "recommendation": {
+    "suggestedPlan": "planA/planB/both_suitable",
+    "reasoning": "Detailed explanation of recommendation",
+    "confidenceScore": 0.85
+  },
+  "riskComparison": {
+    "planARiskScore": 0.6,
+    "planBRiskScore": 0.4,
+    "riskFactors": ["List of key risk factors to consider"]
+  },
+  "implementationConsiderations": ["Practical considerations for implementation"]
+}`;
+
+    return basePrompt;
+  }
+
+  getComparisonCriteria(planType) {
+    switch (planType) {
+      case 'goal_based':
+        return `
+COMPARISON CRITERIA FOR GOAL-BASED PLANS:
+1. Goal Achievement Probability: Which plan has higher likelihood of meeting stated goals?
+2. Timeline Feasibility: Which plan has more realistic timelines?
+3. Risk-Return Balance: Which plan better balances risk with expected returns?
+4. SIP Requirements: Which plan has more manageable monthly investment requirements?
+5. Goal Prioritization: Which plan better prioritizes multiple goals?
+6. Flexibility: Which plan allows for better adjustments over time?
+`;
+      
+      case 'cash_flow':
+        return `
+COMPARISON CRITERIA FOR CASH FLOW PLANS:
+1. Debt Management: Which plan more effectively reduces debt burden?
+2. Emergency Fund Strategy: Which plan builds emergency fund more efficiently?
+3. Monthly Surplus Optimization: Which plan better utilizes available surplus?
+4. EMI Ratio Improvement: Which plan achieves better debt-to-income ratios?
+5. Investment Growth: Which plan generates better long-term wealth creation?
+6. Risk Management: Which plan better protects against financial emergencies?
+`;
+      
+      default:
+        return `
+GENERAL COMPARISON CRITERIA:
+1. Financial Health Improvement: Which plan better improves overall financial health?
+2. Risk Management: Which plan better manages financial risks?
+3. Return Potential: Which plan has better return expectations?
+4. Feasibility: Which plan is more realistic to implement?
+5. Flexibility: Which plan allows for better future adjustments?
+`;
+    }
+  }
+
+  parseComparisonResponse(content) {
+    try {
+      // Try to parse JSON response
+      let parsed;
+      if (typeof content === 'string') {
+        // Try direct parsing first
+        try {
+          parsed = JSON.parse(content);
+        } catch (e) {
+          // Try extracting JSON from markdown code blocks
+          const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+          if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[1]);
+          } else {
+            // Try finding any JSON-like structure
+            const jsonPattern = /\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/;
+            const match = content.match(jsonPattern);
+            if (match) {
+              parsed = JSON.parse(match[0]);
+            } else {
+              throw new Error('No valid JSON found in response');
+            }
+          }
+        }
+      } else {
+        parsed = content;
+      }
+      
+      // Validate the response structure
+      const requiredFields = ['executiveSummary', 'keyDifferences', 'recommendation'];
+      for (const field of requiredFields) {
+        if (!parsed[field]) {
+          throw new Error(`Missing required field: ${field}`);
+        }
+      }
+      
+      // Ensure confidence score is within valid range
+      if (parsed.recommendation.confidenceScore) {
+        parsed.recommendation.confidenceScore = Math.max(0, Math.min(1, parsed.recommendation.confidenceScore));
+      }
+      
+      return parsed;
+      
+    } catch (error) {
+      console.error('Failed to parse comparison response:', error);
+      
+      // Return a fallback structure
+      return {
+        executiveSummary: "Unable to parse detailed comparison due to response format issues.",
+        keyDifferences: [],
+        planAStrengths: ["Plan analysis unavailable"],
+        planAWeaknesses: ["Plan analysis unavailable"],
+        planBStrengths: ["Plan analysis unavailable"],
+        planBWeaknesses: ["Plan analysis unavailable"],
+        recommendation: {
+          suggestedPlan: "both_suitable",
+          reasoning: "Unable to provide specific recommendation due to parsing error.",
+          confidenceScore: 0.5
+        },
+        riskComparison: {
+          planARiskScore: 0.5,
+          planBRiskScore: 0.5,
+          riskFactors: ["Analysis unavailable due to parsing error"]
+        },
+        implementationConsiderations: ["Manual review recommended due to parsing issues"]
+      };
+    }
+  }
+
   /**
    * Format goals and client data for AI analysis with comprehensive financial context
    */

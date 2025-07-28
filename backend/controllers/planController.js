@@ -2226,4 +2226,391 @@ exports.getPDFStorageStats = async (req, res) => {
   }
 };
 
+// A/B Testing endpoints
+
+// Get all plans for a specific client
+exports.getClientPlans = async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { planType } = req.query;
+
+    // Build query
+    const query = { clientId, status: { $ne: 'archived' } };
+    if (planType) {
+      query.planType = planType;
+    }
+
+    const plans = await FinancialPlan.find(query)
+      .select('planType status version createdAt updatedAt clientDataSnapshot.calculatedMetrics')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    logger.log('info', 'Client plans fetched for A/B testing', {
+      advisorId: req.advisor.id,
+      clientId,
+      plansCount: plans.length
+    });
+
+    res.json({
+      success: true,
+      plans
+    });
+  } catch (error) {
+    logger.log('error', 'Error fetching client plans', {
+      error: error.message,
+      stack: error.stack,
+      clientId: req.params.clientId
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch client plans',
+      error: error.message
+    });
+  }
+};
+
+// Compare two plans using AI
+exports.comparePlans = async (req, res) => {
+  try {
+    const { planAId, planBId } = req.body;
+    const advisorId = req.advisor.id;
+
+    // Fetch both plans
+    const [planA, planB] = await Promise.all([
+      FinancialPlan.findById(planAId).populate('clientId'),
+      FinancialPlan.findById(planBId).populate('clientId')
+    ]);
+
+    if (!planA || !planB) {
+      return res.status(404).json({
+        success: false,
+        message: 'One or both plans not found'
+      });
+    }
+
+    // Ensure both plans are for the same client
+    if (planA.clientId._id.toString() !== planB.clientId._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Plans must belong to the same client'
+      });
+    }
+
+    // Ensure both plans are of the same type
+    if (planA.planType !== planB.planType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Plans must be of the same type for comparison'
+      });
+    }
+
+    // Check if these plans have been compared before
+    const ABTestComparison = require('../models/ABTestComparison');
+    const existingComparison = await ABTestComparison.hasBeenCompared(planAId, planBId);
+    
+    if (existingComparison && existingComparison.status === 'completed') {
+      logger.log('info', 'Returning existing comparison', {
+        comparisonId: existingComparison._id,
+        planAId,
+        planBId
+      });
+
+      return res.json({
+        success: true,
+        comparison: existingComparison,
+        isExisting: true
+      });
+    }
+
+    // Create new comparison record
+    const comparison = new ABTestComparison({
+      advisorId,
+      clientId: planA.clientId._id,
+      planA: {
+        planId: planA._id,
+        planType: planA.planType,
+        version: planA.version,
+        createdAt: planA.createdAt,
+        snapshot: {
+          keyMetrics: planA.clientDataSnapshot.calculatedMetrics,
+          summary: planA.advisorRecommendations?.keyPoints?.join('; ')
+        }
+      },
+      planB: {
+        planId: planB._id,
+        planType: planB.planType,
+        version: planB.version,
+        createdAt: planB.createdAt,
+        snapshot: {
+          keyMetrics: planB.clientDataSnapshot.calculatedMetrics,
+          summary: planB.advisorRecommendations?.keyPoints?.join('; ')
+        }
+      },
+      comparisonType: planA.planType,
+      status: 'analyzing'
+    });
+
+    await comparison.save();
+
+    // Perform AI analysis
+    try {
+      const aiAnalysis = await claudeAiService.comparePlans(planA, planB);
+      
+      comparison.aiAnalysis = aiAnalysis;
+      comparison.status = 'completed';
+      await comparison.save();
+
+      // Update both plans with comparison reference
+      await Promise.all([
+        FinancialPlan.findByIdAndUpdate(planAId, {
+          $push: {
+            abTestComparisons: {
+              comparisonId: comparison._id,
+              comparedWithPlanId: planBId,
+              comparisonDate: new Date(),
+              aiRecommendation: aiAnalysis.recommendation.suggestedPlan === 'planA' ? 'winner' : 'loser'
+            }
+          }
+        }),
+        FinancialPlan.findByIdAndUpdate(planBId, {
+          $push: {
+            abTestComparisons: {
+              comparisonId: comparison._id,
+              comparedWithPlanId: planAId,
+              comparisonDate: new Date(),
+              aiRecommendation: aiAnalysis.recommendation.suggestedPlan === 'planB' ? 'winner' : 'loser'
+            }
+          }
+        })
+      ]);
+
+      logger.log('info', 'Plans compared successfully', {
+        comparisonId: comparison._id,
+        planAId,
+        planBId,
+        recommendedPlan: aiAnalysis.recommendation.suggestedPlan
+      });
+
+      res.json({
+        success: true,
+        comparison,
+        isExisting: false
+      });
+
+    } catch (aiError) {
+      comparison.status = 'error';
+      await comparison.save();
+      
+      logger.log('error', 'AI analysis failed', {
+        error: aiError.message,
+        comparisonId: comparison._id
+      });
+
+      res.status(500).json({
+        success: false,
+        message: 'AI analysis failed',
+        error: aiError.message
+      });
+    }
+
+  } catch (error) {
+    logger.log('error', 'Error comparing plans', {
+      error: error.message,
+      stack: error.stack,
+      body: req.body
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to compare plans',
+      error: error.message
+    });
+  }
+};
+
+// Get comparison history for a client
+exports.getComparisonHistory = async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { limit = 10 } = req.query;
+
+    const ABTestComparison = require('../models/ABTestComparison');
+    const comparisons = await ABTestComparison.findByClient(clientId, { limit: parseInt(limit) });
+
+    logger.log('info', 'Comparison history fetched', {
+      advisorId: req.advisor.id,
+      clientId,
+      comparisonsCount: comparisons.length
+    });
+
+    res.json({
+      success: true,
+      comparisons
+    });
+
+  } catch (error) {
+    logger.log('error', 'Error fetching comparison history', {
+      error: error.message,
+      stack: error.stack,
+      clientId: req.params.clientId
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch comparison history',
+      error: error.message
+    });
+  }
+};
+
+// Get PDF for a specific plan (A/B Testing)
+exports.getPlanPDF = async (req, res) => {
+  try {
+    const { planId, reportType } = req.params;
+    const advisorId = req.advisor.id;
+
+    const plan = await FinancialPlan.findById(planId);
+    
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plan not found'
+      });
+    }
+
+    // Verify ownership
+    if (plan.advisorId.toString() !== advisorId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Plan belongs to different advisor'
+      });
+    }
+
+    // Get the latest PDF report of the specified type
+    const pdfReport = plan.getLatestPDFReport(reportType);
+    
+    if (!pdfReport) {
+      return res.status(404).json({
+        success: false,
+        message: `No ${reportType} PDF report found for this plan`
+      });
+    }
+
+    // Set appropriate headers for PDF viewing
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Length': pdfReport.fileSize,
+      'Content-Disposition': `inline; filename="${pdfReport.fileName}"`,
+      'Cache-Control': 'no-cache',
+      'X-PDF-Info': JSON.stringify({
+        reportType: pdfReport.reportType,
+        version: pdfReport.version,
+        generatedAt: pdfReport.generatedAt,
+        planVersion: pdfReport.metadata.planVersion
+      })
+    });
+
+    logger.log('info', 'PDF served for A/B testing', {
+      planId,
+      reportType,
+      advisorId,
+      fileSize: pdfReport.fileSize,
+      fileName: pdfReport.fileName
+    });
+
+    // Send the PDF buffer
+    res.send(pdfReport.pdfData);
+
+  } catch (error) {
+    logger.log('error', 'Error serving PDF for A/B testing', {
+      error: error.message,
+      stack: error.stack,
+      planId: req.params.planId,
+      reportType: req.params.reportType
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to serve PDF',
+      error: error.message
+    });
+  }
+};
+
+// Update comparison with user's decision
+exports.updateComparisonDecision = async (req, res) => {
+  try {
+    const { comparisonId } = req.params;
+    const { selectedWinner, reason } = req.body;
+    const advisorId = req.advisor.id;
+
+    const ABTestComparison = require('../models/ABTestComparison');
+    const comparison = await ABTestComparison.findById(comparisonId);
+
+    if (!comparison) {
+      return res.status(404).json({
+        success: false,
+        message: 'Comparison not found'
+      });
+    }
+
+    comparison.selectedWinner = {
+      plan: selectedWinner,
+      reason,
+      selectedBy: advisorId,
+      selectedAt: new Date()
+    };
+
+    comparison.changeHistory.push({
+      changeDate: new Date(),
+      changedBy: advisorId,
+      changeType: 'winner_selected',
+      description: `Selected ${selectedWinner} as winner`
+    });
+
+    await comparison.save();
+
+    // Update the plans with winner information
+    const planAId = comparison.planA.planId;
+    const planBId = comparison.planB.planId;
+    const planAWon = selectedWinner === 'planA';
+
+    await Promise.all([
+      FinancialPlan.updateOne(
+        { _id: planAId, 'abTestComparisons.comparisonId': comparisonId },
+        { $set: { 'abTestComparisons.$.wasSelectedAsWinner': planAWon } }
+      ),
+      FinancialPlan.updateOne(
+        { _id: planBId, 'abTestComparisons.comparisonId': comparisonId },
+        { $set: { 'abTestComparisons.$.wasSelectedAsWinner': !planAWon } }
+      )
+    ]);
+
+    logger.log('info', 'Comparison decision updated', {
+      comparisonId,
+      selectedWinner,
+      advisorId
+    });
+
+    res.json({
+      success: true,
+      comparison
+    });
+
+  } catch (error) {
+    logger.log('error', 'Error updating comparison decision', {
+      error: error.message,
+      stack: error.stack,
+      comparisonId: req.params.comparisonId
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update comparison decision',
+      error: error.message
+    });
+  }
+};
+
 module.exports = exports;

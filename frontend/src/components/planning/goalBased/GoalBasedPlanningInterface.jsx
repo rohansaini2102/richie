@@ -212,8 +212,7 @@ const GoalBasedPlanningInterface = ({
       }
       
       if (currentStep < steps.length - 1) {
-        // Add small delay for better UX
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Removed delay to fix double-click issue
         setCurrentStep(currentStep + 1);
         console.log('➡️ [GoalBasedPlanningInterface] Moving to step:', currentStep + 1);
       }
