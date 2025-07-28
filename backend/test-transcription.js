@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
 const Meeting = require('./models/Meeting');
+require('dotenv').config();
 
 async function checkLatestMeetingTranscription() {
   try {
-    await mongoose.connect('mongodb+srv://techfuturepodsuddit:uddit@cluster0.f3fzm4.mongodb.net/richieat?retryWrites=true&w=majority&appName=Cluster0');
+    await mongoose.connect(process.env.MONGODB_URI);
     
     console.log('🔍 CHECKING LATEST MEETING TRANSCRIPTION:');
     console.log('========================================\n');

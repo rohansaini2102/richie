@@ -42,7 +42,7 @@
 #### Configuration Changes
 1. **MongoDB Atlas Connection**
    ```
-   MONGODB_URI=mongodb+srv://rohansainicoc:AGKd4swK1xItFtLf@richieai.opx2scb.mongodb.net/richiai2?retryWrites=true&w=majority
+   MONGODB_URI=mongodb+srv://[USERNAME]:[PASSWORD]@[CLUSTER].mongodb.net/[DATABASE]?retryWrites=true&w=majority
    ```
 
 2. **PostCSS Configuration**
@@ -186,8 +186,8 @@
 
 #### Email Configuration
 ```
-EMAIL_USER=udditkantsinha@gmail.com
-EMAIL_PASS=bwzn snqd lfbb mpyy
+EMAIL_USER=[GMAIL_ADDRESS]
+EMAIL_PASS=[APP_PASSWORD]
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 CLIENT_FORM_BASE_URL=http://localhost:5173/client-onboarding

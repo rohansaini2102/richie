@@ -42,7 +42,7 @@ docs/
 ```
 
 ### Key Configurations
-- **MongoDB URI:** mongodb+srv://rohansainicoc:AGKd4swK1xItFtLf@richieai.opx2scb.mongodb.net/richiai2?retryWrites=true&w=majority
+- **MongoDB URI:** mongodb+srv://[USERNAME]:[PASSWORD]@[CLUSTER].mongodb.net/[DATABASE]?retryWrites=true&w=majority
 - **PostCSS Plugin:** @tailwindcss/postcss
 - **Environment:** Development setup with .env configuration
 

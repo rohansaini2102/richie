@@ -14,6 +14,7 @@ import ClientDetailView from './components/client/ClientDetailView'
 import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
 import { MeetingsPage } from './components/meetings'
+import LOESignaturePage from './components/loe/LOESignaturePage'
 
 function App() {
   return (
@@ -49,6 +50,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/client-onboarding/:token" element={<ClientOnboardingForm />} />
+            <Route path="/loe/sign/:token" element={<LOESignaturePage />} />
             
             {/* Admin routes */}
             <Route path="/admin/login" element={<AdminLogin />} />

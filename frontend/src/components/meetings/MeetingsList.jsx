@@ -12,11 +12,14 @@ import {
   Filter,
   RefreshCw,
   FileText,
-  Eye
+  Eye,
+  Send
 } from 'lucide-react';
 import { meetingAPI } from '../../services/api';
 import TranscriptViewer from './TranscriptViewer';
 import MeetingRoom from './MeetingRoom';
+import LOESendModal from './LOESendModal';
+import LOEStatusBadge from './LOEStatusBadge';
 
 const MeetingsList = ({ refreshTrigger }) => {
   const [meetings, setMeetings] = useState([]);
@@ -28,6 +31,7 @@ const MeetingsList = ({ refreshTrigger }) => {
   const [joinedMeeting, setJoinedMeeting] = useState(null);
   const [showDirectJoin, setShowDirectJoin] = useState(false);
   const [directJoinUrl, setDirectJoinUrl] = useState('');
+  const [selectedLOEMeeting, setSelectedLOEMeeting] = useState(null);
 
   useEffect(() => {
     loadMeetings();
@@ -318,6 +322,7 @@ const MeetingsList = ({ refreshTrigger }) => {
                     </div>
                     {getStatusBadge(meeting.status)}
                     {getMeetingTypeBadge(meeting.meetingType)}
+                    <LOEStatusBadge meetingId={meeting.id || meeting._id} />
                   </div>
                   
                   {/* Date/Time */}
@@ -444,6 +449,18 @@ const MeetingsList = ({ refreshTrigger }) => {
                       Transcript
                     </button>
                   )}
+
+                  {/* Send LOE Button */}
+                  {meeting.status === 'completed' && (
+                    <button
+                      onClick={() => setSelectedLOEMeeting(meeting)}
+                      className="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                      title="Send Letter of Engagement"
+                    >
+                      <Send className="h-3 w-3" />
+                      Send LOE
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -456,6 +473,22 @@ const MeetingsList = ({ refreshTrigger }) => {
         <TranscriptViewer
           meetingId={selectedTranscriptMeeting}
           onClose={() => setSelectedTranscriptMeeting(null)}
+        />
+      )}
+
+      {/* LOE Send Modal */}
+      {selectedLOEMeeting && (
+        <LOESendModal
+          isOpen={!!selectedLOEMeeting}
+          onClose={() => setSelectedLOEMeeting(null)}
+          meeting={selectedLOEMeeting}
+          onSuccess={(loeData) => {
+            const action = loeData?.wasResent ? 'resent' : 'sent';
+            console.log(`✅ LOE ${action} successfully:`, loeData);
+            
+            // Refresh meetings to show updated LOE status
+            loadMeetings();
+          }}
         />
       )}
 

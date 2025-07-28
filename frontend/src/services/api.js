@@ -1386,5 +1386,75 @@ export const meetingAPI = {
   }
 };
 
+// Letter of Engagement (LOE) API
+export const loeAPI = {
+  // Send LOE for a meeting
+  sendLOE: async (meetingId, customNotes = '') => {
+    console.log('📄 SENDING LOE:', { meetingId, hasCustomNotes: !!customNotes });
+    
+    const response = await api.post('/loe/send', {
+      meetingId,
+      customNotes
+    });
+    
+    console.log('✅ LOE SENT:', {
+      loeId: response.data.data?.loeId,
+      status: response.data.data?.status,
+      clientAccessUrl: response.data.data?.clientAccessUrl
+    });
+    
+    return response.data;
+  },
+
+  // Get LOE status for a meeting
+  getMeetingLOEStatus: async (meetingId) => {
+    const response = await api.get(`/loe/meeting/${meetingId}/status`);
+    return response.data;
+  },
+
+  // Get all LOEs for advisor
+  getAdvisorLOEs: async (params = {}) => {
+    const queryParams = new URLSearchParams({
+      page: params.page || 1,
+      limit: params.limit || 20,
+      status: params.status || ''
+    });
+    
+    const response = await api.get(`/loe/advisor?${queryParams}`);
+    return response.data;
+  },
+
+  // Public endpoints (no auth required)
+  // View LOE by token
+  viewLOE: async (token) => {
+    console.log('👁️ VIEWING LOE:', { token });
+    
+    const response = await api.get(`/loe/view/${token}`);
+    
+    console.log('✅ LOE RETRIEVED:', {
+      status: response.data.data?.status,
+      isSigned: response.data.data?.isSigned
+    });
+    
+    return response.data;
+  },
+
+  // Sign LOE
+  signLOE: async (token, signature) => {
+    console.log('✍️ SIGNING LOE:', { token, hasSignature: !!signature });
+    
+    const response = await api.post(`/loe/sign/${token}`, {
+      signature
+    });
+    
+    console.log('✅ LOE SIGNED:', {
+      status: response.data.data?.status,
+      signedAt: response.data.data?.signedAt
+    });
+    
+    return response.data;
+  }
+};
+
 // Export default API instance for custom requests
 export default api;
