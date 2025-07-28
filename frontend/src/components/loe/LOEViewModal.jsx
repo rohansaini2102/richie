@@ -19,6 +19,15 @@ const LOEViewModal = ({ isOpen, onClose, loe }) => {
       const response = await loeAPI.viewLOE(loe.accessToken);
       
       if (response.success) {
+        console.log('🖊️ [LOEViewModal] LOE Details loaded:', {
+          isSigned: response.data.isSigned,
+          hasSignature: !!response.data.signature,
+          signatureLength: response.data.signature?.length,
+          signatureTimestamp: response.data.signatureTimestamp,
+          signaturePreview: response.data.signature?.substring(0, 100),
+          signatureIsDataUrl: response.data.signature?.startsWith('data:'),
+          signatureFormat: response.data.signature?.substring(0, 30)
+        });
         setLoeDetails(response.data);
       } else {
         toast.error('Failed to load LOE details');
@@ -223,21 +232,52 @@ const LOEViewModal = ({ isOpen, onClose, loe }) => {
               )}
 
               {/* Signature Section */}
-              {loeDetails.isSigned && loeDetails.signature && (
+              {loeDetails.isSigned && (
                 <>
                   <div className="section-title">CLIENT SIGNATURE</div>
                   <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                     <div className="text-center">
-                      {loeDetails.signature && (
-                        <img 
-                          src={loeDetails.signature} 
-                          alt="Client Signature" 
-                          className="mx-auto mb-4 border border-gray-300"
-                          style={{ maxHeight: '100px' }}
-                        />
+                      {loeDetails.signature ? (
+                        <div>
+                          <img 
+                            src={loeDetails.signature} 
+                            alt="Client Signature" 
+                            className="mx-auto mb-4 border border-gray-300 bg-white p-2 rounded"
+                            style={{ maxHeight: '120px', maxWidth: '300px' }}
+                            onError={(e) => {
+                              console.error('🖊️ Signature image failed to load:', {
+                                src: e.target.src,
+                                srcLength: e.target.src?.length,
+                                isDataUrl: e.target.src?.startsWith('data:'),
+                                srcPreview: e.target.src?.substring(0, 100),
+                                error: e
+                              });
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'block';
+                            }}
+                            onLoad={(e) => {
+                              console.log('🖊️ Signature image loaded successfully:', {
+                                naturalWidth: e.target.naturalWidth,
+                                naturalHeight: e.target.naturalHeight
+                              });
+                            }}
+                          />
+                          <div 
+                            className="hidden text-gray-500 italic p-4 border border-gray-300 rounded bg-white"
+                            style={{ maxWidth: '300px', margin: '0 auto' }}
+                          >
+                            [Signature image could not be displayed]
+                            <br />
+                            <small>Check browser console for details</small>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-gray-500 italic p-4 border border-gray-300 rounded bg-white">
+                          [Electronic signature recorded]
+                        </div>
                       )}
-                      <p className="text-sm text-gray-600">
-                        Signed electronically on {formatDate(loeDetails.signature?.timestamp)}
+                      <p className="text-sm text-gray-600 mt-4">
+                        Signed electronically on {formatDate(loeDetails.signatureTimestamp)}
                       </p>
                     </div>
                   </div>
@@ -258,7 +298,7 @@ const LOEViewModal = ({ isOpen, onClose, loe }) => {
             {loeDetails?.isSigned && (
               <div className="flex items-center text-green-600">
                 <CheckCircle className="h-5 w-5 mr-2" />
-                <span className="font-medium">Signed on {formatDate(loeDetails.signature?.timestamp)}</span>
+                <span className="font-medium">Signed on {formatDate(loeDetails.signatureTimestamp)}</span>
               </div>
             )}
           </div>

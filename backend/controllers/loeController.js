@@ -278,6 +278,19 @@ exports.getLOEByToken = async (req, res) => {
     }
 
     // Prepare LOE data for display
+    const signatureData = loe.signatures?.client?.data;
+    const hasSignatureData = signatureData && signatureData.length > 0;
+    
+    logger.info('🖊️ [LOE] Signature debug info', {
+      loeId: loe._id,
+      status: loe.status,
+      hasSignatures: !!loe.signatures,
+      hasClientSignature: !!loe.signatures?.client,
+      hasSignatureData: hasSignatureData,
+      signatureDataLength: signatureData?.length,
+      signatureDataPreview: signatureData ? signatureData.substring(0, 50) + '...' : null
+    });
+
     const loeData = {
       id: loe._id,
       status: loe.status,
@@ -295,7 +308,10 @@ exports.getLOEByToken = async (req, res) => {
       createdAt: loe.createdAt,
       expiresAt: loe.expiresAt,
       isSigned: loe.status === 'signed',
-      signature: loe.status === 'signed' ? loe.signatures.client : null
+      signature: hasSignatureData ? 
+        (signatureData.startsWith('data:') ? signatureData : `data:image/png;base64,${signatureData}`) : null,
+      signatureTimestamp: loe.status === 'signed' && loe.signatures?.client ? 
+        loe.signatures.client.timestamp : null
     };
 
     res.json({
