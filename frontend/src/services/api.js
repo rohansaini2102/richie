@@ -1227,6 +1227,25 @@ export const meetingAPI = {
     return response.data;
   },
 
+  // Get meetings for a specific client
+  getMeetingsByClient: async (clientId, params = {}) => {
+    const queryParams = new URLSearchParams({
+      limit: params.limit || 20,
+      status: params.status || ''
+    });
+    
+    console.log('📋 FETCHING CLIENT MEETINGS:', { clientId, params });
+    
+    const response = await api.get(`/meetings/client/${clientId}?${queryParams}`);
+    
+    console.log('✅ CLIENT MEETINGS FETCHED:', {
+      clientId,
+      meetingCount: response.data.meetings?.length || 0
+    });
+    
+    return response.data;
+  },
+
   // Get a specific meeting by ID
   getMeetingById: async (meetingId) => {
     console.log('🔍 FETCHING MEETING:', { meetingId });
@@ -1422,6 +1441,89 @@ export const loeAPI = {
     
     const response = await api.get(`/loe/advisor?${queryParams}`);
     return response.data;
+  },
+
+  // Get LOEs for a specific client (filter from advisor LOEs)
+  getLOEsByClient: async (clientId) => {
+    console.log('📋 FETCHING CLIENT LOEs:', { clientId });
+    
+    try {
+      // Get all LOEs and filter by clientId on frontend
+      // Since backend doesn't have client-specific endpoint yet
+      const response = await api.get('/loe/advisor?limit=100');
+      
+      console.log('📊 LOE API Response:', {
+        success: response.data?.success,
+        hasData: !!response.data?.data,
+        loesCount: response.data?.data?.loes?.length || 0,
+        structure: response.data
+      });
+      
+      if (response.data?.success && response.data?.data?.loes) {
+        // Log first LOE to check structure
+        if (response.data.data.loes.length > 0) {
+          console.log('🔍 First LOE structure:', {
+            loe: response.data.data.loes[0],
+            clientIdField: response.data.data.loes[0].clientId,
+            clientIdType: typeof response.data.data.loes[0].clientId
+          });
+        }
+        
+        const clientLOEs = response.data.data.loes.filter(loe => {
+          // Handle null/undefined clientId
+          if (!loe.clientId) {
+            console.log('⚠️ LOE has no clientId:', { loeId: loe._id });
+            return false;
+          }
+          
+          const loeClientId = typeof loe.clientId === 'object' ? loe.clientId._id : loe.clientId;
+          const matches = loeClientId === clientId;
+          
+          console.log('🔍 LOE Filter Check:', {
+            loeId: loe._id,
+            loeClientId,
+            targetClientId: clientId,
+            clientIdType: typeof loe.clientId,
+            clientIdObject: loe.clientId,
+            matches
+          });
+          
+          return matches;
+        });
+        
+        console.log('✅ CLIENT LOEs FILTERED:', {
+          clientId,
+          totalLOEs: response.data.data.loes.length,
+          clientLOEs: clientLOEs.length,
+          filteredLOEs: clientLOEs
+        });
+        
+        return {
+          success: true,
+          data: {
+            loes: clientLOEs,
+            pagination: {
+              total: clientLOEs.length,
+              page: 1,
+              pages: 1
+            }
+          }
+        };
+      }
+      
+      console.warn('⚠️ No LOE data found in response');
+      return {
+        success: false,
+        data: { loes: [], pagination: { total: 0, page: 1, pages: 0 } }
+      };
+      
+    } catch (error) {
+      console.error('❌ Error fetching client LOEs:', error);
+      return {
+        success: false,
+        data: { loes: [], pagination: { total: 0, page: 1, pages: 0 } }
+      };
+    }
   },
 
   // Public endpoints (no auth required)

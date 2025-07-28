@@ -36,6 +36,16 @@ router.get('/advisor', (req, res, next) => {
   next();
 }, meetingController.getAdvisorMeetings);
 
+// Get meetings for a specific client
+router.get('/client/:clientId', (req, res, next) => {
+  logger.info('📋 [MeetingRoutes] Get client meetings request', {
+    advisorId: req.advisor?.id,
+    clientId: req.params.clientId,
+    queryParams: req.query
+  });
+  next();
+}, meetingController.getMeetingsByClient);
+
 // Get a specific meeting by ID
 router.get('/:meetingId', (req, res, next) => {
   logger.info('🔍 [MeetingRoutes] Get meeting by ID request', {

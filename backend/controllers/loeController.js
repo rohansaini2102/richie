@@ -394,13 +394,54 @@ exports.getAdvisorLOEs = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
+    
+    // For LOEs created during onboarding, clientId might be an invitation ID
+    // We need to fetch the actual client data for those
+    const processedLOEs = await Promise.all(loes.map(async (loe) => {
+      const loeObj = loe.toObject();
+      
+      // If clientId wasn't populated (null), it might be an invitation ID
+      if (!loeObj.clientId && loe.clientId) {
+        try {
+          const ClientInvitation = require('../models/ClientInvitation');
+          const invitation = await ClientInvitation.findById(loe.clientId)
+            .populate('clientData', 'firstName lastName email');
+          
+          if (invitation && invitation.clientData) {
+            // Use the actual client data from the invitation
+            loeObj.clientId = invitation.clientData;
+            logger.info('📄 [LOE] Resolved client from invitation', {
+              loeId: loe._id,
+              invitationId: loe.clientId,
+              clientId: invitation.clientData._id
+            });
+          } else {
+            // If no client data, use invitation data
+            loeObj.clientId = {
+              _id: loe.clientId,
+              firstName: invitation?.clientFirstName || 'Unknown',
+              lastName: invitation?.clientLastName || 'Client',
+              email: invitation?.clientEmail || ''
+            };
+          }
+        } catch (error) {
+          logger.warn('⚠️ [LOE] Could not resolve client from invitation', {
+            loeId: loe._id,
+            clientId: loe.clientId,
+            error: error.message
+          });
+        }
+      }
+      
+      return loeObj;
+    }));
 
     const total = await LOE.countDocuments(query);
 
     res.json({
       success: true,
       data: {
-        loes,
+        loes: processedLOEs,
         pagination: {
           total,
           page: parseInt(page),

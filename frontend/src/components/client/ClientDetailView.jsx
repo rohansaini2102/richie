@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { clientAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 import { PlanCreationModal, CashFlowPlanning, PlanHistory } from '../planning';
+import ClientLOESection from './ClientLOESection';
 import { 
   User, 
   Mail, 
@@ -1242,68 +1243,79 @@ function ClientDetailView() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="space-y-6">
-        {/* Step 1: Personal Information */}
-        {renderStep1PersonalInfo()}
+      {/* Main Content - Two Column Layout */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Left Column - Client Information (2 columns wide) */}
+        <div className="xl:col-span-2 space-y-6">
+          {/* Step 1: Personal Information */}
+          {renderStep1PersonalInfo()}
 
-        {/* Step 2: Income & Expenses */}
-        {renderStep2IncomeExpenses()}
+          {/* Step 2: Income & Expenses */}
+          {renderStep2IncomeExpenses()}
 
-        {/* Step 3: Retirement Planning */}
-        {renderStep3RetirementPlanning()}
+          {/* Step 3: Retirement Planning */}
+          {renderStep3RetirementPlanning()}
 
-        {/* Step 4: CAS & Investments */}
-        {renderStep4CasInvestments()}
+          {/* Step 4: CAS & Investments */}
+          {renderStep4CasInvestments()}
 
-        {/* Step 5: Debts & Liabilities */}
-        {renderStep5DebtsLiabilities()}
+          {/* Step 5: Debts & Liabilities */}
+          {renderStep5DebtsLiabilities()}
 
-        {/* Step 6: Insurance Coverage */}
-        {renderStep6Insurance()}
+          {/* Step 6: Insurance Coverage */}
+          {renderStep6Insurance()}
 
-        {/* Step 7: Goals & Risk Profile */}
-        {renderStep7GoalsRiskProfile()}
+          {/* Step 7: Goals & Risk Profile */}
+          {renderStep7GoalsRiskProfile()}
 
-        {/* Financial Planning Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-              <TrendingUp className="h-5 w-5 mr-2" />
-              Financial Planning Strategies
-            </h2>
-            <button
-              onClick={() => {
-                console.group('🚀 [ClientDetailView] Opening Plan Creation Modal');
-                console.log('📋 Modal Trigger Data:', {
-                  clientId,
-                  clientName: clientName || `${client?.firstName} ${client?.lastName}`,
-                  hasClient: !!client,
-                  clientKeys: client ? Object.keys(client).slice(0, 10) : [],
-                  timestamp: new Date().toISOString()
-                });
-                console.log('👤 Client Data Being Passed:', {
-                  firstName: client?.firstName,
-                  lastName: client?.lastName,
-                  email: client?.email,
-                  hasFinancialData: !!(client?.totalMonthlyIncome || client?.totalMonthlyExpenses),
-                  hasAssets: !!client?.assets,
-                  hasDebts: !!client?.debtsAndLiabilities,
-                  dataSize: client ? JSON.stringify(client).length : 0
-                });
-                console.groupEnd();
-                setShowPlanModal(true);
-              }}
-              className="flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Create New Plan
-            </button>
+          {/* Financial Planning Section */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                <TrendingUp className="h-5 w-5 mr-2" />
+                Financial Planning Strategies
+              </h2>
+              <button
+                onClick={() => {
+                  console.group('🚀 [ClientDetailView] Opening Plan Creation Modal');
+                  console.log('📋 Modal Trigger Data:', {
+                    clientId,
+                    clientName: clientName || `${client?.firstName} ${client?.lastName}`,
+                    hasClient: !!client,
+                    clientKeys: client ? Object.keys(client).slice(0, 10) : [],
+                    timestamp: new Date().toISOString()
+                  });
+                  console.log('👤 Client Data Being Passed:', {
+                    firstName: client?.firstName,
+                    lastName: client?.lastName,
+                    email: client?.email,
+                    hasFinancialData: !!(client?.totalMonthlyIncome || client?.totalMonthlyExpenses),
+                    hasAssets: !!client?.assets,
+                    hasDebts: !!client?.debtsAndLiabilities,
+                    dataSize: client ? JSON.stringify(client).length : 0
+                  });
+                  console.groupEnd();
+                  setShowPlanModal(true);
+                }}
+                className="flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Create New Plan
+              </button>
+            </div>
+
+            <PlanHistory 
+              clientId={clientId} 
+              onSelectPlan={handleSelectPlan}
+            />
           </div>
+        </div>
 
-          <PlanHistory 
+        {/* Right Column - LOE Section (1 column wide) */}
+        <div className="xl:col-span-1">
+          <ClientLOESection 
             clientId={clientId} 
-            onSelectPlan={handleSelectPlan}
+            clientName={clientName}
           />
         </div>
       </div>

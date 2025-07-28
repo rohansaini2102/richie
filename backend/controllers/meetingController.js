@@ -1019,4 +1019,88 @@ const createMeetingTokens = async (roomName, advisorId, clientId, client, reques
   }
 };
 
+// Get meetings for a specific client
+exports.getMeetingsByClient = async (req, res) => {
+  try {
+    const advisorId = req.advisor.id;
+    const { clientId } = req.params;
+    const { limit = 20, status } = req.query;
+
+    logger.info('📋 [MeetingController] Fetching meetings for client', {
+      advisorId,
+      clientId,
+      limit,
+      status
+    });
+
+    // Verify client belongs to advisor
+    const client = await Client.findOne({ _id: clientId, advisor: advisorId });
+    if (!client) {
+      logger.warn('❌ [MeetingController] Client not found or unauthorized', {
+        clientId,
+        advisorId
+      });
+      return res.status(404).json({ 
+        success: false,
+        error: 'Client not found or unauthorized access' 
+      });
+    }
+
+    let query = { advisorId, clientId };
+    
+    if (status) {
+      query.status = status;
+    }
+
+    const meetings = await Meeting.find(query)
+      .populate('clientId', 'firstName lastName email')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    logger.info('✅ [MeetingController] Client meetings fetched successfully', {
+      advisorId,
+      clientId,
+      meetingsCount: meetings.length
+    });
+
+    res.json({
+      success: true,
+      meetings: meetings.map(meeting => ({
+        id: meeting._id,
+        roomName: meeting.roomName,
+        roomUrl: meeting.roomUrl,
+        scheduledAt: meeting.scheduledAt,
+        meetingType: meeting.meetingType,
+        status: meeting.status,
+        client: meeting.clientId,
+        clientMeetingLink: meeting.clientMeetingLink,
+        createdAt: meeting.createdAt,
+        updatedAt: meeting.updatedAt,
+        transcript: meeting.transcript ? {
+          status: meeting.transcript.status,
+          messagesCount: meeting.transcript.realTimeMessages.length,
+          hasFinalTranscript: !!meeting.transcript.finalTranscript,
+          hasSummary: !!meeting.transcript.summary
+        } : null,
+        recording: meeting.recording ? {
+          status: meeting.recording.status,
+          recordingUrl: meeting.recording.recordingUrl,
+          downloadUrl: meeting.recording.downloadUrl
+        } : null
+      }))
+    });
+
+  } catch (error) {
+    logger.error('❌ [MeetingController] Error fetching client meetings', {
+      clientId: req.params.clientId,
+      error: error.message
+    });
+
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch client meetings' 
+    });
+  }
+};
+
 module.exports = exports;

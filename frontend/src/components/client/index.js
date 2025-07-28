@@ -27,3 +27,4 @@ export { default as RequiredFieldsChecklist } from './RequiredFieldsChecklist';
 export { default as ClientCard } from './ClientCard';
 export { default as ClientList } from './ClientList';
 export { default as ClientDetailView } from './ClientDetailView';
+export { default as ClientLOESection } from './ClientLOESection';
