@@ -1,6 +1,5 @@
 import React from 'react';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import { 
   Box, 
   Button, 
@@ -38,29 +37,307 @@ class GoalPlanPDFGenerator {
     this.margin = 20;
     this.contentWidth = this.pageWidth - (2 * this.margin);
     
-    // Initialize and verify autoTable plugin
-    this.initializeAutoTable();
+    // Professional financial services theme
+    this.theme = {
+      colors: {
+        primary: [26, 54, 93],      // Deep navy
+        secondary: [37, 99, 235],   // Professional blue
+        accent: [245, 158, 11],     // Gold accent
+        success: [34, 197, 94],     // Green for positive
+        warning: [234, 179, 8],     // Amber for caution
+        danger: [239, 68, 68],      // Red for negative
+        gray: {
+          50: [250, 250, 250],
+          100: [245, 245, 245],
+          200: [229, 231, 235],
+          300: [209, 213, 219],
+          400: [156, 163, 175],
+          500: [107, 114, 128],
+          600: [75, 85, 99],
+          700: [55, 65, 81],
+          800: [31, 41, 55],
+          900: [17, 24, 39]
+        },
+        background: {
+          light: [248, 250, 252],
+          medium: [241, 245, 249],
+          gradient: [240, 248, 255]
+        }
+      },
+      fonts: {
+        sizes: {
+          title: 24,
+          heading1: 18,
+          heading2: 16,
+          heading3: 14,
+          heading4: 12,
+          body: 11,
+          small: 10,
+          tiny: 9
+        },
+        lineHeight: {
+          tight: 1.2,
+          normal: 1.4,
+          relaxed: 1.6
+        }
+      },
+      spacing: {
+        xs: 4,
+        sm: 8,
+        md: 12,
+        lg: 16,
+        xl: 24,
+        xxl: 32
+      }
+    };
   }
 
-  initializeAutoTable() {
-    console.log('🔍 [PDF Generator] Checking autoTable availability...');
+  /**
+   * Create professional table without autoTable dependency
+   */
+  createProfessionalTable(doc, data, headers, startY, options = {}) {
+    const {
+      title = null,
+      columnWidths = null,
+      headerStyle = 'primary',
+      alternateRows = true,
+      showBorders = true,
+      fontSize = this.theme.fonts.sizes.body,
+      headerFontSize = this.theme.fonts.sizes.heading4,
+      cellPadding = 6,
+      maxWidth = this.contentWidth - 10
+    } = options;
+
+    let y = startY;
     
-    // Create a test jsPDF instance to check plugin availability
-    const testDoc = new jsPDF();
-    console.log('autoTable method on instance:', typeof testDoc.autoTable);
+    // Validate data
+    if (!data || data.length === 0) {
+      console.warn('⚠️ [PDF Generator] No data provided for table');
+      return y;
+    }
+
+    // Add title if provided
+    if (title) {
+      doc.setFontSize(this.theme.fonts.sizes.heading3);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...this.theme.colors.primary);
+      doc.text(title, this.margin, y);
+      y += this.theme.spacing.md;
+      doc.setTextColor(0, 0, 0); // Reset color
+    }
+
+    // Calculate column widths
+    const numColumns = headers ? headers.length : (data[0] ? data[0].length : 1);
+    const finalColumnWidths = columnWidths || this.calculateOptimalColumnWidths(doc, data, headers, maxWidth, fontSize);
     
-    // For jsPDF 3.x with jspdf-autotable 5.x, the plugin should be auto-attached
-    if (typeof testDoc.autoTable === 'function') {
-      console.log('✅ [PDF Generator] autoTable plugin properly loaded');
-      return true;
-    } else {
-      console.warn('⚠️ [PDF Generator] autoTable not available - will use fallback tables');
-      return false;
+    // Ensure we don't exceed page width
+    const totalWidth = finalColumnWidths.reduce((sum, width) => sum + width, 0);
+    if (totalWidth > maxWidth) {
+      const scaleFactor = maxWidth / totalWidth;
+      finalColumnWidths.forEach((width, index) => {
+        finalColumnWidths[index] = width * scaleFactor;
+      });
+    }
+
+    const tableWidth = finalColumnWidths.reduce((sum, width) => sum + width, 0);
+    const tableStartX = this.margin + (maxWidth - tableWidth) / 2; // Center table
+
+    // Check if we need a new page
+    const estimatedHeight = (data.length + (headers ? 1 : 0)) * (cellPadding * 2 + fontSize * 1.2);
+    if (y + estimatedHeight > this.pageHeight - this.margin - 20) {
+      doc.addPage();
+      y = this.margin + this.theme.spacing.md;
+    }
+
+    // Draw table header if provided
+    if (headers && headers.length > 0) {
+      const headerHeight = cellPadding * 2 + headerFontSize * 1.2;
+      
+      // Header background
+      const headerColor = headerStyle === 'primary' ? this.theme.colors.primary : this.theme.colors.secondary;
+      doc.setFillColor(...headerColor);
+      doc.rect(tableStartX, y, tableWidth, headerHeight, 'F');
+      
+      // Header text
+      doc.setFontSize(headerFontSize);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255); // White text
+      
+      let currentX = tableStartX;
+      headers.forEach((header, index) => {
+        const colWidth = finalColumnWidths[index];
+        const wrappedText = this.wrapTextToWidth(doc, String(header), colWidth - cellPadding * 2, headerFontSize);
+        
+        // Center text vertically in cell
+        const textY = y + cellPadding + (headerHeight - cellPadding * 2) / 2;
+        wrappedText.forEach((line, lineIndex) => {
+          doc.text(line, currentX + cellPadding, textY + (lineIndex * headerFontSize * 1.2));
+        });
+        
+        currentX += colWidth;
+      });
+      
+      y += headerHeight;
+      doc.setTextColor(0, 0, 0); // Reset text color
+    }
+
+    // Draw data rows
+    doc.setFontSize(fontSize);
+    doc.setFont('helvetica', 'normal');
+    
+    data.forEach((row, rowIndex) => {
+      // Calculate row height based on content
+      const rowHeight = this.calculateRowHeight(doc, row, finalColumnWidths, fontSize, cellPadding);
+      
+      // Check if row fits on current page
+      if (y + rowHeight > this.pageHeight - this.margin - 10) {
+        doc.addPage();
+        y = this.margin + this.theme.spacing.md;
+      }
+      
+      // Alternate row background
+      if (alternateRows && rowIndex % 2 === 0) {
+        doc.setFillColor(...this.theme.colors.background.light);
+        doc.rect(tableStartX, y, tableWidth, rowHeight, 'F');
+      }
+      
+      // Draw cell content
+      let currentX = tableStartX;
+      row.forEach((cell, colIndex) => {
+        const colWidth = finalColumnWidths[colIndex];
+        const cellText = String(cell || '');
+        const wrappedText = this.wrapTextToWidth(doc, cellText, colWidth - cellPadding * 2, fontSize);
+        
+        // Draw text with proper alignment
+        const textY = y + cellPadding;
+        wrappedText.forEach((line, lineIndex) => {
+          if (line.trim()) {
+            // Right align numbers, left align text
+            const isNumber = /^[₹$]?[\d,.-]+%?$/.test(line.trim());
+            const textX = isNumber ? 
+              currentX + colWidth - cellPadding - doc.getTextWidth(line) : 
+              currentX + cellPadding;
+            
+            doc.text(line, textX, textY + (lineIndex * fontSize * 1.2));
+          }
+        });
+        
+        currentX += colWidth;
+      });
+      
+      y += rowHeight;
+    });
+
+    // Draw table borders if requested
+    if (showBorders) {
+      doc.setDrawColor(...this.theme.colors.gray[300]);
+      doc.setLineWidth(0.5);
+      
+      const tableHeight = y - startY - (title ? this.theme.spacing.md : 0);
+      
+      // Outer border
+      doc.rect(tableStartX, startY + (title ? this.theme.spacing.md : 0), tableWidth, tableHeight);
+      
+      // Column separators
+      let currentX = tableStartX;
+      finalColumnWidths.forEach((colWidth, index) => {
+        if (index < finalColumnWidths.length - 1) {
+          currentX += colWidth;
+          doc.line(currentX, startY + (title ? this.theme.spacing.md : 0), currentX, y);
+        }
+      });
+      
+      // Row separators (optional)
+      if (headers) {
+        const headerHeight = cellPadding * 2 + headerFontSize * 1.2;
+        doc.line(tableStartX, startY + (title ? this.theme.spacing.md : 0) + headerHeight, 
+                tableStartX + tableWidth, startY + (title ? this.theme.spacing.md : 0) + headerHeight);
+      }
+    }
+
+    return y + this.theme.spacing.md;
+  }
+
+  /**
+   * Calculate optimal column widths based on content
+   */
+  calculateOptimalColumnWidths(doc, data, headers, maxWidth, fontSize) {
+    const numColumns = headers ? headers.length : (data[0] ? data[0].length : 1);
+    const minColWidth = 25; // Minimum column width in mm
+    const padding = 12; // Extra padding per column
+    
+    // Calculate content-based widths
+    const contentWidths = [];
+    
+    for (let colIndex = 0; colIndex < numColumns; colIndex++) {
+      let maxWidth = minColWidth;
+      
+      // Check header width
+      if (headers && headers[colIndex]) {
+        doc.setFontSize(fontSize);
+        const headerWidth = doc.getTextWidth(String(headers[colIndex])) + padding;
+        maxWidth = Math.max(maxWidth, headerWidth);
+      }
+      
+      // Check data content width
+      data.forEach(row => {
+        if (row[colIndex]) {
+          doc.setFontSize(fontSize);
+          const cellWidth = doc.getTextWidth(String(row[colIndex])) + padding;
+          maxWidth = Math.max(maxWidth, cellWidth);
+        }
+      });
+      
+      contentWidths.push(maxWidth);
+    }
+    
+    // Scale to fit available width
+    const totalContentWidth = contentWidths.reduce((sum, width) => sum + width, 0);
+    
+    if (totalContentWidth > maxWidth) {
+      const scaleFactor = maxWidth / totalContentWidth;
+      return contentWidths.map(width => Math.max(width * scaleFactor, minColWidth));
+    }
+    
+    return contentWidths;
+  }
+
+  /**
+   * Calculate row height based on wrapped content
+   */
+  calculateRowHeight(doc, row, columnWidths, fontSize, cellPadding) {
+    let maxLines = 1;
+    
+    row.forEach((cell, colIndex) => {
+      if (cell && columnWidths[colIndex]) {
+        const wrappedLines = this.wrapTextToWidth(doc, String(cell), columnWidths[colIndex] - cellPadding * 2, fontSize);
+        maxLines = Math.max(maxLines, wrappedLines.length);
+      }
+    });
+    
+    return cellPadding * 2 + (maxLines * fontSize * 1.2);
+  }
+
+  /**
+   * Wrap text to fit within specified width
+   */
+  wrapTextToWidth(doc, text, maxWidth, fontSize) {
+    if (!text) return [''];
+    
+    doc.setFontSize(fontSize);
+    
+    // Use jsPDF's built-in text splitting with improved handling
+    try {
+      const lines = doc.splitTextToSize(String(text), maxWidth);
+      return Array.isArray(lines) ? lines : [String(text)];
+    } catch (error) {
+      console.warn('⚠️ [PDF Generator] Text wrapping failed, using fallback:', error);
+      return [String(text).substring(0, Math.floor(maxWidth / 3))];
     }
   }
 
   /**
-   * Create professional fallback table when autoTable is not available
+   * Legacy fallback table method (deprecated)
    */
   createFallbackTable(doc, data, headers, startY, options = {}) {
     let y = startY;
@@ -159,650 +436,694 @@ class GoalPlanPDFGenerator {
   }
 
   /**
-   * Ensure autoTable is available on document instance
+   * Validate and safely extract data
    */
-  ensureAutoTable(doc) {
-    // Check if autoTable is available on the document
-    const isAvailable = typeof doc.autoTable === 'function';
-    
-    if (!isAvailable) {
-      console.warn('⚠️ [PDF Generator] autoTable not available - using fallback tables');
+  safeDataExtract(data, path, defaultValue = null) {
+    try {
+      const keys = path.split('.');
+      let result = data;
+      
+      for (const key of keys) {
+        if (result && typeof result === 'object' && key in result) {
+          result = result[key];
+        } else {
+          return defaultValue;
+        }
+      }
+      
+      return result !== undefined && result !== null ? result : defaultValue;
+    } catch (error) {
+      console.warn(`⚠️ [PDF Generator] Failed to extract data path '${path}':`, error);
+      return defaultValue;
     }
-    
-    return isAvailable;
+  }
+
+  /**
+   * Check if sufficient space exists on current page
+   */
+  checkSpaceAndBreak(doc, currentY, requiredSpace = 40, addHeader = false) {
+    if (currentY + requiredSpace > this.pageHeight - this.margin - 15) {
+      doc.addPage();
+      let newY = this.margin + this.theme.spacing.md;
+      
+      if (addHeader && doc.advisorData) {
+        newY = this.addProfessionalHeader(doc, doc.advisorData, doc.internal.getNumberOfPages());
+      }
+      
+      return newY;
+    }
+    return currentY;
   }
 
   /**
    * Generate comprehensive goal-based financial plan PDF
    */
   generatePDF(data) {
-    const { clientData, editedGoals, recommendations, metrics, cacheInfo, advisorData } = data;
+    // Enhanced data validation and extraction
+    const clientData = this.safeDataExtract(data, 'clientData', {});
+    const editedGoals = this.safeDataExtract(data, 'editedGoals', []);
+    const recommendations = this.safeDataExtract(data, 'recommendations', null);
+    const metrics = this.safeDataExtract(data, 'metrics', {});
+    const cacheInfo = this.safeDataExtract(data, 'cacheInfo', {});
+    const advisorData = this.safeDataExtract(data, 'advisorData', null);
     
-    // Validate input data
-    if (!clientData) {
-      throw new Error('Client data is required for PDF generation');
+    // Validate essential data
+    if (!clientData || !clientData.firstName) {
+      throw new Error('Client data with at least firstName is required for PDF generation');
     }
     
-    if (!editedGoals || editedGoals.length === 0) {
-      console.warn('⚠️ [PDF Generator] No goals provided, generating basic report');
-    }
-    
-    console.log('🎯 [PDF Generator] Starting frontend PDF generation:', {
-      clientName: `${clientData?.firstName} ${clientData?.lastName}`,
-      goalsCount: editedGoals?.length || 0,
+    console.log('🎯 [PDF Generator] Starting professional PDF generation:', {
+      clientName: `${clientData.firstName} ${clientData.lastName || ''}`,
+      goalsCount: editedGoals.length,
       hasRecommendations: !!recommendations,
-      hasMetrics: !!metrics,
-      hasAdvisorData: !!advisorData
+      hasMetrics: Object.keys(metrics).length > 0,
+      hasAdvisorData: !!advisorData,
+      dataQuality: 'Enhanced validation complete'
     });
 
     const doc = new jsPDF();
     
-    // Ensure autoTable is available on this document instance
-    const autoTableReady = this.ensureAutoTable(doc);
-    if (!autoTableReady) {
-      console.warn('⚠️ [PDF Generator] autoTable initialization failed, using fallback tables only');
-    }
+    // Store data references on doc for access in header methods
+    doc.advisorData = advisorData;
+    doc.clientData = clientData;
     
     let currentY = this.margin;
 
-    // 1. Cover Page with Advisor Branding
-    currentY = this.addCoverPage(doc, clientData, advisorData, currentY, cacheInfo);
+    // 1. Cover Page with Enhanced Branding
+    currentY = this.addEnhancedCoverPage(doc, clientData, advisorData, currentY, cacheInfo);
     
-    // 2. Executive Summary
+    // 2. Executive Summary with Professional Design
     doc.addPage();
-    currentY = this.margin + 5; // Add small top margin
-    currentY = this.addExecutiveSummary(doc, clientData, editedGoals, metrics, currentY);
+    currentY = this.addProfessionalHeader(doc, advisorData, 2);
+    currentY = this.addEnhancedExecutiveSummary(doc, clientData, editedGoals, metrics, currentY);
     
-    // 3. Client Profile - use smart page break
-    currentY = this.checkPageBreak(doc, currentY, 80); // Need space for client profile
-    currentY = this.addSectionSpacing(currentY, 20);
-    currentY = this.addClientProfile(doc, clientData, currentY);
+    // 3. Client Profile with Smart Layout
+    currentY = this.checkSpaceAndBreak(doc, currentY, 100, true);
+    currentY += this.theme.spacing.lg;
+    currentY = this.addEnhancedClientProfile(doc, clientData, currentY);
     
-    // 4. Goals Analysis - always start on new page for clarity
+    // 4. Goals Analysis with Visual Enhancements
     doc.addPage();
-    currentY = this.margin + 5;
-    currentY = this.addGoalsAnalysis(doc, editedGoals, currentY);
+    currentY = advisorData ? this.addProfessionalHeader(doc, advisorData, doc.internal.getNumberOfPages()) : this.margin;
+    currentY = this.addEnhancedGoalsAnalysis(doc, editedGoals, currentY);
     
-    // 5. Financial Recommendations - use smart page break
-    if (recommendations) {
-      currentY = this.checkPageBreak(doc, currentY, 60);
-      currentY = this.addSectionSpacing(currentY, 25);
+    // 5. AI Recommendations - Enhanced Presentation
+    if (recommendations && Object.keys(recommendations).length > 0) {
+      currentY = this.checkSpaceAndBreak(doc, currentY, 80, true);
+      currentY += this.theme.spacing.lg;
       currentY = this.addRecommendations(doc, recommendations, currentY);
     }
     
-    // 6. Implementation Timeline - use smart page break
-    currentY = this.checkPageBreak(doc, currentY, 80);
-    currentY = this.addSectionSpacing(currentY, 25);
-    currentY = this.addImplementationTimeline(doc, editedGoals, currentY);
+    // 6. Advisor Recommendations - New Dedicated Section
+    if (advisorData) {
+      currentY = this.checkSpaceAndBreak(doc, currentY, 80, true);
+      currentY += this.theme.spacing.lg;
+      currentY = this.addAdvisorRecommendations(doc, advisorData, editedGoals, metrics, currentY);
+    }
     
-    // 7. Disclaimers - ensure adequate space
-    currentY = this.checkPageBreak(doc, currentY, 50);
-    currentY = this.addSectionSpacing(currentY, 20);
-    currentY = this.addDisclaimers(doc, currentY);
+    // 7. Implementation Timeline with Visual Timeline
+    currentY = this.checkSpaceAndBreak(doc, currentY, 100, true);
+    currentY += this.theme.spacing.lg;
+    currentY = this.addEnhancedImplementationTimeline(doc, editedGoals, currentY);
+    
+    // 8. Professional Disclaimers
+    currentY = this.checkSpaceAndBreak(doc, currentY, 60, true);
+    currentY += this.theme.spacing.lg;
+    currentY = this.addProfessionalDisclaimers(doc, currentY);
 
-    // Add advisor signature section on last page
-    currentY = this.addAdvisorSignature(doc, advisorData, clientData, currentY);
+    // 9. Enhanced Advisor Signature
+    if (advisorData) {
+      currentY = this.addEnhancedAdvisorSignature(doc, advisorData, clientData, currentY);
+    }
 
-    console.log('✅ [PDF Generator] PDF generated successfully');
+    console.log('✅ [PDF Generator] Professional PDF generated successfully with enhanced design');
     return doc;
   }
 
   /**
-   * Add professional header with firm branding to each page
+   * Add professional header with enhanced branding
    */
   addProfessionalHeader(doc, advisorData, pageNumber = 1) {
-    if (!advisorData) return;
-
-    const headerHeight = 25;
+    const headerHeight = 30;
     
-    // Enhanced header background with gradient effect
-    doc.setFillColor(245, 250, 255); // Lighter blue background
+    // Professional gradient background
+    doc.setFillColor(...this.theme.colors.background.gradient);
     doc.rect(0, 0, this.pageWidth, headerHeight, 'F');
     
-    // Add subtle gradient strip at top
-    doc.setFillColor(0, 102, 204);
-    doc.rect(0, 0, this.pageWidth, 3, 'F');
+    // Premium accent strip
+    doc.setFillColor(...this.theme.colors.primary);
+    doc.rect(0, 0, this.pageWidth, 4, 'F');
     
-    // Firm name - prominent with enhanced styling
-    doc.setFontSize(16);
+    // Firm name with enhanced typography - with safe fallback
+    doc.setFontSize(this.theme.fonts.sizes.heading2);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(0, 51, 102); // Dark blue
-    doc.text(advisorData.firmName || 'Financial Advisory Services', this.margin, 12);
+    doc.setTextColor(...this.theme.colors.primary);
+    const firmName = this.safeDataExtract(advisorData, 'firmName', 'Financial Advisory Services');
+    doc.text(firmName, this.margin, 14);
     
-    // Advisor name and credentials with better formatting
-    doc.setFontSize(10);
+    // Advisor credentials with professional formatting - safe extraction
+    doc.setFontSize(this.theme.fonts.sizes.small);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(85, 85, 85); // Slightly darker gray
-    const advisorInfo = `${advisorData.firstName} ${advisorData.lastName}`;
-    const sebiInfo = advisorData.sebiRegNumber ? ` | SEBI Reg: ${advisorData.sebiRegNumber}` : '';
-    doc.text(`${advisorInfo}${sebiInfo}`, this.margin, 18);
+    doc.setTextColor(...this.theme.colors.gray[700]);
     
-    // Page number and date (right aligned) with better styling
+    let advisorInfo = '';
+    if (advisorData && (advisorData.firstName || advisorData.lastName)) {
+      const firstName = this.safeDataExtract(advisorData, 'firstName', '');
+      const lastName = this.safeDataExtract(advisorData, 'lastName', '');
+      advisorInfo = `${firstName} ${lastName}`.trim();
+    }
+    
+    // If no valid advisor name, use default
+    if (!advisorInfo) {
+      advisorInfo = 'Financial Advisor';
+    }
+    
+    const sebiInfo = this.safeDataExtract(advisorData, 'sebiRegNumber', '') 
+      ? ` • SEBI Reg: ${advisorData.sebiRegNumber}` 
+      : '';
+    doc.text(`${advisorInfo}${sebiInfo}`, this.margin, 22);
+    
+    // Page info with elegant styling
     const rightX = this.pageWidth - this.margin;
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(0, 51, 102);
-    doc.text(`Page ${pageNumber}`, rightX, 12, { align: 'right' });
+    doc.setFontSize(this.theme.fonts.sizes.small);
+    doc.setTextColor(...this.theme.colors.primary);
+    doc.text(`Page ${pageNumber}`, rightX, 14, { align: 'right' });
+    
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(85, 85, 85);
-    doc.text(new Date().toLocaleDateString('en-IN'), rightX, 18, { align: 'right' });
+    doc.setFontSize(this.theme.fonts.sizes.tiny);
+    doc.setTextColor(...this.theme.colors.gray[500]);
+    doc.text(new Date().toLocaleDateString('en-IN'), rightX, 22, { align: 'right' });
     
-    // Enhanced header line with double line effect
-    doc.setDrawColor(0, 102, 204);
-    doc.setLineWidth(1);
-    doc.line(this.margin, headerHeight - 3, this.pageWidth - this.margin, headerHeight - 3);
-    doc.setLineWidth(0.3);
-    doc.line(this.margin, headerHeight - 1, this.pageWidth - this.margin, headerHeight - 1);
+    // Professional separator line
+    doc.setDrawColor(...this.theme.colors.secondary);
+    doc.setLineWidth(1.5);
+    doc.line(this.margin, headerHeight - 4, this.pageWidth - this.margin, headerHeight - 4);
     
-    // Reset text color
+    // Reset colors
     doc.setTextColor(0, 0, 0);
     
-    return headerHeight + 5; // Return new Y position
+    return headerHeight + this.theme.spacing.sm;
   }
 
   /**
-   * Add cover page with client details and plan summary
+   * Add enhanced cover page with professional design
    */
-  addCoverPage(doc, clientData, advisorData, startY, cacheInfo) {
-    // Add professional header first
+  addEnhancedCoverPage(doc, clientData, advisorData, startY, cacheInfo) {
+    // Add professional header
     let y = advisorData ? this.addProfessionalHeader(doc, advisorData, 1) : startY;
-    y += 20;
+    y += this.theme.spacing.xl;
     
-    // Title
-    doc.setFontSize(24);
+    // Premium title design
+    doc.setFontSize(this.theme.fonts.sizes.title);
     doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.primary);
     const planTitle = this.getPlanTitle(cacheInfo?.planType || 'goal_based');
     doc.text(planTitle, this.pageWidth / 2, y, { align: 'center' });
     
-    y += 20;
-    doc.setFontSize(16);
+    y += this.theme.spacing.lg;
+    doc.setFontSize(this.theme.fonts.sizes.heading2);
     doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...this.theme.colors.gray[700]);
     doc.text('Comprehensive Investment Strategy Report', this.pageWidth / 2, y, { align: 'center' });
     
-    y += 40;
+    y += this.theme.spacing.xxl + 10;
     
-    // Client Details Box with enhanced styling
-    doc.setDrawColor(0, 102, 204);
-    doc.setFillColor(245, 250, 255);
-    doc.roundedRect(this.margin, y, this.contentWidth, 65, 5, 5, 'FD');
+    // Enhanced client information card
+    const cardHeight = 75;
     
-    // Add subtle inner shadow effect
-    doc.setDrawColor(220, 230, 245);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(this.margin + 1, y + 1, this.contentWidth - 2, 63, 4, 4);
+    // Main card with gradient effect
+    doc.setFillColor(...this.theme.colors.background.light);
+    doc.roundedRect(this.margin, y, this.contentWidth, cardHeight, 8, 8, 'F');
     
-    y += 15;
-    doc.setFontSize(14);
+    // Premium border
+    doc.setDrawColor(...this.theme.colors.secondary);
+    doc.setLineWidth(2);
+    doc.roundedRect(this.margin, y, this.contentWidth, cardHeight, 8, 8, 'S');
+    
+    // Accent stripe
+    doc.setFillColor(...this.theme.colors.accent);
+    doc.roundedRect(this.margin, y, this.contentWidth, 6, 8, 8, 'F');
+    
+    y += this.theme.spacing.lg;
+    
+    // Card title
+    doc.setFontSize(this.theme.fonts.sizes.heading3);
     doc.setFont('helvetica', 'bold');
-    doc.text('CLIENT INFORMATION', this.margin + 10, y);
+    doc.setTextColor(...this.theme.colors.primary);
+    doc.text('CLIENT PROFILE', this.margin + this.theme.spacing.md, y);
     
-    y += 15;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Name: ${clientData.firstName} ${clientData.lastName}`, this.margin + 10, y);
+    y += this.theme.spacing.md;
     
-    y += 10;
-    doc.text(`Age: ${this.calculateAge(clientData.dateOfBirth)} years`, this.margin + 10, y);
+    // Client details with professional formatting
+    const clientDetails = [
+      [`Name:`, `${clientData.firstName} ${clientData.lastName || ''}`],
+      [`Age:`, `${this.calculateAge(clientData.dateOfBirth)} years`],
+      [`Risk Profile:`, `${clientData.riskTolerance || 'Moderate'}`],
+      [`Monthly Income:`, `₹${this.formatCurrency(clientData.totalMonthlyIncome || 0)}`]
+    ];
     
-    y += 10;
-    doc.text(`Risk Tolerance: ${clientData.riskTolerance || 'Moderate'}`, this.margin + 10, y);
+    doc.setFontSize(this.theme.fonts.sizes.body);
+    clientDetails.forEach(([label, value]) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...this.theme.colors.gray[800]);
+      doc.text(label, this.margin + this.theme.spacing.md, y);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...this.theme.colors.gray[700]);
+      const labelWidth = doc.getTextWidth(label + ' ');
+      doc.text(value, this.margin + this.theme.spacing.md + labelWidth, y);
+      
+      y += this.theme.spacing.sm + 2;
+    });
     
-    y += 10;
-    doc.text(`Income: ₹${this.formatCurrency(clientData.totalMonthlyIncome || 0)}/month`, this.margin + 10, y);
+    y += this.theme.spacing.xl;
     
-    y += 30;
-    
-    // Report Details
-    doc.setFontSize(12);
+    // Report metadata with elegant styling
+    doc.setFontSize(this.theme.fonts.sizes.small);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(...this.theme.colors.gray[500]);
     doc.text(`Report Generated: ${new Date().toLocaleDateString('en-IN')}`, this.margin, y);
-    y += 10;
+    y += this.theme.spacing.sm;
     const planTypeLabel = this.getPlanTypeLabel(cacheInfo?.planType || 'goal_based');
     doc.text(`Plan Type: ${planTypeLabel}`, this.margin, y);
+    
+    // Reset colors
+    doc.setTextColor(0, 0, 0);
     
     return y;
   }
 
   /**
-   * Add executive summary with key metrics
+   * Add enhanced executive summary with professional design
    */
-  addExecutiveSummary(doc, clientData, editedGoals, metrics, startY) {
+  addEnhancedExecutiveSummary(doc, clientData, editedGoals, metrics, startY) {
     let y = startY;
     
-    // Section heading with enhanced styling
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(0, 51, 102); // Dark blue
-    doc.text('EXECUTIVE SUMMARY', this.margin, y);
+    // Professional section heading
+    this.addSectionHeader(doc, 'EXECUTIVE SUMMARY', y);
+    y += this.theme.spacing.xl;
     
-    // Add underline for section heading
-    doc.setDrawColor(0, 102, 204);
-    doc.setLineWidth(1);
-    doc.line(this.margin, y + 2, this.margin + 100, y + 2);
-    
-    // Reset text color
-    doc.setTextColor(0, 0, 0);
-    y += 20;
-    
-    // Key Metrics Table - with improved data validation and formatting
-    const summaryHeaders = ['Metric', 'Value'];
+    // Key Metrics with enhanced validation
+    const summaryHeaders = ['Financial Metric', 'Current Status'];
     const summaryData = [
-      ['Total Financial Goals', `${metrics?.totalGoals || editedGoals?.length || 0}`],
-      ['Required Monthly SIP', metrics?.totalRequiredSIP ? `₹${this.formatCurrency(metrics.totalRequiredSIP)}` : 'Calculating...'],
-      ['Available Monthly Surplus', metrics?.availableSurplus ? `₹${this.formatCurrency(metrics.availableSurplus)}` : 'TBD'],
-      ['Plan Feasibility', metrics?.feasible ? '✓ Achievable' : '⚠ Requires Review'],
-      ['Planning Horizon', `${this.getMaxTimelineYears(metrics, editedGoals)} years`]
+      ['Total Financial Goals', `${editedGoals?.length || 0} Goals Defined`],
+      ['Required Monthly SIP', metrics?.totalRequiredSIP || 0],
+      ['Available Monthly Surplus', this.calculateMonthlySurplus(clientData) || 0],
+      ['Plan Feasibility Status', this.getFeasibilityStatus(metrics, clientData)],
+      ['Investment Timeline', `${this.getMaxTimelineYears(metrics, editedGoals)} years`]
     ];
 
-    // Calculate responsive column widths for summary table
-    const summaryColumnWidths = this.calculateResponsiveColumnWidths(summaryHeaders, summaryData);
+    // Validate and format data
+    const validatedData = this.validateAndFormatTableData(summaryData, ['text', 'text']);
 
-    // Use autoTable if available, otherwise use fallback
-    if (this.ensureAutoTable(doc)) {
-      try {
-        doc.autoTable({
-          startY: y,
-          head: [summaryHeaders],
-          body: summaryData,
-          theme: 'grid',
-          headStyles: { 
-            fillColor: [0, 102, 204],
-            fontSize: 12,
-            fontStyle: 'bold',
-            textColor: [255, 255, 255],
-            halign: 'center'
-          },
-          bodyStyles: { 
-            fontSize: 11,
-            cellPadding: 4
-          },
-          margin: { left: this.margin, right: this.margin },
-          columnStyles: {
-            0: { fontStyle: 'bold', fillColor: [248, 250, 252] },
-            1: { halign: 'right' }
-          }
-        });
-        y = doc.lastAutoTable.finalY + 15;
-      } catch (error) {
-        console.warn('❌ [PDF Generator] autoTable failed, using fallback table:', error);
-        y = this.createFallbackTable(doc, summaryData, summaryHeaders, y, {
-          columnWidths: summaryColumnWidths,
-          fontSize: 11,
-          headerFontSize: 12,
-          rowHeight: 12
-        });
-      }
-    } else {
-      // Use professional fallback table
-      y = this.createFallbackTable(doc, summaryData, summaryHeaders, y, {
-        columnWidths: summaryColumnWidths,
-        fontSize: 11,
-        headerFontSize: 12,
-        rowHeight: 12
-      });
-    }
+    // Create enhanced unbreakable table
+    y = this.createEnhancedTable(doc, validatedData, summaryHeaders, y, {
+      title: 'Key Financial Metrics',
+      columnTypes: ['text', 'currency'],
+      columnAlignments: ['left', 'right'],
+      headerStyle: 'primary',
+      unbreakable: true,
+      fontSize: 10,
+      headerFontSize: 11,
+      cellPadding: 8,
+      advisorData: null
+    });
 
-    // Financial Health Summary with enhanced styling
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(0, 51, 102); // Dark blue
-    doc.text('FINANCIAL HEALTH OVERVIEW', this.margin, y);
-    
-    // Add underline
-    doc.setDrawColor(0, 102, 204);
-    doc.setLineWidth(0.8);
-    doc.line(this.margin, y + 2, this.margin + 120, y + 2);
-    
-    // Reset text color
-    doc.setTextColor(0, 0, 0);
-    y += 15;
+    // Financial Health Analysis
+    y += this.theme.spacing.lg;
+    this.addSubsectionHeader(doc, 'FINANCIAL HEALTH ANALYSIS', y);
+    y += this.theme.spacing.md;
 
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    
-    const monthlyIncome = clientData?.totalMonthlyIncome || 0;
-    const monthlyExpenses = clientData?.totalMonthlyExpenses || 0;
+    // Calculate financial health metrics
+    const monthlyIncome = this.safeDataExtract(clientData, 'totalMonthlyIncome', 0);
+    const monthlyExpenses = this.safeDataExtract(clientData, 'totalMonthlyExpenses', 0);
     const surplus = monthlyIncome - monthlyExpenses;
     const savingsRate = monthlyIncome > 0 ? ((surplus / monthlyIncome) * 100).toFixed(1) : 0;
     
-    const healthItems = [
-      [`Monthly Income:`, `₹${this.formatCurrency(monthlyIncome)}`],
-      [`Monthly Expenses:`, `₹${this.formatCurrency(monthlyExpenses)}`],
-      [`Monthly Surplus:`, `₹${this.formatCurrency(surplus)}`, surplus >= 0 ? '(Positive)' : '(Needs Attention)'],
-      [`Savings Rate:`, `${savingsRate}%`, savingsRate >= 20 ? '(Excellent)' : savingsRate >= 10 ? '(Good)' : '(Can Improve)'],
-      [`Investment Capacity:`, metrics?.feasible ? 'Strong' : 'Needs Optimization']
+    // Professional financial summary
+    const financialAnalysis = this.generateFinancialAnalysis(monthlyIncome, monthlyExpenses, surplus, savingsRate, metrics);
+    
+    doc.setFontSize(this.theme.fonts.sizes.body);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...this.theme.colors.gray[800]);
+    
+    const analysisLines = this.wrapTextToWidth(doc, financialAnalysis, this.contentWidth, this.theme.fonts.sizes.body);
+    analysisLines.forEach(line => {
+      doc.text(line, this.margin, y);
+      y += this.theme.fonts.sizes.body * this.theme.fonts.lineHeight.normal;
+    });
+    
+    y += this.theme.spacing.lg;
+    
+    // Key financial indicators with visual elements
+    const indicators = [
+      { label: 'Cash Flow Status', value: surplus >= 0 ? 'Positive' : 'Needs Attention', status: surplus >= 0 ? 'success' : 'warning' },
+      { label: 'Savings Rate', value: `${savingsRate}%`, status: savingsRate >= 20 ? 'success' : savingsRate >= 10 ? 'warning' : 'danger' },
+      { label: 'Investment Readiness', value: this.getInvestmentReadiness(surplus, savingsRate), status: surplus > 0 && savingsRate >= 10 ? 'success' : 'warning' }
     ];
-
-    healthItems.forEach(([label, value, note]) => {
-      // Label in bold
-      doc.setFont('helvetica', 'bold');
-      doc.text(`• ${label}`, this.margin, y);
-      
-      // Value in normal weight
-      doc.setFont('helvetica', 'normal');
-      const labelWidth = doc.getTextWidth(`• ${label} `);
-      doc.text(` ${value}`, this.margin + labelWidth, y);
-      
-      // Additional note if available
-      if (note) {
-        const valueWidth = doc.getTextWidth(` ${value} `);
-        doc.setFont('helvetica', 'italic');
-        doc.text(` ${note}`, this.margin + labelWidth + valueWidth, y);
-      }
-      
-      y += 9;
+    
+    indicators.forEach(indicator => {
+      this.addFinancialIndicator(doc, indicator, y);
+      y += this.theme.spacing.md;
     });
 
-    return y + 10;
+    doc.setTextColor(0, 0, 0); // Reset color
+    return y + this.theme.spacing.md;
   }
 
   /**
-   * Add detailed client profile
+   * Add section header with professional styling
    */
-  addClientProfile(doc, clientData, startY) {
-    let y = startY + 15;
-    
-    doc.setFontSize(16);
+  addSectionHeader(doc, title, y) {
+    doc.setFontSize(this.theme.fonts.sizes.heading1);
     doc.setFont('helvetica', 'bold');
-    doc.text('CLIENT PROFILE', this.margin, y);
-    y += 15;
+    doc.setTextColor(...this.theme.colors.primary);
+    doc.text(title, this.margin, y);
+    
+    // Professional underline with gradient effect
+    doc.setDrawColor(...this.theme.colors.secondary);
+    doc.setLineWidth(2);
+    doc.line(this.margin, y + 3, this.margin + 140, y + 3);
+    
+    doc.setDrawColor(...this.theme.colors.accent);
+    doc.setLineWidth(1);
+    doc.line(this.margin, y + 5, this.margin + 100, y + 5);
+    
+    doc.setTextColor(0, 0, 0); // Reset color
+  }
+  
+  /**
+   * Add subsection header
+   */
+  addSubsectionHeader(doc, title, y) {
+    doc.setFontSize(this.theme.fonts.sizes.heading3);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.gray[800]);
+    doc.text(title, this.margin, y);
+    
+    doc.setDrawColor(...this.theme.colors.gray[300]);
+    doc.setLineWidth(1);
+    doc.line(this.margin, y + 2, this.margin + 80, y + 2);
+    
+    doc.setTextColor(0, 0, 0); // Reset color
+  }
+  
+  /**
+   * Calculate monthly surplus safely
+   */
+  calculateMonthlySurplus(clientData) {
+    const income = this.safeDataExtract(clientData, 'totalMonthlyIncome', 0);
+    const expenses = this.safeDataExtract(clientData, 'totalMonthlyExpenses', 0);
+    return income - expenses;
+  }
+  
+  /**
+   * Get feasibility status with enhanced logic
+   */
+  getFeasibilityStatus(metrics, clientData) {
+    if (metrics?.feasible === true) return '✓ Highly Achievable';
+    if (metrics?.feasible === false) return '⚠ Requires Optimization';
+    
+    const surplus = this.calculateMonthlySurplus(clientData);
+    if (surplus > 0) return '✓ Likely Achievable';
+    return '⚠ Needs Review';
+  }
+  
+  /**
+   * Generate comprehensive financial analysis text
+   */
+  generateFinancialAnalysis(income, expenses, surplus, savingsRate, metrics) {
+    let analysis = '';
+    
+    if (surplus > 0) {
+      analysis += `Your current financial position shows a positive monthly surplus of ₹${this.formatCurrency(surplus)}, representing a ${savingsRate}% savings rate. `;
+      
+      if (savingsRate >= 20) {
+        analysis += 'This excellent savings rate positions you strongly for achieving your financial goals ahead of schedule.';
+      } else if (savingsRate >= 10) {
+        analysis += 'This healthy savings rate provides a solid foundation for your investment strategy, with room for optimization.';
+      } else {
+        analysis += 'While positive, increasing your savings rate to 15-20% would significantly accelerate your financial progress.';
+      }
+    } else {
+      analysis += `Your current expenses exceed income by ₹${this.formatCurrency(Math.abs(surplus))}, creating a monthly deficit. `;
+      analysis += 'Immediate action is required to reduce expenses or increase income before pursuing investment goals.';
+    }
+    
+    return analysis;
+  }
+  
+  /**
+   * Get investment readiness assessment
+   */
+  getInvestmentReadiness(surplus, savingsRate) {
+    if (surplus <= 0) return 'Not Ready';
+    if (savingsRate >= 20) return 'Excellent';
+    if (savingsRate >= 10) return 'Good';
+    return 'Moderate';
+  }
+  
+  /**
+   * Add financial indicator with visual styling
+   */
+  addFinancialIndicator(doc, indicator, y) {
+    // Status color coding
+    const statusColors = {
+      success: this.theme.colors.success,
+      warning: this.theme.colors.warning,
+      danger: this.theme.colors.danger
+    };
+    
+    // Indicator bullet
+    doc.setFillColor(...statusColors[indicator.status]);
+    doc.circle(this.margin + 3, y - 2, 2, 'F');
+    
+    // Label and value
+    doc.setFontSize(this.theme.fonts.sizes.body);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.gray[800]);
+    doc.text(indicator.label + ':', this.margin + 10, y);
+    
+    const labelWidth = doc.getTextWidth(indicator.label + ': ');
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...statusColors[indicator.status]);
+    doc.text(indicator.value, this.margin + 10 + labelWidth, y);
+    
+    doc.setTextColor(0, 0, 0); // Reset color
+  }
 
-    // Personal Information
+  /**
+   * Add enhanced client profile
+   */
+  addEnhancedClientProfile(doc, clientData, startY) {
+    let y = startY;
+    
+    this.addSectionHeader(doc, 'CLIENT PROFILE', y);
+    y += this.theme.spacing.xl;
+
+    // Personal Information with enhanced data handling
     const personalInfo = [
-      ['Full Name', `${clientData.firstName} ${clientData.lastName}`],
-      ['Date of Birth', new Date(clientData.dateOfBirth).toLocaleDateString('en-IN')],
-      ['Age', `${this.calculateAge(clientData.dateOfBirth)} years`],
+      ['Full Name', `${clientData.firstName || ''} ${clientData.lastName || ''}`.trim() || 'Not provided'],
+      ['Date of Birth', clientData.dateOfBirth ? new Date(clientData.dateOfBirth).toLocaleDateString('en-IN') : 'Not provided'],
+      ['Age', this.calculateAge(clientData.dateOfBirth) || 'Not available'],
       ['Marital Status', clientData.maritalStatus || 'Not specified'],
       ['Occupation', clientData.occupation || 'Not specified'],
       ['Risk Tolerance', clientData.riskTolerance || 'Moderate']
     ];
 
-    // Use autoTable plugin - with multiple fallback strategies
-    if (this.ensureAutoTable(doc)) {
-      try {
-        doc.autoTable({
-          startY: y,
-          head: [['Personal Information', '']],
-          body: personalInfo,
-          theme: 'grid',
-          headStyles: { fillColor: [0, 102, 204] },
-          margin: { left: this.margin, right: this.margin },
-          styles: { fontSize: 10 }
-        });
-        y = doc.lastAutoTable.finalY + 15;
-      } catch (autoTableError) {
-        console.warn('❌ [PDF Generator] doc.autoTable failed for personal info, trying direct function call:', autoTableError);
-        try {
-          autoTable(doc, {
-            startY: y,
-            head: [['Personal Information', '']],
-            body: personalInfo,
-            theme: 'grid',
-            headStyles: { fillColor: [0, 102, 204] },
-            margin: { left: this.margin, right: this.margin },
-            styles: { fontSize: 10 }
-          });
-          y = doc.lastAutoTable.finalY + 15;
-        } catch (directCallError) {
-          console.warn('❌ [PDF Generator] Direct autoTable call failed for personal info, using fallback table:', directCallError);
-          const fallbackResult = this.createFallbackTable(doc, personalInfo, ['Personal Information', ''], y, { 
-            fontSize: 10, 
-            title: 'Personal Information'
-          });
-          y = fallbackResult.endY + 15;
-        }
-      }
-    } else {
-      // Fallback: Create professional fallback table
-      console.warn('Using professional fallback table for personal info');
-      
-      // Add section title
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Personal Information', this.margin, y);
-      y += 15;
-      
-      y = this.createFallbackTable(doc, personalInfo, ['Field', 'Value'], y, {
-        columnWidths: [70, 100],
-        fontSize: 10
-      });
-    }
+    // Create enhanced unbreakable table for personal info
+    y = this.createEnhancedTable(doc, personalInfo, ['Personal Details', 'Information'], y, {
+      title: 'Personal Information',
+      columnTypes: ['text', 'text'],
+      columnAlignments: ['left', 'left'],
+      headerStyle: 'secondary',
+      unbreakable: true,
+      fontSize: 9,
+      headerFontSize: 10,
+      cellPadding: 6
+    });
 
-    // Financial Summary
+    // Financial Summary with enhanced calculations
     const financialInfo = [
-      ['Monthly Income', `₹${this.formatCurrency(clientData.totalMonthlyIncome || 0)}`],
-      ['Monthly Expenses', `₹${this.formatCurrency(clientData.totalMonthlyExpenses || 0)}`],
-      ['Annual Income', `₹${this.formatCurrency(clientData.annualIncome || 0)}`],
-      ['Current Assets', `₹${this.formatCurrency(this.calculateTotalAssets(clientData.assets))}`],
-      ['Total Liabilities', `₹${this.formatCurrency(this.calculateTotalLiabilities(clientData.debtsAndLiabilities))}`]
+      ['Monthly Income', this.safeDataExtract(clientData, 'totalMonthlyIncome', 0)],
+      ['Monthly Expenses', this.safeDataExtract(clientData, 'totalMonthlyExpenses', 0)],
+      ['Monthly Surplus', this.calculateMonthlySurplus(clientData)],
+      ['Annual Income', this.safeDataExtract(clientData, 'annualIncome', (clientData.totalMonthlyIncome || 0) * 12)],
+      ['Current Assets', this.calculateTotalAssets(clientData.assets || {})],
+      ['Total Liabilities', this.calculateTotalLiabilities(clientData.debtsAndLiabilities || {})]
     ];
 
-    // Use autoTable plugin - with multiple fallback strategies
-    if (this.ensureAutoTable(doc)) {
-      try {
-        doc.autoTable({
-          startY: y,
-          head: [['Financial Overview', '']],
-          body: financialInfo,
-          theme: 'grid',
-          headStyles: { fillColor: [0, 102, 204] },
-          margin: { left: this.margin, right: this.margin },
-          styles: { fontSize: 10 }
-        });
-        return doc.lastAutoTable.finalY + 10;
-      } catch (autoTableError) {
-        console.warn('❌ [PDF Generator] doc.autoTable failed for financial info, trying direct function call:', autoTableError);
-        try {
-          autoTable(doc, {
-            startY: y,
-            head: [['Financial Overview', '']],
-            body: financialInfo,
-            theme: 'grid',
-            headStyles: { fillColor: [0, 102, 204] },
-            margin: { left: this.margin, right: this.margin },
-            styles: { fontSize: 10 }
-          });
-          return doc.lastAutoTable.finalY + 10;
-        } catch (directCallError) {
-          console.warn('❌ [PDF Generator] Direct autoTable call failed for financial info, using fallback table:', directCallError);
-          const fallbackResult = this.createFallbackTable(doc, financialInfo, ['Financial Overview', ''], y, { 
-            fontSize: 10, 
-            title: 'Financial Overview'
-          });
-          return fallbackResult.endY + 10;
-        }
-      }
-    } else {
-      // Fallback: Create professional fallback table
-      console.warn('Using professional fallback table for financial info');
-      
-      // Add section title
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Financial Overview', this.margin, y);
-      y += 15;
-      
-      return this.createFallbackTable(doc, financialInfo, ['Field', 'Value'], y, {
-        columnWidths: [80, 90],
-        fontSize: 10
-      });
-    }
+    // Create enhanced financial overview table
+    y = this.createEnhancedTable(doc, financialInfo, ['Financial Aspect', 'Amount'], y, {
+      title: 'Financial Overview',
+      columnTypes: ['text', 'currency'],
+      columnAlignments: ['left', 'right'],
+      headerStyle: 'secondary',
+      unbreakable: true,
+      fontSize: 9,
+      headerFontSize: 10,
+      cellPadding: 6
+    });
+    
+    return y;
   }
 
   /**
-   * Add detailed goals analysis with SIP calculations
+   * Add enhanced goals analysis with professional presentation
    */
-  addGoalsAnalysis(doc, editedGoals, startY) {
+  addEnhancedGoalsAnalysis(doc, editedGoals, startY) {
     let y = startY;
     
-    try {
-      // Section heading with enhanced styling
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 51, 102); // Dark blue
-      doc.text('GOALS ANALYSIS & SIP REQUIREMENTS', this.margin, y);
-      
-      // Add underline for section heading
-      doc.setDrawColor(0, 102, 204);
-      doc.setLineWidth(1);
-      doc.line(this.margin, y + 2, this.margin + 120, y + 2);
-      
-      // Reset text color
-      doc.setTextColor(0, 0, 0);
-      y += 20;
+    // Professional section header
+    this.addSectionHeader(doc, 'GOALS ANALYSIS & SIP REQUIREMENTS', y);
+    y += this.theme.spacing.xl;
 
-      if (!editedGoals || editedGoals.length === 0) {
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'normal');
-        doc.text('No financial goals have been defined. Please set up your goals first.', this.margin, y);
-        doc.text('This section will display detailed goal analysis once goals are added.', this.margin, y + 10);
-        return y + 30;
-      }
-    } catch (error) {
-      console.error('❌ [PDF Generator] Error in goals analysis header:', error);
-      doc.setFontSize(12);
-      doc.text('Error generating goals analysis section', this.margin, y);
-      return y + 20;
+    // Validate goals data
+    if (!editedGoals || editedGoals.length === 0) {
+      this.addEmptyStateMessage(doc, 'No financial goals have been defined yet.', 
+        'Goals analysis will appear here once you define your financial objectives.', y);
+      return y + this.theme.spacing.xxl;
     }
 
-    // Goals Summary Table - with robust data validation
-    let goalsTableHeaders, goalsTableData, goalsColumnWidths;
-    
-    try {
-      goalsTableHeaders = ['#', 'Goal', 'Target Amount', 'Target Year', 'Time Horizon', 'Monthly SIP', 'Priority'];
-      goalsTableData = editedGoals.map((goal, index) => [
-        `${index + 1}`,
-        goal?.title || 'Unnamed Goal',
-        goal?.targetAmount ? `₹${this.formatCurrency(goal.targetAmount)}` : 'TBD',
-        goal?.targetYear ? `${goal.targetYear}` : 'TBD',
-        goal?.timeInYears ? `${goal.timeInYears} years` : 'TBD',
-        goal?.monthlySIP ? `₹${this.formatCurrency(goal.monthlySIP)}` : 'TBD',
-        goal?.priority || 'Medium'
-      ]);
+    // Goals Summary Table with enhanced data processing
+    const goalsTableHeaders = ['#', 'Goal Name', 'Target Amount', 'Target Year', 'Time Horizon', 'Monthly SIP', 'Priority Level'];
+    const goalsTableData = editedGoals.map((goal, index) => [
+      `${index + 1}`,
+      this.safeDataExtract(goal, 'title', 'Unnamed Goal'),
+      goal?.targetAmount || 0,
+      this.safeDataExtract(goal, 'targetYear', 'TBD'),
+      goal?.timeInYears ? `${goal.timeInYears} years` : 'TBD',
+      goal?.monthlySIP || 0,
+      this.safeDataExtract(goal, 'priority', 'Medium')
+    ]);
 
-      // Calculate responsive column widths for goals table
-      goalsColumnWidths = this.calculateResponsiveColumnWidths(goalsTableHeaders, goalsTableData);
-    } catch (error) {
-      console.error('❌ [PDF Generator] Error preparing goals table data:', error);
-      doc.setFontSize(12);
-      doc.text('Error processing goals data for table display', this.margin, y);
-      return y + 20;
-    }
+    // Create enhanced unbreakable goals table
+    y = this.createEnhancedTable(doc, goalsTableData, goalsTableHeaders, y, {
+      title: 'Financial Goals Overview',
+      columnTypes: ['text', 'text', 'currency', 'text', 'text', 'currency', 'text'],
+      columnAlignments: ['center', 'left', 'right', 'center', 'center', 'right', 'center'],
+      headerStyle: 'primary',
+      unbreakable: true,
+      fontSize: 8,
+      headerFontSize: 9,
+      cellPadding: 5
+    });
 
-    // Use autoTable if available, otherwise use fallback
-    if (this.ensureAutoTable(doc)) {
-      try {
-        doc.autoTable({
-          startY: y,
-          head: [goalsTableHeaders],
-          body: goalsTableData,
-          theme: 'grid',
-          headStyles: { 
-            fillColor: [0, 102, 204], 
-            fontSize: 11,
-            fontStyle: 'bold',
-            textColor: [255, 255, 255],
-            halign: 'center'
-          },
-          bodyStyles: { 
-            fontSize: 10,
-            cellPadding: 3
-          },
-          margin: { left: this.margin, right: this.margin },
-          columnStyles: {
-            0: { halign: 'center' },
-            2: { halign: 'right' },
-            3: { halign: 'center' },
-            4: { halign: 'center' },
-            5: { halign: 'right' },
-            6: { halign: 'center' }
-          },
-          alternateRowStyles: {
-            fillColor: [248, 250, 252]
-          }
-        });
-        y = doc.lastAutoTable.finalY + 15;
-      } catch (error) {
-        console.warn('❌ [PDF Generator] autoTable failed for goals table, using fallback table:', error);
-        y = this.createFallbackTable(doc, goalsTableData, goalsTableHeaders, y, {
-          columnWidths: goalsColumnWidths,
-          fontSize: 10,
-          headerFontSize: 11,
-          rowHeight: 12
-        });
-      }
-    } else {
-      // Use professional fallback table
-      y = this.createFallbackTable(doc, goalsTableData, goalsTableHeaders, y, {
-        columnWidths: goalsColumnWidths,
-        fontSize: 10,
-        headerFontSize: 11,
-        rowHeight: 12
-      });
-    }
-
-    // Detailed Goal Breakdown with improved typography
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(0, 51, 102); // Dark blue
-    doc.text('DETAILED GOAL BREAKDOWN', this.margin, y);
-    
-    // Add underline
-    doc.setDrawColor(0, 102, 204);
-    doc.setLineWidth(0.8);
-    doc.line(this.margin, y + 2, this.margin + 110, y + 2);
-    
-    // Reset text color
-    doc.setTextColor(0, 0, 0);
-    y += 18;
+    // Detailed Goal Breakdown with professional design
+    y += this.theme.spacing.lg;
+    this.addSubsectionHeader(doc, 'DETAILED GOAL ANALYSIS', y);
+    y += this.theme.spacing.md;
 
     editedGoals.forEach((goal, index) => {
-      // Smart page break - check if we have enough space for the goal details
-      y = this.checkPageBreak(doc, y, 60); // Need ~60mm for a typical goal
+      // Smart page management
+      y = this.checkSpaceAndBreak(doc, y, 80, true);
 
-      // Goal title with enhanced styling
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 77, 153); // Medium blue
-      doc.text(`${index + 1}. ${goal?.title || 'Unnamed Goal'}`, this.margin, y);
-      doc.setTextColor(0, 0, 0); // Reset to black
-      y += 12;
-
-      // Goal details with better formatting
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'normal');
-      
-      const goalDetails = [
-        [`Target Amount:`, goal?.targetAmount ? `₹${this.formatCurrency(goal.targetAmount)}` : 'TBD'],
-        [`Time Horizon:`, goal?.timeInYears ? `${goal.timeInYears} years` : 'TBD', goal?.targetYear ? `(Target: ${goal.targetYear})` : ''],
-        [`Monthly SIP Required:`, goal?.monthlySIP ? `₹${this.formatCurrency(goal.monthlySIP)}` : 'TBD'],
-        [`Expected Return:`, `${goal?.assetAllocation?.expectedReturn || 8}% per annum`],
-        [`Risk Level:`, goal?.assetAllocation?.riskLevel || 'Medium'],
-        [`Asset Allocation:`, goal?.assetAllocation ? `${goal.assetAllocation.equity || 0}% Equity, ${goal.assetAllocation.debt || 0}% Debt` : 'To be determined']
-      ];
-
-      goalDetails.forEach(([label, value, extra]) => {
-        // Label in semi-bold
-        doc.setFont('helvetica', 'bold');
-        doc.text(`• ${label}`, this.margin + 5, y);
-        
-        // Value in normal weight
-        doc.setFont('helvetica', 'normal');
-        const labelWidth = doc.getTextWidth(`• ${label} `);
-        doc.text(` ${value}`, this.margin + 5 + labelWidth, y);
-        
-        // Extra info if available
-        if (extra) {
-          const valueWidth = doc.getTextWidth(` ${value} `);
-          doc.text(` ${extra}`, this.margin + 5 + labelWidth + valueWidth, y);
-        }
-        
-        y += 8;
-      });
-
-      // Add spacing between goals
-      y += 8;
+      // Goal card design
+      y = this.addGoalCard(doc, goal, index + 1, y);
+      y += this.theme.spacing.md;
     });
 
     return y;
+  }
+  
+  /**
+   * Add empty state message with professional styling
+   */
+  addEmptyStateMessage(doc, title, subtitle, y) {
+    // Title
+    doc.setFontSize(this.theme.fonts.sizes.heading4);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.gray[600]);
+    doc.text(title, this.margin, y);
+    
+    // Subtitle
+    y += this.theme.spacing.sm;
+    doc.setFontSize(this.theme.fonts.sizes.small);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...this.theme.colors.gray[500]);
+    doc.text(subtitle, this.margin, y);
+    
+    doc.setTextColor(0, 0, 0); // Reset color
+  }
+  
+  /**
+   * Add individual goal card with professional design
+   */
+  addGoalCard(doc, goal, goalNumber, startY) {
+    let y = startY;
+    const cardHeight = 50;
+    
+    // Goal card background
+    doc.setFillColor(...this.theme.colors.background.light);
+    doc.roundedRect(this.margin, y, this.contentWidth, cardHeight, 5, 5, 'F');
+    
+    // Goal card border
+    doc.setDrawColor(...this.theme.colors.gray[300]);
+    doc.setLineWidth(1);
+    doc.roundedRect(this.margin, y, this.contentWidth, cardHeight, 5, 5, 'S');
+    
+    // Priority indicator stripe
+    const priorityColor = this.getPriorityColor(goal?.priority);
+    doc.setFillColor(...priorityColor);
+    doc.roundedRect(this.margin, y, 5, cardHeight, 2, 2, 'F');
+    
+    y += this.theme.spacing.sm;
+    
+    // Goal title
+    doc.setFontSize(this.theme.fonts.sizes.heading4);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.primary);
+    doc.text(`${goalNumber}. ${this.safeDataExtract(goal, 'title', 'Unnamed Goal')}`, this.margin + 10, y);
+    
+    y += this.theme.spacing.sm;
+    
+    // Goal details in columns
+    const goalDetails = [
+      { label: 'Target', value: goal?.targetAmount ? `₹${this.formatCurrency(goal.targetAmount)}` : 'TBD' },
+      { label: 'Timeline', value: goal?.timeInYears ? `${goal.timeInYears} years` : 'TBD' },
+      { label: 'Monthly SIP', value: goal?.monthlySIP ? `₹${this.formatCurrency(goal.monthlySIP)}` : 'Calculating...' },
+      { label: 'Priority', value: this.safeDataExtract(goal, 'priority', 'Medium') }
+    ];
+    
+    // Display details in a grid
+    const colWidth = (this.contentWidth - 20) / 2;
+    let currentX = this.margin + 10;
+    let currentRow = 0;
+    
+    goalDetails.forEach((detail, index) => {
+      if (index > 0 && index % 2 === 0) {
+        currentRow++;
+        currentX = this.margin + 10;
+        y += this.theme.spacing.sm;
+      }
+      
+      doc.setFontSize(this.theme.fonts.sizes.tiny);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...this.theme.colors.gray[600]);
+      doc.text(detail.label + ':', currentX, y);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...this.theme.colors.gray[800]);
+      doc.text(detail.value, currentX, y + 4);
+      
+      currentX += colWidth;
+    });
+    
+    doc.setTextColor(0, 0, 0); // Reset color
+    return startY + cardHeight + this.theme.spacing.sm;
+  }
+  
+  /**
+   * Get priority color coding
+   */
+  getPriorityColor(priority) {
+    switch ((priority || '').toLowerCase()) {
+      case 'high': return this.theme.colors.danger;
+      case 'medium': return this.theme.colors.warning;
+      case 'low': return this.theme.colors.success;
+      default: return this.theme.colors.gray[400];
+    }
   }
 
   /**
@@ -985,217 +1306,495 @@ class GoalPlanPDFGenerator {
       }
     }
 
-    return y + 10;
-  }
-
-  /**
-   * Add implementation timeline
-   */
-  addImplementationTimeline(doc, editedGoals, startY) {
-    let y = startY;
-    
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('IMPLEMENTATION TIMELINE', this.margin, y);
-    y += 15;
-
-    if (!editedGoals || editedGoals.length === 0) {
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text('No goals defined for timeline planning.', this.margin, y);
-      return y + 20;
-    }
-
-    // Sort goals by target year
-    const sortedGoals = [...editedGoals].sort((a, b) => (a.targetYear || 9999) - (b.targetYear || 9999));
-
-    // Timeline Table
-    const timelineHeaders = ['Goal', 'Target Year', 'Monthly SIP', 'Action', 'Priority'];
-    const timelineData = sortedGoals.map(goal => [
-      goal.title || 'Unnamed Goal',
-      `${goal.targetYear || 'TBD'}`,
-      `₹${this.formatCurrency(goal.monthlySIP || 0)}`,
-      'Start immediately',
-      goal.priority || 'Medium'
-    ]);
-
-    // Use autoTable plugin - with multiple fallback strategies
-    if (this.ensureAutoTable(doc)) {
-      try {
-        doc.autoTable({
-          startY: y,
-          head: [timelineHeaders],
-          body: timelineData,
-          theme: 'grid',
-          headStyles: { fillColor: [0, 102, 204] },
-          margin: { left: this.margin, right: this.margin },
-          styles: { fontSize: 10 }
-        });
-        y = doc.lastAutoTable.finalY + 15;
-      } catch (error) {
-        console.warn('❌ [PDF Generator] autoTable failed for timeline table, using fallback table:', error);
-        y = this.createFallbackTable(doc, timelineData, timelineHeaders, y, {
-          fontSize: 10,
-          headerFontSize: 11,
-          rowHeight: 12
-        });
-      }
-    } else {
-      // Use professional fallback table
-      y = this.createFallbackTable(doc, timelineData, timelineHeaders, y, {
-        fontSize: 10,
-        headerFontSize: 11,
-        rowHeight: 12
-      });
-    }
-
-    // Action Items
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('IMMEDIATE ACTION ITEMS', this.margin, y);
-    y += 12;
-
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    const actionItems = [
-      '1. Open investment accounts with reputable mutual fund companies',
-      '2. Set up systematic investment plans (SIPs) for each goal',
-      '3. Review and rebalance portfolio annually',
-      '4. Monitor progress quarterly',
-      '5. Adjust contributions as income increases'
-    ];
-
-    actionItems.forEach(item => {
-      doc.text(item, this.margin, y);
-      y += 8;
-    });
-
-    return y + 10;
-  }
-
-  /**
-   * Add disclaimers and important notes
-   */
-  addDisclaimers(doc, startY) {
-    let y = startY + 20;
-    
-    if (y > 250) {
-      doc.addPage();
-      y = this.margin;
-    }
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('IMPORTANT DISCLAIMERS', this.margin, y);
-    y += 12;
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    
-    const disclaimers = [
-      '• This financial plan is based on information provided and current market conditions.',
-      '• Past performance does not guarantee future results.',
-      '• All investments are subject to market risks.',
-      '• Please consult with a qualified financial advisor before making investment decisions.',
-      '• Review and update this plan regularly as your circumstances change.',
-      '• This report is generated by AI and should be used for guidance only.'
-    ];
-
-    disclaimers.forEach(disclaimer => {
-      const wrappedText = this.wrapText(doc, disclaimer, this.contentWidth);
-      wrappedText.forEach(line => {
-        doc.text(line, this.margin, y);
-        y += 6;
-      });
-    });
-
     return y;
   }
-
+  
   /**
-   * Add advisor signature and credentials section
+   * Add analysis card for individual goals
    */
-  addAdvisorSignature(doc, advisorData, clientData, startY) {
-    if (!advisorData) return startY;
-
-    let y = startY + 30;
+  addAnalysisCard(doc, analysis, goalNumber, startY) {
+    let y = startY;
     
-    // Add new page if needed
-    if (y > 250) {
-      doc.addPage();
-      y = this.addProfessionalHeader(doc, advisorData, doc.internal.getNumberOfPages()) + 20;
+    // Card title
+    doc.setFontSize(this.theme.fonts.sizes.heading4);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.secondary);
+    doc.text(`Goal ${goalNumber}: ${analysis.goalTitle || 'Analysis'}`, this.margin, y);
+    y += this.theme.spacing.sm;
+    
+    // Feasibility analysis
+    if (analysis.feasibilityAnalysis) {
+      y = this.addContentBlock(doc, 'Feasibility Analysis', analysis.feasibilityAnalysis, y);
     }
-
-    // Section title
-    doc.setFontSize(16);
+    
+    // Optimization suggestions
+    if (analysis.optimizationSuggestions) {
+      y = this.addContentBlock(doc, 'Optimization Suggestions', analysis.optimizationSuggestions, y);
+    }
+    
+    doc.setTextColor(0, 0, 0); // Reset color
+    return y;
+  }
+  
+  /**
+   * Add content block with title and text
+   */
+  addContentBlock(doc, title, content, startY) {
+    let y = startY;
+    
+    // Block title
+    doc.setFontSize(this.theme.fonts.sizes.small);
     doc.setFont('helvetica', 'bold');
-    doc.text('PREPARED BY', this.margin, y);
-    y += 20;
-
-    // Enhanced advisor details box
-    doc.setDrawColor(0, 102, 204);
-    doc.setFillColor(248, 252, 255);
-    doc.roundedRect(this.margin, y, this.contentWidth, 55, 5, 5, 'FD');
+    doc.setTextColor(...this.theme.colors.gray[700]);
+    doc.text(title + ':', this.margin + 5, y);
+    y += this.theme.spacing.xs;
     
-    // Add subtle inner border
-    doc.setDrawColor(220, 235, 250);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(this.margin + 2, y + 2, this.contentWidth - 4, 51, 3, 3);
-    
-    y += 15;
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${advisorData.firstName} ${advisorData.lastName}`, this.margin + 10, y);
-    
-    y += 8;
-    doc.setFontSize(12);
+    // Block content
+    doc.setFontSize(this.theme.fonts.sizes.small);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${advisorData.firmName}`, this.margin + 10, y);
+    doc.setTextColor(...this.theme.colors.gray[600]);
     
-    y += 8;
-    if (advisorData.sebiRegNumber) {
-      doc.text(`SEBI Registration: ${advisorData.sebiRegNumber}`, this.margin + 10, y);
-      y += 6;
+    const contentLines = this.wrapTextToWidth(doc, content, this.contentWidth - 10, this.theme.fonts.sizes.small);
+    contentLines.forEach(line => {
+      doc.text(line, this.margin + 10, y);
+      y += this.theme.fonts.sizes.small * this.theme.fonts.lineHeight.normal;
+    });
+    
+    return y + this.theme.spacing.xs;
+  }
+  
+  /**
+   * Add action item with priority indicator
+   */
+  addActionItem(doc, action, itemNumber, startY, priority = 'medium') {
+    let y = startY;
+    
+    // Priority indicator
+    const priorityColors = {
+      high: this.theme.colors.danger,
+      medium: this.theme.colors.warning,
+      low: this.theme.colors.success
+    };
+    
+    doc.setFillColor(...priorityColors[priority]);
+    doc.circle(this.margin + 4, y - 2, 2, 'F');
+    
+    // Action text
+    doc.setFontSize(this.theme.fonts.sizes.body);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...this.theme.colors.gray[800]);
+    
+    const actionText = `${itemNumber}. ${action}`;
+    const actionLines = this.wrapTextToWidth(doc, actionText, this.contentWidth - 15, this.theme.fonts.sizes.body);
+    
+    actionLines.forEach(line => {
+      doc.text(line, this.margin + 10, y);
+      y += this.theme.fonts.sizes.body * this.theme.fonts.lineHeight.normal;
+    });
+    
+    return y + this.theme.spacing.xs;
+  }
+  
+  /**
+   * Add risk profile card
+   */
+  addRiskProfileCard(doc, riskProfile, startY) {
+    let y = startY;
+    
+    // Risk profile indicator
+    doc.setFontSize(this.theme.fonts.sizes.body);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.primary);
+    doc.text('Overall Risk Profile:', this.margin, y);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...this.theme.colors.gray[700]);
+    const labelWidth = doc.getTextWidth('Overall Risk Profile: ');
+    doc.text(riskProfile, this.margin + labelWidth, y);
+    
+    return y + this.theme.spacing.md;
+  }
+  
+  /**
+   * Add risks list with color coding
+   */
+  addRisksList(doc, title, risks, startY, type = 'warning') {
+    let y = startY;
+    
+    // List title
+    doc.setFontSize(this.theme.fonts.sizes.body);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.gray[800]);
+    doc.text(title + ':', this.margin, y);
+    y += this.theme.spacing.xs;
+    
+    // List items
+    const typeColors = {
+      warning: this.theme.colors.warning,
+      success: this.theme.colors.success,
+      danger: this.theme.colors.danger
+    };
+    
+    risks.forEach(risk => {
+      // Bullet point
+      doc.setFillColor(...typeColors[type]);
+      doc.circle(this.margin + 8, y - 2, 1.5, 'F');
+      
+      // Risk text
+      doc.setFontSize(this.theme.fonts.sizes.small);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...this.theme.colors.gray[700]);
+      
+      const riskLines = this.wrapTextToWidth(doc, risk, this.contentWidth - 20, this.theme.fonts.sizes.small);
+      riskLines.forEach(line => {
+        doc.text(line, this.margin + 15, y);
+        y += this.theme.fonts.sizes.small * this.theme.fonts.lineHeight.normal;
+      });
+      
+      y += this.theme.spacing.xs;
+    });
+    
+    return y + this.theme.spacing.sm;
+  }
+  
+  /**
+   * Add dedicated advisor recommendations section
+   */
+  addAdvisorRecommendations(doc, advisorData, editedGoals, metrics, startY) {
+    let y = startY;
+    
+    this.addSectionHeader(doc, 'ADVISOR RECOMMENDATIONS', y);
+    y += this.theme.spacing.xl;
+    
+    // Personalized advisor message
+    const advisorMessage = this.generateAdvisorMessage(advisorData, editedGoals, metrics);
+    
+    doc.setFontSize(this.theme.fonts.sizes.body);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...this.theme.colors.gray[700]);
+    
+    const messageLines = this.wrapTextToWidth(doc, advisorMessage, this.contentWidth, this.theme.fonts.sizes.body);
+    messageLines.forEach(line => {
+      doc.text(line, this.margin, y);
+      y += this.theme.fonts.sizes.body * this.theme.fonts.lineHeight.normal;
+    });
+    
+    y += this.theme.spacing.lg;
+    
+    // Advisor-specific recommendations
+    const advisorRecommendations = this.generateAdvisorSpecificRecommendations(editedGoals, metrics);
+    
+    advisorRecommendations.forEach((recommendation, index) => {
+      y = this.addActionItem(doc, recommendation, index + 1, y, 'high');
+    });
+    
+    doc.setTextColor(0, 0, 0); // Reset color
+    return y + this.theme.spacing.md;
+  }
+  
+  /**
+   * Generate personalized advisor message
+   */
+  generateAdvisorMessage(advisorData, editedGoals, metrics) {
+    const advisorName = advisorData ? `${advisorData.firstName} ${advisorData.lastName}` : 'Your Financial Advisor';
+    const goalsCount = editedGoals?.length || 0;
+    
+    return `As your dedicated financial advisor, I have carefully reviewed your ${goalsCount} financial goals and current financial position. Based on my analysis of your income, expenses, risk tolerance, and investment timeline, I recommend the following strategic approach to help you achieve your objectives efficiently and within your target timeframes.`;
+  }
+  
+  /**
+   * Generate advisor-specific recommendations
+   */
+  generateAdvisorSpecificRecommendations(editedGoals, metrics) {
+    const recommendations = [];
+    
+    // Emergency fund recommendation
+    recommendations.push('Establish an emergency fund covering 6-8 months of expenses before starting aggressive investments.');
+    
+    // SIP recommendation
+    if (editedGoals && editedGoals.length > 0) {
+      recommendations.push('Set up systematic investment plans (SIPs) for each goal to benefit from rupee cost averaging.');
     }
     
-    if (advisorData.email) {
-      doc.text(`Email: ${advisorData.email}`, this.margin + 10, y);
-      y += 6;
-    }
+    // Review recommendation
+    recommendations.push('Schedule quarterly portfolio reviews to track progress and make necessary adjustments.');
     
-    if (advisorData.phoneNumber) {
-      doc.text(`Phone: ${advisorData.phoneNumber}`, this.margin + 10, y);
-    }
-
-    y += 20;
-
-    // Prepared for client message
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'italic');
-    doc.text(`This financial plan has been specifically prepared for ${clientData.firstName} ${clientData.lastName}`, this.margin, y);
-    y += 8;
-    doc.text(`Generated on: ${new Date().toLocaleDateString('en-IN')}`, this.margin, y);
-
-    return y + 10;
+    // Tax optimization
+    recommendations.push('Utilize tax-efficient investment options like ELSS, PPF, and NPS to optimize your tax liability.');
+    
+    // Diversification
+    recommendations.push('Maintain proper asset allocation across equity, debt, and alternative investments based on your risk profile.');
+    
+    return recommendations;
   }
 
-  // Utility Functions
+  /**
+   * Add enhanced implementation timeline with visual elements
+   */
+  addEnhancedImplementationTimeline(doc, editedGoals, startY) {
+    let y = startY;
+    
+    this.addSectionHeader(doc, 'IMPLEMENTATION TIMELINE', y);
+    y += this.theme.spacing.xl;
+
+    if (!editedGoals || editedGoals.length === 0) {
+      this.addEmptyStateMessage(doc, 'No goals defined for timeline planning.', 
+        'Implementation timeline will appear here once goals are established.', y);
+      return y + this.theme.spacing.xxl;
+    }
+
+    // Sort goals by target year for timeline visualization
+    const sortedGoals = [...editedGoals].sort((a, b) => (a.targetYear || 9999) - (b.targetYear || 9999));
+
+    // Enhanced Timeline Table
+    const timelineHeaders = ['Goal Name', 'Target Year', 'Monthly Investment', 'Implementation Status', 'Priority Level'];
+    const timelineData = sortedGoals.map(goal => [
+      this.safeDataExtract(goal, 'title', 'Unnamed Goal'),
+      goal?.targetYear ? `${goal.targetYear}` : 'To Be Determined',
+      goal?.monthlySIP ? `₹${this.formatCurrency(goal.monthlySIP)}` : 'Calculating...',
+      'Ready to Start',
+      this.safeDataExtract(goal, 'priority', 'Medium')
+    ]);
+
+    // Create professional timeline table
+    y = this.createProfessionalTable(doc, timelineData, timelineHeaders, y, {
+      title: 'Goal Implementation Schedule',
+      headerStyle: 'primary',
+      alternateRows: true,
+      fontSize: this.theme.fonts.sizes.small,
+      cellPadding: 6
+    });
+
+    // Implementation Action Plan
+    y += this.theme.spacing.lg;
+    this.addSubsectionHeader(doc, 'IMPLEMENTATION ACTION PLAN', y);
+    y += this.theme.spacing.md;
+    
+    const actionItems = [
+      { action: 'Complete KYC documentation and open investment accounts with recommended fund houses', timeline: 'Week 1-2', priority: 'high' },
+      { action: 'Set up systematic investment plans (SIPs) for each defined financial goal', timeline: 'Week 3', priority: 'high' },
+      { action: 'Establish emergency fund equivalent to 6 months of expenses', timeline: 'Month 1-3', priority: 'high' },
+      { action: 'Review and optimize existing investment portfolio alignment', timeline: 'Month 1', priority: 'medium' },
+      { action: 'Schedule quarterly progress reviews and portfolio rebalancing', timeline: 'Ongoing', priority: 'medium' },
+      { action: 'Implement tax-saving investment strategies before financial year-end', timeline: 'As needed', priority: 'medium' }
+    ];
+    
+    actionItems.forEach((item, index) => {
+      y = this.addTimelineActionItem(doc, item, index + 1, y);
+    });
+
+    return y + this.theme.spacing.md;
+  }
+  
+  /**
+   * Add timeline action item with enhanced formatting
+   */
+  addTimelineActionItem(doc, item, itemNumber, startY) {
+    let y = startY;
+    
+    // Priority indicator and number
+    const priorityColors = {
+      high: this.theme.colors.danger,
+      medium: this.theme.colors.warning,
+      low: this.theme.colors.success
+    };
+    
+    doc.setFillColor(...priorityColors[item.priority]);
+    doc.circle(this.margin + 4, y - 2, 2, 'F');
+    
+    // Item number
+    doc.setFontSize(this.theme.fonts.sizes.body);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.primary);
+    doc.text(`${itemNumber}.`, this.margin + 10, y);
+    
+    // Action description
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...this.theme.colors.gray[800]);
+    const actionLines = this.wrapTextToWidth(doc, item.action, this.contentWidth - 60, this.theme.fonts.sizes.body);
+    
+    actionLines.forEach((line, lineIndex) => {
+      doc.text(line, this.margin + 20, y + (lineIndex * this.theme.fonts.sizes.body * this.theme.fonts.lineHeight.normal));
+    });
+    
+    // Timeline indicator
+    const actionHeight = actionLines.length * this.theme.fonts.sizes.body * this.theme.fonts.lineHeight.normal;
+    doc.setFontSize(this.theme.fonts.sizes.tiny);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(...this.theme.colors.gray[500]);
+    doc.text(`Timeline: ${item.timeline}`, this.pageWidth - this.margin - 50, y, { align: 'right' });
+    
+    doc.setTextColor(0, 0, 0); // Reset color
+    return y + Math.max(actionHeight, this.theme.fonts.sizes.body * this.theme.fonts.lineHeight.normal) + this.theme.spacing.xs;
+  }
 
   /**
-   * Check if we need a page break and handle it smartly
+   * Add professional disclaimers with enhanced formatting
+   */
+  addProfessionalDisclaimers(doc, startY) {
+    let y = startY;
+    
+    y = this.checkSpaceAndBreak(doc, y, 80, true);
+    
+    this.addSectionHeader(doc, 'IMPORTANT DISCLAIMERS', y);
+    y += this.theme.spacing.xl;
+    
+    // Professional disclaimer box
+    const disclaimerHeight = 60;
+    doc.setFillColor(...this.theme.colors.background.light);
+    doc.roundedRect(this.margin, y, this.contentWidth, disclaimerHeight, 5, 5, 'F');
+    
+    doc.setDrawColor(...this.theme.colors.gray[300]);
+    doc.setLineWidth(1);
+    doc.roundedRect(this.margin, y, this.contentWidth, disclaimerHeight, 5, 5, 'S');
+    
+    // Warning icon area
+    doc.setFillColor(...this.theme.colors.warning);
+    doc.roundedRect(this.margin, y, 6, disclaimerHeight, 5, 5, 'F');
+    
+    y += this.theme.spacing.sm;
+    
+    const disclaimers = [
+      'This financial plan is based on information provided and reflects current market conditions and assumptions.',
+      'Past performance of investments does not guarantee future results. All investments carry market risks.',
+      'This report is generated using AI-assisted analysis and should be reviewed with a qualified advisor.',
+      'Please consult with your financial advisor before making any investment decisions.',
+      'Regular review and updates of this plan are recommended as your circumstances change.',
+      'Tax implications and regulatory changes may affect the recommendations provided.'
+    ];
+    
+    doc.setFontSize(this.theme.fonts.sizes.tiny);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...this.theme.colors.gray[600]);
+    
+    disclaimers.forEach(disclaimer => {
+      const disclaimerLines = this.wrapTextToWidth(doc, `• ${disclaimer}`, this.contentWidth - 15, this.theme.fonts.sizes.tiny);
+      disclaimerLines.forEach(line => {
+        doc.text(line, this.margin + 10, y);
+        y += this.theme.fonts.sizes.tiny * this.theme.fonts.lineHeight.normal;
+      });
+      y += 1;
+    });
+
+    doc.setTextColor(0, 0, 0); // Reset color
+    return y + this.theme.spacing.sm;
+  }
+
+  /**
+   * Add enhanced advisor signature with professional styling
+   */
+  addEnhancedAdvisorSignature(doc, advisorData, clientData, startY) {
+    if (!advisorData) return startY;
+
+    let y = startY + this.theme.spacing.xl;
+    
+    // Ensure adequate space for signature section
+    y = this.checkSpaceAndBreak(doc, y, 100, true);
+    
+    this.addSectionHeader(doc, 'PREPARED BY', y);
+    y += this.theme.spacing.xl;
+
+    // Premium advisor credentials card
+    const cardHeight = 70;
+    
+    // Main card with professional styling
+    doc.setFillColor(...this.theme.colors.background.gradient);
+    doc.roundedRect(this.margin, y, this.contentWidth, cardHeight, 8, 8, 'F');
+    
+    // Premium border with accent
+    doc.setDrawColor(...this.theme.colors.primary);
+    doc.setLineWidth(2);
+    doc.roundedRect(this.margin, y, this.contentWidth, cardHeight, 8, 8, 'S');
+    
+    // Gold accent stripe
+    doc.setFillColor(...this.theme.colors.accent);
+    doc.roundedRect(this.margin, y, this.contentWidth, 4, 8, 8, 'F');
+    
+    y += this.theme.spacing.lg;
+    
+    // Advisor name with enhanced typography
+    doc.setFontSize(this.theme.fonts.sizes.heading3);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...this.theme.colors.primary);
+    doc.text(`${advisorData.firstName} ${advisorData.lastName}`, this.margin + this.theme.spacing.md, y);
+    
+    y += this.theme.spacing.sm;
+    
+    // Firm name
+    doc.setFontSize(this.theme.fonts.sizes.body);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...this.theme.colors.gray[700]);
+    doc.text(advisorData.firmName || 'Financial Advisory Services', this.margin + this.theme.spacing.md, y);
+    
+    y += this.theme.spacing.xs;
+    
+    // Credentials in professional format
+    const credentials = [];
+    if (advisorData.sebiRegNumber) {
+      credentials.push(`SEBI Reg: ${advisorData.sebiRegNumber}`);
+    }
+    if (advisorData.email) {
+      credentials.push(`Email: ${advisorData.email}`);
+    }
+    if (advisorData.phoneNumber) {
+      credentials.push(`Phone: ${advisorData.phoneNumber}`);
+    }
+    
+    if (credentials.length > 0) {
+      doc.setFontSize(this.theme.fonts.sizes.small);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...this.theme.colors.gray[600]);
+      doc.text(credentials.join(' • '), this.margin + this.theme.spacing.md, y);
+    }
+    
+    y += cardHeight - this.theme.spacing.lg + this.theme.spacing.md;
+    
+    // Professional dedication message
+    doc.setFontSize(this.theme.fonts.sizes.small);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(...this.theme.colors.gray[600]);
+    
+    const dedicationMessage = `This comprehensive financial plan has been specifically prepared for ${clientData.firstName} ${clientData.lastName || ''} and reflects their unique financial situation and goals.`;
+    const dedicationLines = this.wrapTextToWidth(doc, dedicationMessage, this.contentWidth, this.theme.fonts.sizes.small);
+    
+    dedicationLines.forEach(line => {
+      doc.text(line, this.margin, y);
+      y += this.theme.fonts.sizes.small * this.theme.fonts.lineHeight.normal;
+    });
+    
+    y += this.theme.spacing.xs;
+    
+    // Generation timestamp
+    doc.text(`Generated on: ${new Date().toLocaleDateString('en-IN', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    })}`, this.margin, y);
+
+    doc.setTextColor(0, 0, 0); // Reset color
+    return y + this.theme.spacing.md;
+  }
+
+  // Enhanced Utility Functions
+
+  /**
+   * Smart page break with professional header continuation
    */
   checkPageBreak(doc, currentY, requiredSpace = 30, addHeader = true) {
     if (currentY + requiredSpace > this.pageHeight - this.margin) {
       doc.addPage();
       let newY = this.margin;
       
-      // Add header to new page if requested
-      if (addHeader) {
-        // Add a subtle header line for continuation
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.3);
+      // Add professional header to new page if requested
+      if (addHeader && doc.advisorData) {
+        newY = this.addProfessionalHeader(doc, doc.advisorData, doc.internal.getNumberOfPages());
+      } else if (addHeader) {
+        // Subtle continuation indicator
+        doc.setDrawColor(...this.theme.colors.gray[300]);
+        doc.setLineWidth(0.5);
         doc.line(this.margin, newY, this.pageWidth - this.margin, newY);
-        newY += 10;
+        newY += this.theme.spacing.sm;
       }
       
       return newY;
@@ -1204,77 +1803,20 @@ class GoalPlanPDFGenerator {
   }
 
   /**
-   * Add consistent section spacing
-   */
-  addSectionSpacing(currentY, spacing = 15) {
-    return currentY + spacing;  
-  }
-
-  /**
-   * Calculate responsive column widths based on content and available space
+   * Enhanced responsive column width calculation (legacy method - kept for compatibility)
    */
   calculateResponsiveColumnWidths(headers, data, availableWidth = this.contentWidth) {
-    const padding = 10; // Extra padding per column
-    const minColumnWidth = 15; // Minimum column width in mm
-    const maxColumnWidth = availableWidth * 0.4; // Maximum 40% of available width
-    
-    // Calculate content-based widths
-    const contentWidths = headers.map((header, colIndex) => {
-      // Start with header width
-      let maxWidth = header.length * 2; // Approximate mm per character
-      
-      // Check data content width
-      data.forEach(row => {
-        if (row[colIndex]) {
-          const cellLength = String(row[colIndex]).length * 1.8;
-          maxWidth = Math.max(maxWidth, cellLength);
-        }
-      });
-      
-      // Apply constraints
-      return Math.min(Math.max(maxWidth + padding, minColumnWidth), maxColumnWidth);
-    });
-    
-    // Scale to fit available width
-    const totalCalculatedWidth = contentWidths.reduce((sum, width) => sum + width, 0);
-    
-    if (totalCalculatedWidth > availableWidth) {
-      // Scale down proportionally
-      const scaleFactor = availableWidth / totalCalculatedWidth;
-      return contentWidths.map(width => Math.max(width * scaleFactor, minColumnWidth));
-    }
-    
-    return contentWidths;
+    // Delegate to the new optimal calculation method
+    return this.calculateOptimalColumnWidths({ setFontSize: () => {}, getTextWidth: () => 10 }, data, headers, availableWidth, this.theme.fonts.sizes.body);
   }
 
   /**
-   * Wrap text to fit within column width
+   * Wrap text for column (legacy method - kept for compatibility)
    */
   wrapTextForColumn(doc, text, maxWidth, fontSize = 10) {
-    if (!text) return [''];
-    
-    // Set font size for accurate measurement
-    doc.setFontSize(fontSize);
-    
-    // Use jsPDF's built-in text splitting
-    return doc.splitTextToSize(String(text), maxWidth - 4); // 4mm padding
+    return this.wrapTextToWidth(doc, text, maxWidth - 4, fontSize);
   }
 
-  /**
-   * Calculate required row height for wrapped text
-   */
-  calculateRowHeight(doc, rowData, columnWidths, fontSize = 10, baseHeight = 8) {
-    let maxLines = 1;
-    
-    rowData.forEach((cell, colIndex) => {
-      if (cell && columnWidths[colIndex]) {
-        const wrappedLines = this.wrapTextForColumn(doc, cell, columnWidths[colIndex], fontSize);
-        maxLines = Math.max(maxLines, wrappedLines.length);
-      }
-    });
-    
-    return Math.max(baseHeight, maxLines * 6 + 4); // 6mm per line + padding
-  }
 
   calculateAge(dateOfBirth) {
     if (!dateOfBirth) return 'N/A';
@@ -1289,21 +1831,484 @@ class GoalPlanPDFGenerator {
   }
 
   formatCurrency(amount) {
-    if (!amount || amount === 0 || isNaN(amount)) return '0';
+    if (!amount || amount === 0 || isNaN(amount)) return '₹0';
     
     try {
       // Handle string amounts that might be passed
       const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-      if (isNaN(numAmount)) return '0';
+      if (isNaN(numAmount)) return '₹0';
       
-      return new Intl.NumberFormat('en-IN', {
+      const formatted = new Intl.NumberFormat('en-IN', {
         maximumFractionDigits: 0,
         minimumFractionDigits: 0
       }).format(Math.round(numAmount));
+      
+      return `₹${formatted}`;
     } catch (error) {
       console.warn('⚠️ [PDF Generator] Error formatting currency:', error);
-      return String(amount);
+      return `₹${amount}`;
     }
+  }
+
+  // Enhanced number formatting with proper alignment
+  formatNumber(value, isAmount = false) {
+    if (value === null || value === undefined || value === '') return '';
+    
+    if (isAmount) {
+      return this.formatCurrency(value);
+    }
+    
+    if (typeof value === 'number') {
+      return new Intl.NumberFormat('en-IN').format(value);
+    }
+    
+    return String(value);
+  }
+
+  // Calculate text width for proper alignment
+  getTextWidth(doc, text, fontSize = 10) {
+    doc.setFontSize(fontSize);
+    return doc.getTextWidth(text);
+  }
+
+  // Create unbreakable content sections
+  createUnbreakableSection(doc, sectionData, startY, options = {}) {
+    const {
+      title = null,
+      minHeight = 60,
+      allowPageBreak = false,
+      padding = 10
+    } = options;
+
+    let currentY = startY;
+    const estimatedHeight = this.calculateSectionHeight(doc, sectionData, options);
+    
+    // Check if we need a page break BEFORE starting the section
+    if (currentY + estimatedHeight > this.pageHeight - this.margin - 20) {
+      if (allowPageBreak) {
+        doc.addPage();
+        this.addProfessionalHeader(doc, this.safeDataExtract(sectionData, 'advisorData'), doc.getNumberOfPages());
+        currentY = this.margin + 40;
+      }
+    }
+
+    // Add section title
+    if (title) {
+      currentY = this.addSectionHeader(doc, title, currentY);
+      currentY += this.theme.spacing.sm;
+    }
+
+    return currentY;
+  }
+
+  // Calculate estimated section height
+  calculateSectionHeight(doc, sectionData, options = {}) {
+    const { title, data = [], baseHeight = 40 } = options;
+    let height = baseHeight;
+    
+    if (title) height += 25;
+    if (data && Array.isArray(data)) {
+      height += data.length * 20; // Estimate 20px per row
+    }
+    
+    return height;
+  }
+
+  // Enhanced table creation with unbreakable sections and better alignment
+  createEnhancedTable(doc, data, headers, startY, options = {}) {
+    const {
+      title = null,
+      columnTypes = [], // 'text', 'number', 'currency'
+      columnAlignments = [], // 'left', 'center', 'right'
+      headerStyle = 'primary',
+      unbreakable = true,
+      minRowsPerPage = 3,
+      fontSize = 10,
+      headerFontSize = 11,
+      cellPadding = 8,
+      maxWidth = this.contentWidth - 10
+    } = options;
+
+    let y = startY;
+    
+    // Validate data
+    if (!data || data.length === 0) {
+      console.warn('⚠️ [PDF Generator] No data provided for table');
+      return y;
+    }
+
+    // Add title if provided
+    if (title) {
+      doc.setFontSize(this.theme.fonts.sizes.heading3);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...this.theme.colors.primary);
+      doc.text(title, this.margin, y);
+      y += this.theme.spacing.md;
+      doc.setTextColor(0, 0, 0); // Reset color
+    }
+
+    // Calculate optimal column widths based on content type
+    const numColumns = headers ? headers.length : (data[0] ? data[0].length : 1);
+    const columnWidths = this.calculateSmartColumnWidths(doc, data, headers, maxWidth, columnTypes, fontSize);
+    
+    const tableWidth = columnWidths.reduce((sum, width) => sum + width, 0);
+    const tableStartX = this.margin + (maxWidth - tableWidth) / 2; // Center table
+
+    // Estimate table height
+    const headerHeight = headers ? (cellPadding * 2 + headerFontSize * 1.2) : 0;
+    const rowHeight = cellPadding * 2 + fontSize * 1.2;
+    const totalTableHeight = headerHeight + (data.length * rowHeight);
+
+    // Check if we need unbreakable rendering
+    if (unbreakable && y + totalTableHeight > this.pageHeight - this.margin - 20) {
+      doc.addPage();
+      this.addProfessionalHeader(doc, options.advisorData, doc.getNumberOfPages());
+      y = this.margin + 40;
+      
+      // Re-add title on new page
+      if (title) {
+        doc.setFontSize(this.theme.fonts.sizes.heading3);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...this.theme.colors.primary);
+        doc.text(title, this.margin, y);
+        y += this.theme.spacing.md;
+        doc.setTextColor(0, 0, 0);
+      }
+    }
+
+    // Draw headers
+    if (headers) {
+      y = this.drawEnhancedTableHeaders(doc, headers, columnWidths, tableStartX, y, headerFontSize, cellPadding, headerStyle);
+    }
+
+    // Draw data rows
+    y = this.drawEnhancedTableRows(doc, data, columnWidths, tableStartX, y, fontSize, cellPadding, columnTypes, columnAlignments);
+
+    return y + this.theme.spacing.md;
+  }
+
+  // Calculate smart column widths based on content type and actual content
+  calculateSmartColumnWidths(doc, data, headers, maxWidth, columnTypes, fontSize) {
+    const numColumns = headers ? headers.length : (data[0] ? data[0].length : 1);
+    const minColWidth = 50; // Minimum column width
+    const availableWidth = maxWidth - 30; // Leave margin for borders
+    
+    // Calculate ideal widths based on content analysis
+    let columnWidths = new Array(numColumns).fill(0);
+    
+    // Analyze header text requirements
+    if (headers) {
+      headers.forEach((header, index) => {
+        const headerText = String(header || '');
+        const headerWidth = this.getTextWidth(doc, headerText, fontSize + 1) + 16; // Extra for padding
+        columnWidths[index] = Math.max(columnWidths[index], headerWidth);
+      });
+    }
+    
+    // Analyze data content requirements
+    if (data && data.length > 0) {
+      data.slice(0, Math.min(5, data.length)).forEach(row => { // Sample first 5 rows
+        row.forEach((cell, colIndex) => {
+          if (colIndex < numColumns) {
+            let cellText = '';
+            const columnType = columnTypes[colIndex] || 'text';
+            
+            if (columnType === 'currency' && (cell || cell === 0)) {
+              cellText = this.formatCurrency(cell);
+            } else if (columnType === 'number' && (cell || cell === 0)) {
+              cellText = this.formatNumber(cell);
+            } else {
+              cellText = String(cell || '');
+            }
+            
+            const cellWidth = this.getTextWidth(doc, cellText, fontSize) + 12; // Extra for padding
+            columnWidths[colIndex] = Math.max(columnWidths[colIndex], cellWidth);
+          }
+        });
+      });
+    }
+    
+    // Apply content type weights
+    if (columnTypes && columnTypes.length === numColumns) {
+      const weightMap = { 
+        text: 1.4,      // Text columns need more space
+        number: 0.8,    // Numbers are usually shorter
+        currency: 1.0   // Currency needs moderate space
+      };
+      
+      columnWidths = columnWidths.map((width, index) => {
+        const type = columnTypes[index] || 'text';
+        const weight = weightMap[type] || 1;
+        return width * weight;
+      });
+    }
+    
+    // Ensure minimum widths
+    columnWidths = columnWidths.map(width => Math.max(minColWidth, width));
+    
+    // Scale to fit available width
+    const totalWidth = columnWidths.reduce((sum, width) => sum + width, 0);
+    if (totalWidth > availableWidth) {
+      const scaleFactor = availableWidth / totalWidth;
+      columnWidths = columnWidths.map(width => width * scaleFactor);
+    } else if (totalWidth < availableWidth * 0.8) {
+      // If we have extra space, distribute it proportionally
+      const extraSpace = availableWidth - totalWidth;
+      const totalCurrentWidth = columnWidths.reduce((sum, width) => sum + width, 0);
+      columnWidths = columnWidths.map(width => 
+        width + (width / totalCurrentWidth) * extraSpace
+      );
+    }
+    
+    // Final minimum width check
+    columnWidths = columnWidths.map(width => Math.max(minColWidth, width));
+    
+    return columnWidths;
+  }
+
+  // Draw enhanced table headers with proper styling and text wrapping
+  drawEnhancedTableHeaders(doc, headers, columnWidths, startX, startY, fontSize, cellPadding, headerStyle) {
+    const headerColors = {
+      primary: this.theme.colors.primary,
+      secondary: this.theme.colors.secondary,
+      accent: this.theme.colors.accent
+    };
+
+    const headerColor = headerColors[headerStyle] || this.theme.colors.primary;
+    
+    // Calculate dynamic row height based on header content
+    let maxHeaderHeight = fontSize * 1.2;
+    const processedHeaders = headers.map((header, index) => {
+      const cellWidth = columnWidths[index];
+      const availableWidth = cellWidth - (cellPadding * 2);
+      const text = this.abbreviateHeaderText(String(header || ''), availableWidth, fontSize, doc);
+      const wrappedLines = this.wrapTextToWidth(doc, text, availableWidth, fontSize);
+      maxHeaderHeight = Math.max(maxHeaderHeight, wrappedLines.length * fontSize * 1.2);
+      return { text, wrappedLines, cellWidth };
+    });
+    
+    const rowHeight = cellPadding * 2 + maxHeaderHeight;
+
+    // Draw header background
+    doc.setFillColor(...headerColor);
+    doc.rect(startX, startY, columnWidths.reduce((sum, width) => sum + width, 0), rowHeight, 'F');
+
+    // Draw header borders for better separation
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(0.8);
+    let borderX = startX;
+    columnWidths.forEach(width => {
+      if (borderX > startX) { // Don't draw left border for first column
+        doc.line(borderX, startY, borderX, startY + rowHeight);
+      }
+      borderX += width;
+    });
+
+    // Set header text properties
+    doc.setFontSize(fontSize);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255); // White text
+
+    // Draw header text with proper wrapping
+    let currentX = startX;
+    processedHeaders.forEach((headerInfo, index) => {
+      const { wrappedLines, cellWidth } = headerInfo;
+      
+      // Calculate vertical centering
+      const totalTextHeight = wrappedLines.length * fontSize * 1.2;
+      const startTextY = startY + cellPadding + (rowHeight - cellPadding * 2 - totalTextHeight) / 2 + fontSize * 0.7;
+      
+      // Draw each line of wrapped text
+      wrappedLines.forEach((line, lineIndex) => {
+        const textWidth = this.getTextWidth(doc, line, fontSize);
+        const textX = currentX + (cellWidth - textWidth) / 2; // Center horizontally
+        const textY = startTextY + (lineIndex * fontSize * 1.2);
+        
+        doc.text(line, textX, textY);
+      });
+      
+      currentX += cellWidth;
+    });
+
+    // Reset properties
+    doc.setTextColor(0, 0, 0);
+    doc.setDrawColor(0, 0, 0);
+    
+    return startY + rowHeight;
+  }
+
+  // Create smart header abbreviations
+  abbreviateHeaderText(text, availableWidth, fontSize, doc) {
+    // Check if text fits as-is
+    const textWidth = this.getTextWidth(doc, text, fontSize);
+    if (textWidth <= availableWidth) {
+      return text;
+    }
+
+    // Common abbreviations for financial table headers
+    const abbreviations = {
+      'Financial Metric': 'Metric',
+      'Current Status': 'Status',
+      'Target Amount': 'Amount',
+      'Target Year': 'Year',
+      'Time Horizon': 'Timeline',
+      'Monthly SIP': 'SIP',
+      'Priority Level': 'Priority',
+      'Goal Name': 'Goal',
+      'Personal Details': 'Details',
+      'Information': 'Info',
+      'Financial Aspect': 'Aspect'
+    };
+
+    // Try abbreviation first
+    if (abbreviations[text]) {
+      const abbrevWidth = this.getTextWidth(doc, abbreviations[text], fontSize);
+      if (abbrevWidth <= availableWidth) {
+        return abbreviations[text];
+      }
+    }
+
+    // If still too long, truncate intelligently
+    const words = text.split(' ');
+    if (words.length > 1) {
+      // Try first word only
+      const firstWordWidth = this.getTextWidth(doc, words[0], fontSize);
+      if (firstWordWidth <= availableWidth) {
+        return words[0];
+      }
+    }
+
+    // Last resort: truncate with ellipsis
+    let truncated = text;
+    while (this.getTextWidth(doc, truncated + '...', fontSize) > availableWidth && truncated.length > 3) {
+      truncated = truncated.slice(0, -1);
+    }
+    return truncated + (truncated.length < text.length ? '...' : '');
+  }
+
+  // Draw enhanced table rows with dynamic height and proper alignment
+  drawEnhancedTableRows(doc, data, columnWidths, startX, startY, fontSize, cellPadding, columnTypes = [], columnAlignments = []) {
+    let currentY = startY;
+
+    doc.setFontSize(fontSize);
+    doc.setFont('helvetica', 'normal');
+
+    data.forEach((row, rowIndex) => {
+      // Calculate dynamic row height based on content
+      let maxRowHeight = fontSize * 1.2;
+      const processedCells = row.map((cell, colIndex) => {
+        const cellWidth = columnWidths[colIndex];
+        const columnType = columnTypes[colIndex] || 'text';
+        const maxWidth = cellWidth - (cellPadding * 2);
+        
+        // Format cell content based on type
+        let cellText = '';
+        if (cell !== null && cell !== undefined && cell !== '') {
+          if (columnType === 'currency') {
+            cellText = this.formatCurrency(cell);
+          } else if (columnType === 'number') {
+            cellText = this.formatNumber(cell);
+          } else {
+            cellText = String(cell);
+          }
+        }
+
+        // Wrap text and calculate height
+        const wrappedLines = this.wrapTextToWidth(doc, cellText, maxWidth, fontSize);
+        const cellHeight = wrappedLines.length * fontSize * 1.2;
+        maxRowHeight = Math.max(maxRowHeight, cellHeight);
+        
+        return { cellText, wrappedLines, cellWidth };
+      });
+
+      const rowHeight = cellPadding * 2 + maxRowHeight;
+
+      // Draw alternate row background
+      if (rowIndex % 2 === 1) {
+        doc.setFillColor(...this.theme.colors.gray[50]);
+        doc.rect(startX, currentY, columnWidths.reduce((sum, width) => sum + width, 0), rowHeight, 'F');
+      }
+
+      // Draw row borders and cell separators
+      doc.setDrawColor(...this.theme.colors.gray[200]);
+      doc.setLineWidth(0.5);
+      
+      // Horizontal borders
+      doc.line(startX, currentY, startX + columnWidths.reduce((sum, width) => sum + width, 0), currentY);
+      doc.line(startX, currentY + rowHeight, startX + columnWidths.reduce((sum, width) => sum + width, 0), currentY + rowHeight);
+      
+      // Vertical borders
+      let borderX = startX;
+      columnWidths.forEach((width, index) => {
+        doc.line(borderX, currentY, borderX, currentY + rowHeight);
+        borderX += width;
+      });
+      // Right border
+      doc.line(borderX, currentY, borderX, currentY + rowHeight);
+
+      // Draw cell content with proper alignment
+      let currentX = startX;
+      processedCells.forEach((cellInfo, colIndex) => {
+        const { wrappedLines, cellWidth } = cellInfo;
+        const columnType = columnTypes[colIndex] || 'text';
+        const alignment = columnAlignments[colIndex] || (columnType === 'currency' || columnType === 'number' ? 'right' : 'left');
+        
+        // Calculate vertical centering
+        const totalTextHeight = wrappedLines.length * fontSize * 1.2;
+        const startTextY = currentY + cellPadding + (rowHeight - cellPadding * 2 - totalTextHeight) / 2 + fontSize * 0.7;
+        
+        // Draw each line of text
+        wrappedLines.forEach((line, lineIndex) => {
+          let textX = currentX + cellPadding;
+          
+          // Calculate horizontal alignment
+          if (alignment === 'center') {
+            const textWidth = this.getTextWidth(doc, line, fontSize);
+            textX = currentX + (cellWidth - textWidth) / 2;
+          } else if (alignment === 'right') {
+            const textWidth = this.getTextWidth(doc, line, fontSize);
+            textX = currentX + cellWidth - textWidth - cellPadding;
+          }
+          
+          const textY = startTextY + (lineIndex * fontSize * 1.2);
+          doc.text(line, textX, textY);
+        });
+
+        currentX += cellWidth;
+      });
+
+      currentY += rowHeight;
+    });
+
+    return currentY;
+  }
+
+  // Enhanced data validation and extraction
+  validateAndFormatTableData(rawData, columnTypes = []) {
+    if (!rawData || !Array.isArray(rawData)) {
+      console.warn('⚠️ [PDF Generator] Invalid table data provided');
+      return [];
+    }
+
+    return rawData.map(row => {
+      if (!Array.isArray(row)) return [];
+      
+      return row.map((cell, index) => {
+        const columnType = columnTypes[index] || 'text';
+        
+        // Handle null/undefined values
+        if (cell === null || cell === undefined) {
+          return columnType === 'currency' ? '₹0' : '';
+        }
+        
+        // Handle empty strings
+        if (cell === '') {
+          return columnType === 'currency' ? '₹0' : '';
+        }
+        
+        return cell;
+      });
+    });
   }
 
   calculateTotalAssets(assets) {
@@ -1352,8 +2357,11 @@ class GoalPlanPDFGenerator {
     return '5-20'; // Default timeline range
   }
 
+  /**
+   * Enhanced text wrapping with error handling
+   */
   wrapText(doc, text, maxWidth) {
-    return doc.splitTextToSize(text, maxWidth);
+    return this.wrapTextToWidth(doc, text, maxWidth, this.theme.fonts.sizes.body);
   }
 
   getPlanTypeLabel(planType) {

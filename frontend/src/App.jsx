@@ -16,6 +16,8 @@ import AdminDashboard from './components/AdminDashboard'
 import { MeetingsPage } from './components/meetings'
 import LOESignaturePage from './components/loe/LOESignaturePage'
 import ABTestingDashboard from './components/abTesting/ABTestingDashboard'
+import PortfolioManagementDashboard from './components/portfolio/PortfolioManagementDashboard'
+import Settings from './components/Settings'
 
 function App() {
   return (
@@ -71,6 +73,8 @@ function App() {
               <Route path="/clients/:clientId" element={<ClientDetailView />} />
               <Route path="/meetings" element={<MeetingsPage />} />
               <Route path="/ab-testing" element={<ABTestingDashboard />} />
+              <Route path="/portfolio-management" element={<PortfolioManagementDashboard />} />
+              <Route path="/settings" element={<Settings />} />
             </Route>
             
             {/* Redirect any unknown routes to home */}
