@@ -37,8 +37,12 @@ const ComparisonHistory = ({
       return { text: 'Plan A', color: 'text-blue-600', bgColor: 'bg-blue-50' };
     } else if (suggested === 'planB') {
       return { text: 'Plan B', color: 'text-green-600', bgColor: 'bg-green-50' };
+    } else if (suggested === 'both_suitable') {
+      return { text: 'Both Suitable', color: 'text-purple-600', bgColor: 'bg-purple-50' };
+    } else if (suggested === 'neither_suitable') {
+      return { text: 'Neither Suitable', color: 'text-red-600', bgColor: 'bg-red-50' };
     }
-    return { text: 'Both Suitable', color: 'text-gray-600', bgColor: 'bg-gray-50' };
+    return { text: 'No Recommendation', color: 'text-gray-600', bgColor: 'bg-gray-50' };
   };
 
   const getDecisionDisplay = (comparison) => {

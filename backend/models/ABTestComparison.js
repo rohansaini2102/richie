@@ -75,7 +75,7 @@ const abTestComparisonSchema = new mongoose.Schema({
     recommendation: {
       suggestedPlan: {
         type: String,
-        enum: ['planA', 'planB', 'both_suitable']
+        enum: ['planA', 'planB', 'both_suitable', 'neither_suitable']
       },
       reasoning: String,
       confidenceScore: Number
@@ -96,7 +96,7 @@ const abTestComparisonSchema = new mongoose.Schema({
   selectedWinner: {
     plan: {
       type: String,
-      enum: ['planA', 'planB', 'none', 'both']
+      enum: ['planA', 'planB', 'none', 'both', 'neither']
     },
     reason: String,
     selectedBy: {

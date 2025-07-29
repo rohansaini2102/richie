@@ -95,6 +95,10 @@ const PlanComparisonView = ({
         return <Award className="h-5 w-5 text-blue-600" />;
       case 'planB':
         return <Award className="h-5 w-5 text-green-600" />;
+      case 'both_suitable':
+        return <CheckCircle className="h-5 w-5 text-purple-600" />;
+      case 'neither_suitable':
+        return <AlertTriangle className="h-5 w-5 text-red-600" />;
       default:
         return <Minus className="h-5 w-5 text-gray-500" />;
     }
@@ -327,7 +331,9 @@ const PlanComparisonView = ({
                   <div className="font-medium mb-1">
                     {aiAnalysis?.recommendation?.suggestedPlan === 'planA' ? 'Plan A Recommended' :
                      aiAnalysis?.recommendation?.suggestedPlan === 'planB' ? 'Plan B Recommended' :
-                     'Both Plans Suitable'}
+                     aiAnalysis?.recommendation?.suggestedPlan === 'both_suitable' ? 'Both Plans Suitable' :
+                     aiAnalysis?.recommendation?.suggestedPlan === 'neither_suitable' ? 'Neither Plan Suitable' :
+                     'No Recommendation'}
                   </div>
                   <p className="text-gray-700">{aiAnalysis?.recommendation?.reasoning}</p>
                 </div>
@@ -563,6 +569,16 @@ const PlanComparisonView = ({
                       className="mr-2"
                     />
                     Both plans are suitable
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value="neither"
+                      checked={selectedWinner === 'neither'}
+                      onChange={(e) => setSelectedWinner(e.target.value)}
+                      className="mr-2"
+                    />
+                    Neither plan is suitable
                   </label>
                 </div>
               </div>

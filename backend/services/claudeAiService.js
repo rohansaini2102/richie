@@ -527,7 +527,7 @@ Please provide a detailed comparison in JSON format with the following structure
   "planBStrengths": ["List of Plan B strengths"],
   "planBWeaknesses": ["List of Plan B weaknesses"],
   "recommendation": {
-    "suggestedPlan": "planA/planB/both_suitable",
+    "suggestedPlan": "planA/planB/both_suitable/neither_suitable",
     "reasoning": "Detailed explanation of recommendation",
     "confidenceScore": 0.85
   },
