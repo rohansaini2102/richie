@@ -1,7 +1,6 @@
 import React from 'react';
-import { jsPDF } from 'jspdf';
-// Import jspdf-autotable and manually attach to jsPDF
-import autoTable from 'jspdf-autotable';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import { 
   Box, 
   Button, 
@@ -45,27 +44,18 @@ class GoalPlanPDFGenerator {
 
   initializeAutoTable() {
     console.log('🔍 [PDF Generator] Checking autoTable availability...');
-    console.log('autoTable import type:', typeof autoTable);
     
     // Create a test jsPDF instance to check plugin availability
     const testDoc = new jsPDF();
     console.log('autoTable method on instance:', typeof testDoc.autoTable);
     
-    if (typeof testDoc.autoTable !== 'function') {
-      console.warn('⚠️ [PDF Generator] autoTable not automatically attached, attempting manual attachment...');
-      
-      // Try to manually attach the plugin
-      if (typeof autoTable === 'function') {
-        // For some versions, we need to call the plugin function to attach it
-        try {
-          autoTable(testDoc, { head: [], body: [] }); // Dummy call to initialize
-          console.log('✅ [PDF Generator] autoTable manually initialized');
-        } catch (error) {
-          console.error('❌ [PDF Generator] Failed to manually initialize autoTable:', error);
-        }
-      }
-    } else {
+    // For jsPDF 3.x with jspdf-autotable 5.x, the plugin should be auto-attached
+    if (typeof testDoc.autoTable === 'function') {
       console.log('✅ [PDF Generator] autoTable plugin properly loaded');
+      return true;
+    } else {
+      console.warn('⚠️ [PDF Generator] autoTable not available - will use fallback tables');
+      return false;
     }
   }
 
@@ -78,59 +68,92 @@ class GoalPlanPDFGenerator {
       headerBg = [240, 248, 255], 
       headerText = [0, 51, 102],
       borderColor = [200, 200, 200],
-      fontSize = 10,
-      rowHeight = 8,
+      fontSize = 11,
+      headerFontSize = 12,
+      rowHeight = 12,
       columnWidths = []
     } = options;
 
-    // Calculate column widths if not provided
-    const numColumns = headers.length;
-    const availableWidth = this.contentWidth - 20;
-    const defaultColumnWidth = columnWidths.length ? null : availableWidth / numColumns;
+    // Calculate responsive column widths if not provided
+    const finalColumnWidths = columnWidths.length > 0 
+      ? columnWidths 
+      : this.calculateResponsiveColumnWidths(headers, data, this.contentWidth - 10);
+
+    // Calculate header height based on wrapped text
+    const headerHeight = Math.max(rowHeight, 
+      this.calculateRowHeight(doc, headers, finalColumnWidths, headerFontSize, rowHeight));
 
     // Draw table header
     doc.setFillColor(...headerBg);
-    doc.rect(this.margin, y, this.contentWidth, rowHeight + 4, 'F');
+    doc.rect(this.margin, y, this.contentWidth, headerHeight, 'F');
     
-    doc.setFontSize(fontSize);
+    doc.setFontSize(headerFontSize);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...headerText);
     
-    let currentX = this.margin + 5;
+    let currentX = this.margin + 3;
     headers.forEach((header, index) => {
-      const colWidth = columnWidths[index] || defaultColumnWidth;
-      doc.text(header, currentX, y + 6);
+      const colWidth = finalColumnWidths[index];
+      const wrappedHeader = this.wrapTextForColumn(doc, header, colWidth, headerFontSize);
+      
+      // Draw wrapped header text
+      wrappedHeader.forEach((line, lineIndex) => {
+        doc.text(line, currentX, y + 8 + (lineIndex * 6));
+      });
+      
       currentX += colWidth;
     });
     
-    y += rowHeight + 4;
+    y += headerHeight;
 
-    // Draw data rows
+    // Draw data rows with responsive heights
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
+    doc.setFontSize(fontSize);
     
     data.forEach((row, rowIndex) => {
+      // Calculate row height based on content
+      const currentRowHeight = this.calculateRowHeight(doc, row, finalColumnWidths, fontSize, rowHeight);
+      
       // Alternate row background
       if (rowIndex % 2 === 0) {
         doc.setFillColor(250, 250, 250);
-        doc.rect(this.margin, y, this.contentWidth, rowHeight + 2, 'F');
+        doc.rect(this.margin, y, this.contentWidth, currentRowHeight, 'F');
       }
       
-      currentX = this.margin + 5;
+      currentX = this.margin + 3;
       row.forEach((cell, colIndex) => {
-        const colWidth = columnWidths[colIndex] || defaultColumnWidth;
-        const cellText = String(cell).substring(0, Math.floor(colWidth / 3)); // Prevent overflow
-        doc.text(cellText, currentX, y + 5);
+        const colWidth = finalColumnWidths[colIndex];
+        const wrappedText = this.wrapTextForColumn(doc, cell, colWidth, fontSize);
+        
+        // Draw wrapped cell text
+        wrappedText.forEach((line, lineIndex) => {
+          if (line.trim()) { // Only draw non-empty lines
+            doc.text(line, currentX, y + 8 + (lineIndex * 6));
+          }
+        });
+        
         currentX += colWidth;
       });
       
-      y += rowHeight + 2;
+      y += currentRowHeight;
     });
 
-    // Draw table border
+    // Draw table border and column separators
     doc.setDrawColor(...borderColor);
     doc.setLineWidth(0.5);
+    
+    // Outer border
     doc.rect(this.margin, startY, this.contentWidth, y - startY);
+    
+    // Column separators
+    currentX = this.margin;
+    finalColumnWidths.forEach(colWidth => {
+      currentX += colWidth;
+      if (currentX < this.margin + this.contentWidth) {
+        doc.line(currentX, startY, currentX, y);
+      }
+    });
 
     return y + 10;
   }
@@ -139,36 +162,14 @@ class GoalPlanPDFGenerator {
    * Ensure autoTable is available on document instance
    */
   ensureAutoTable(doc) {
-    if (typeof doc.autoTable !== 'function') {
-      console.warn('⚠️ [PDF Generator] autoTable not available on doc instance, attempting fix...');
-      
-      // Try multiple methods to attach autoTable
-      if (typeof autoTable === 'function') {
-        try {
-          // Method 1: Direct attachment
-          doc.autoTable = autoTable.bind(null, doc);
-          
-          // Method 2: Call the function to initialize plugin
-          autoTable(doc, { head: [], body: [], startY: -1000 }); // Off-screen dummy table
-          
-          // Verify it's now available
-          if (typeof doc.autoTable === 'function') {
-            console.log('✅ [PDF Generator] autoTable successfully attached to document instance');
-            return true;
-          } else {
-            console.error('❌ [PDF Generator] autoTable still not available after attachment attempt');
-            return false;
-          }
-        } catch (error) {
-          console.error('❌ [PDF Generator] Failed to attach autoTable to instance:', error);
-          return false;
-        }
-      } else {
-        console.error('❌ [PDF Generator] autoTable function not imported');
-        return false;
-      }
+    // Check if autoTable is available on the document
+    const isAvailable = typeof doc.autoTable === 'function';
+    
+    if (!isAvailable) {
+      console.warn('⚠️ [PDF Generator] autoTable not available - using fallback tables');
     }
-    return true;
+    
+    return isAvailable;
   }
 
   /**
@@ -177,17 +178,30 @@ class GoalPlanPDFGenerator {
   generatePDF(data) {
     const { clientData, editedGoals, recommendations, metrics, cacheInfo, advisorData } = data;
     
+    // Validate input data
+    if (!clientData) {
+      throw new Error('Client data is required for PDF generation');
+    }
+    
+    if (!editedGoals || editedGoals.length === 0) {
+      console.warn('⚠️ [PDF Generator] No goals provided, generating basic report');
+    }
+    
     console.log('🎯 [PDF Generator] Starting frontend PDF generation:', {
       clientName: `${clientData?.firstName} ${clientData?.lastName}`,
       goalsCount: editedGoals?.length || 0,
       hasRecommendations: !!recommendations,
-      hasMetrics: !!metrics
+      hasMetrics: !!metrics,
+      hasAdvisorData: !!advisorData
     });
 
     const doc = new jsPDF();
     
     // Ensure autoTable is available on this document instance
-    this.ensureAutoTable(doc);
+    const autoTableReady = this.ensureAutoTable(doc);
+    if (!autoTableReady) {
+      console.warn('⚠️ [PDF Generator] autoTable initialization failed, using fallback tables only');
+    }
     
     let currentY = this.margin;
 
@@ -196,30 +210,34 @@ class GoalPlanPDFGenerator {
     
     // 2. Executive Summary
     doc.addPage();
-    currentY = this.margin;
-    currentY = this.addExecutiveSummary(doc, clientData, metrics, currentY);
+    currentY = this.margin + 5; // Add small top margin
+    currentY = this.addExecutiveSummary(doc, clientData, editedGoals, metrics, currentY);
     
-    // 3. Client Profile
+    // 3. Client Profile - use smart page break
+    currentY = this.checkPageBreak(doc, currentY, 80); // Need space for client profile
+    currentY = this.addSectionSpacing(currentY, 20);
     currentY = this.addClientProfile(doc, clientData, currentY);
     
-    // 4. Goals Analysis
+    // 4. Goals Analysis - always start on new page for clarity
     doc.addPage();
-    currentY = this.margin;
+    currentY = this.margin + 5;
     currentY = this.addGoalsAnalysis(doc, editedGoals, currentY);
     
-    // 5. Financial Recommendations
+    // 5. Financial Recommendations - use smart page break
     if (recommendations) {
-      doc.addPage();
-      currentY = this.margin;
+      currentY = this.checkPageBreak(doc, currentY, 60);
+      currentY = this.addSectionSpacing(currentY, 25);
       currentY = this.addRecommendations(doc, recommendations, currentY);
     }
     
-    // 6. Implementation Timeline
-    doc.addPage();
-    currentY = this.margin;
+    // 6. Implementation Timeline - use smart page break
+    currentY = this.checkPageBreak(doc, currentY, 80);
+    currentY = this.addSectionSpacing(currentY, 25);
     currentY = this.addImplementationTimeline(doc, editedGoals, currentY);
     
-    // 7. Disclaimers
+    // 7. Disclaimers - ensure adequate space
+    currentY = this.checkPageBreak(doc, currentY, 50);
+    currentY = this.addSectionSpacing(currentY, 20);
     currentY = this.addDisclaimers(doc, currentY);
 
     // Add advisor signature section on last page
@@ -237,33 +255,43 @@ class GoalPlanPDFGenerator {
 
     const headerHeight = 25;
     
-    // Header background
-    doc.setFillColor(240, 248, 255); // Light blue background
+    // Enhanced header background with gradient effect
+    doc.setFillColor(245, 250, 255); // Lighter blue background
     doc.rect(0, 0, this.pageWidth, headerHeight, 'F');
     
-    // Firm name - prominent
+    // Add subtle gradient strip at top
+    doc.setFillColor(0, 102, 204);
+    doc.rect(0, 0, this.pageWidth, 3, 'F');
+    
+    // Firm name - prominent with enhanced styling
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 51, 102); // Dark blue
     doc.text(advisorData.firmName || 'Financial Advisory Services', this.margin, 12);
     
-    // Advisor name and credentials
+    // Advisor name and credentials with better formatting
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 100, 100); // Gray
+    doc.setTextColor(85, 85, 85); // Slightly darker gray
     const advisorInfo = `${advisorData.firstName} ${advisorData.lastName}`;
     const sebiInfo = advisorData.sebiRegNumber ? ` | SEBI Reg: ${advisorData.sebiRegNumber}` : '';
     doc.text(`${advisorInfo}${sebiInfo}`, this.margin, 18);
     
-    // Page number and date (right aligned)
+    // Page number and date (right aligned) with better styling
     const rightX = this.pageWidth - this.margin;
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 51, 102);
     doc.text(`Page ${pageNumber}`, rightX, 12, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(85, 85, 85);
     doc.text(new Date().toLocaleDateString('en-IN'), rightX, 18, { align: 'right' });
     
-    // Header line
+    // Enhanced header line with double line effect
     doc.setDrawColor(0, 102, 204);
-    doc.setLineWidth(0.5);
-    doc.line(this.margin, headerHeight - 2, this.pageWidth - this.margin, headerHeight - 2);
+    doc.setLineWidth(1);
+    doc.line(this.margin, headerHeight - 3, this.pageWidth - this.margin, headerHeight - 3);
+    doc.setLineWidth(0.3);
+    doc.line(this.margin, headerHeight - 1, this.pageWidth - this.margin, headerHeight - 1);
     
     // Reset text color
     doc.setTextColor(0, 0, 0);
@@ -292,10 +320,15 @@ class GoalPlanPDFGenerator {
     
     y += 40;
     
-    // Client Details Box
+    // Client Details Box with enhanced styling
     doc.setDrawColor(0, 102, 204);
-    doc.setFillColor(240, 248, 255);
-    doc.roundedRect(this.margin, y, this.contentWidth, 60, 3, 3, 'FD');
+    doc.setFillColor(245, 250, 255);
+    doc.roundedRect(this.margin, y, this.contentWidth, 65, 5, 5, 'FD');
+    
+    // Add subtle inner shadow effect
+    doc.setDrawColor(220, 230, 245);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(this.margin + 1, y + 1, this.contentWidth - 2, 63, 4, 4);
     
     y += 15;
     doc.setFontSize(14);
@@ -331,91 +364,131 @@ class GoalPlanPDFGenerator {
   /**
    * Add executive summary with key metrics
    */
-  addExecutiveSummary(doc, clientData, metrics, startY) {
+  addExecutiveSummary(doc, clientData, editedGoals, metrics, startY) {
     let y = startY;
     
+    // Section heading with enhanced styling
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 51, 102); // Dark blue
     doc.text('EXECUTIVE SUMMARY', this.margin, y);
-    y += 15;
     
-    // Key Metrics Table
+    // Add underline for section heading
+    doc.setDrawColor(0, 102, 204);
+    doc.setLineWidth(1);
+    doc.line(this.margin, y + 2, this.margin + 100, y + 2);
+    
+    // Reset text color
+    doc.setTextColor(0, 0, 0);
+    y += 20;
+    
+    // Key Metrics Table - with improved data validation and formatting
+    const summaryHeaders = ['Metric', 'Value'];
     const summaryData = [
-      ['Total Financial Goals', `${metrics?.totalGoals || 0}`],
-      ['Required Monthly SIP', `₹${this.formatCurrency(metrics?.totalRequiredSIP || 0)}`],
-      ['Available Monthly Surplus', `₹${this.formatCurrency(metrics?.availableSurplus || 0)}`],
-      ['Plan Feasibility', metrics?.feasible ? '✓ Achievable' : '⚠ Requires Adjustment'],
-      ['Planning Horizon', `${this.getMaxTimelineYears(metrics)} years`]
+      ['Total Financial Goals', `${metrics?.totalGoals || editedGoals?.length || 0}`],
+      ['Required Monthly SIP', metrics?.totalRequiredSIP ? `₹${this.formatCurrency(metrics.totalRequiredSIP)}` : 'Calculating...'],
+      ['Available Monthly Surplus', metrics?.availableSurplus ? `₹${this.formatCurrency(metrics.availableSurplus)}` : 'TBD'],
+      ['Plan Feasibility', metrics?.feasible ? '✓ Achievable' : '⚠ Requires Review'],
+      ['Planning Horizon', `${this.getMaxTimelineYears(metrics, editedGoals)} years`]
     ];
 
-    // Use autoTable plugin - with multiple fallback strategies
+    // Calculate responsive column widths for summary table
+    const summaryColumnWidths = this.calculateResponsiveColumnWidths(summaryHeaders, summaryData);
+
+    // Use autoTable if available, otherwise use fallback
     if (this.ensureAutoTable(doc)) {
       try {
         doc.autoTable({
           startY: y,
-          head: [['Metric', 'Value']],
+          head: [summaryHeaders],
           body: summaryData,
           theme: 'grid',
-          headStyles: { fillColor: [0, 102, 204] },
+          headStyles: { 
+            fillColor: [0, 102, 204],
+            fontSize: 12,
+            fontStyle: 'bold',
+            textColor: [255, 255, 255],
+            halign: 'center'
+          },
+          bodyStyles: { 
+            fontSize: 11,
+            cellPadding: 4
+          },
           margin: { left: this.margin, right: this.margin },
-          styles: { fontSize: 11 }
+          columnStyles: {
+            0: { fontStyle: 'bold', fillColor: [248, 250, 252] },
+            1: { halign: 'right' }
+          }
         });
         y = doc.lastAutoTable.finalY + 15;
-      } catch (autoTableError) {
-        console.warn('❌ [PDF Generator] doc.autoTable failed, trying direct function call:', autoTableError);
-        try {
-          // Try calling autoTable function directly
-          autoTable(doc, {
-            startY: y,
-            head: [['Metric', 'Value']],
-            body: summaryData,
-            theme: 'grid',
-            headStyles: { fillColor: [0, 102, 204] },
-            margin: { left: this.margin, right: this.margin },
-            styles: { fontSize: 11 }
-          });
-          y = doc.lastAutoTable.finalY + 15;
-        } catch (directCallError) {
-          console.warn('❌ [PDF Generator] Direct autoTable call failed, using fallback table:', directCallError);
-          const fallbackResult = this.createFallbackTable(doc, summaryData, ['Metric', 'Value'], y, { 
-            fontSize: 11, 
-            title: 'Executive Summary'
-          });
-          y = fallbackResult.endY + 15;
-        }
+      } catch (error) {
+        console.warn('❌ [PDF Generator] autoTable failed, using fallback table:', error);
+        y = this.createFallbackTable(doc, summaryData, summaryHeaders, y, {
+          columnWidths: summaryColumnWidths,
+          fontSize: 11,
+          headerFontSize: 12,
+          rowHeight: 12
+        });
       }
     } else {
-      // Fallback: Create professional fallback table
-      console.warn('Using professional fallback table for executive summary');
-      y = this.createFallbackTable(doc, summaryData, ['Metric', 'Value'], y, {
-        columnWidths: [100, 70],
-        fontSize: 11
+      // Use professional fallback table
+      y = this.createFallbackTable(doc, summaryData, summaryHeaders, y, {
+        columnWidths: summaryColumnWidths,
+        fontSize: 11,
+        headerFontSize: 12,
+        rowHeight: 12
       });
     }
 
-    // Financial Health Summary
-    doc.setFontSize(14);
+    // Financial Health Summary with enhanced styling
+    doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 51, 102); // Dark blue
     doc.text('FINANCIAL HEALTH OVERVIEW', this.margin, y);
-    y += 10;
+    
+    // Add underline
+    doc.setDrawColor(0, 102, 204);
+    doc.setLineWidth(0.8);
+    doc.line(this.margin, y + 2, this.margin + 120, y + 2);
+    
+    // Reset text color
+    doc.setTextColor(0, 0, 0);
+    y += 15;
 
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     
-    const monthlyIncome = clientData.totalMonthlyIncome || 0;
-    const monthlyExpenses = clientData.totalMonthlyExpenses || 0;
-    const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome * 100).toFixed(1) : 0;
+    const monthlyIncome = clientData?.totalMonthlyIncome || 0;
+    const monthlyExpenses = clientData?.totalMonthlyExpenses || 0;
+    const surplus = monthlyIncome - monthlyExpenses;
+    const savingsRate = monthlyIncome > 0 ? ((surplus / monthlyIncome) * 100).toFixed(1) : 0;
     
-    const healthText = [
-      `• Monthly Income: ₹${this.formatCurrency(monthlyIncome)}`,
-      `• Monthly Expenses: ₹${this.formatCurrency(monthlyExpenses)}`,
-      `• Savings Rate: ${savingsRate}%`,
-      `• Investment Capacity: ${metrics?.feasible ? 'Strong' : 'Needs Optimization'}`
+    const healthItems = [
+      [`Monthly Income:`, `₹${this.formatCurrency(monthlyIncome)}`],
+      [`Monthly Expenses:`, `₹${this.formatCurrency(monthlyExpenses)}`],
+      [`Monthly Surplus:`, `₹${this.formatCurrency(surplus)}`, surplus >= 0 ? '(Positive)' : '(Needs Attention)'],
+      [`Savings Rate:`, `${savingsRate}%`, savingsRate >= 20 ? '(Excellent)' : savingsRate >= 10 ? '(Good)' : '(Can Improve)'],
+      [`Investment Capacity:`, metrics?.feasible ? 'Strong' : 'Needs Optimization']
     ];
 
-    healthText.forEach(text => {
-      doc.text(text, this.margin, y);
-      y += 8;
+    healthItems.forEach(([label, value, note]) => {
+      // Label in bold
+      doc.setFont('helvetica', 'bold');
+      doc.text(`• ${label}`, this.margin, y);
+      
+      // Value in normal weight
+      doc.setFont('helvetica', 'normal');
+      const labelWidth = doc.getTextWidth(`• ${label} `);
+      doc.text(` ${value}`, this.margin + labelWidth, y);
+      
+      // Additional note if available
+      if (note) {
+        const valueWidth = doc.getTextWidth(` ${value} `);
+        doc.setFont('helvetica', 'italic');
+        doc.text(` ${note}`, this.margin + labelWidth + valueWidth, y);
+      }
+      
+      y += 9;
     });
 
     return y + 10;
@@ -560,134 +633,173 @@ class GoalPlanPDFGenerator {
   addGoalsAnalysis(doc, editedGoals, startY) {
     let y = startY;
     
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('GOALS ANALYSIS & SIP REQUIREMENTS', this.margin, y);
-    y += 15;
+    try {
+      // Section heading with enhanced styling
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 51, 102); // Dark blue
+      doc.text('GOALS ANALYSIS & SIP REQUIREMENTS', this.margin, y);
+      
+      // Add underline for section heading
+      doc.setDrawColor(0, 102, 204);
+      doc.setLineWidth(1);
+      doc.line(this.margin, y + 2, this.margin + 120, y + 2);
+      
+      // Reset text color
+      doc.setTextColor(0, 0, 0);
+      y += 20;
 
-    if (!editedGoals || editedGoals.length === 0) {
+      if (!editedGoals || editedGoals.length === 0) {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'normal');
+        doc.text('No financial goals have been defined. Please set up your goals first.', this.margin, y);
+        doc.text('This section will display detailed goal analysis once goals are added.', this.margin, y + 10);
+        return y + 30;
+      }
+    } catch (error) {
+      console.error('❌ [PDF Generator] Error in goals analysis header:', error);
       doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text('No financial goals have been defined.', this.margin, y);
+      doc.text('Error generating goals analysis section', this.margin, y);
       return y + 20;
     }
 
-    // Goals Summary Table
-    const goalsTableData = editedGoals.map((goal, index) => [
-      `${index + 1}`,
-      goal.title || 'Unnamed Goal',
-      `₹${this.formatCurrency(goal.targetAmount || 0)}`,
-      `${goal.targetYear || 'TBD'}`,
-      `${goal.timeInYears || 'TBD'} years`,
-      `₹${this.formatCurrency(goal.monthlySIP || 0)}`,
-      goal.priority || 'Medium'
-    ]);
+    // Goals Summary Table - with robust data validation
+    let goalsTableHeaders, goalsTableData, goalsColumnWidths;
+    
+    try {
+      goalsTableHeaders = ['#', 'Goal', 'Target Amount', 'Target Year', 'Time Horizon', 'Monthly SIP', 'Priority'];
+      goalsTableData = editedGoals.map((goal, index) => [
+        `${index + 1}`,
+        goal?.title || 'Unnamed Goal',
+        goal?.targetAmount ? `₹${this.formatCurrency(goal.targetAmount)}` : 'TBD',
+        goal?.targetYear ? `${goal.targetYear}` : 'TBD',
+        goal?.timeInYears ? `${goal.timeInYears} years` : 'TBD',
+        goal?.monthlySIP ? `₹${this.formatCurrency(goal.monthlySIP)}` : 'TBD',
+        goal?.priority || 'Medium'
+      ]);
 
-    // Use autoTable plugin - with multiple fallback strategies
+      // Calculate responsive column widths for goals table
+      goalsColumnWidths = this.calculateResponsiveColumnWidths(goalsTableHeaders, goalsTableData);
+    } catch (error) {
+      console.error('❌ [PDF Generator] Error preparing goals table data:', error);
+      doc.setFontSize(12);
+      doc.text('Error processing goals data for table display', this.margin, y);
+      return y + 20;
+    }
+
+    // Use autoTable if available, otherwise use fallback
     if (this.ensureAutoTable(doc)) {
       try {
         doc.autoTable({
           startY: y,
-          head: [['#', 'Goal', 'Target Amount', 'Target Year', 'Time Horizon', 'Monthly SIP', 'Priority']],
+          head: [goalsTableHeaders],
           body: goalsTableData,
           theme: 'grid',
-          headStyles: { fillColor: [0, 102, 204], fontSize: 9 },
-          bodyStyles: { fontSize: 8 },
+          headStyles: { 
+            fillColor: [0, 102, 204], 
+            fontSize: 11,
+            fontStyle: 'bold',
+            textColor: [255, 255, 255],
+            halign: 'center'
+          },
+          bodyStyles: { 
+            fontSize: 10,
+            cellPadding: 3
+          },
           margin: { left: this.margin, right: this.margin },
           columnStyles: {
-            0: { cellWidth: 12 },
-            1: { cellWidth: 35 },
-            2: { cellWidth: 25 },
-            3: { cellWidth: 20 },
-            4: { cellWidth: 20 },
-            5: { cellWidth: 25 },
-            6: { cellWidth: 20 }
+            0: { halign: 'center' },
+            2: { halign: 'right' },
+            3: { halign: 'center' },
+            4: { halign: 'center' },
+            5: { halign: 'right' },
+            6: { halign: 'center' }
+          },
+          alternateRowStyles: {
+            fillColor: [248, 250, 252]
           }
         });
         y = doc.lastAutoTable.finalY + 15;
-      } catch (autoTableError) {
-        console.warn('❌ [PDF Generator] doc.autoTable failed for goals table, trying direct function call:', autoTableError);
-        try {
-          autoTable(doc, {
-            startY: y,
-            head: [['#', 'Goal', 'Target Amount', 'Target Year', 'Time Horizon', 'Monthly SIP', 'Priority']],
-            body: goalsTableData,
-            theme: 'grid',
-            headStyles: { fillColor: [0, 102, 204], fontSize: 9 },
-            bodyStyles: { fontSize: 8 },
-            margin: { left: this.margin, right: this.margin },
-            columnStyles: {
-              0: { cellWidth: 12 },
-              1: { cellWidth: 35 },
-              2: { cellWidth: 25 },
-              3: { cellWidth: 20 },
-              4: { cellWidth: 20 },
-              5: { cellWidth: 25 },
-              6: { cellWidth: 20 }
-            }
-          });
-          y = doc.lastAutoTable.finalY + 15;
-        } catch (directCallError) {
-          console.warn('❌ [PDF Generator] Direct autoTable call failed for goals table, using fallback table:', directCallError);
-          const fallbackResult = this.createFallbackTable(doc, goalsTableData, 
-            ['#', 'Goal', 'Target Amount', 'Target Year', 'Time Horizon', 'Monthly SIP', 'Priority'], 
-            y, {
-              columnWidths: [12, 35, 25, 20, 20, 25, 20],
-              fontSize: 8,
-              rowHeight: 10
-            }
-          );
-          y = fallbackResult.endY + 15;
-        }
+      } catch (error) {
+        console.warn('❌ [PDF Generator] autoTable failed for goals table, using fallback table:', error);
+        y = this.createFallbackTable(doc, goalsTableData, goalsTableHeaders, y, {
+          columnWidths: goalsColumnWidths,
+          fontSize: 10,
+          headerFontSize: 11,
+          rowHeight: 12
+        });
       }
     } else {
-      // Fallback: Create professional fallback table
-      console.warn('Using professional fallback table for goals');
-      y = this.createFallbackTable(doc, goalsTableData, 
-        ['#', 'Goal', 'Target Amount', 'Target Year', 'Time Horizon', 'Monthly SIP', 'Priority'], 
-        y, {
-          columnWidths: [12, 35, 25, 20, 20, 25, 20],
-          fontSize: 8,
-          rowHeight: 10
-        }
-      );
+      // Use professional fallback table
+      y = this.createFallbackTable(doc, goalsTableData, goalsTableHeaders, y, {
+        columnWidths: goalsColumnWidths,
+        fontSize: 10,
+        headerFontSize: 11,
+        rowHeight: 12
+      });
     }
 
-    // Detailed Goal Breakdown
-    doc.setFontSize(14);
+    // Detailed Goal Breakdown with improved typography
+    doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 51, 102); // Dark blue
     doc.text('DETAILED GOAL BREAKDOWN', this.margin, y);
-    y += 12;
+    
+    // Add underline
+    doc.setDrawColor(0, 102, 204);
+    doc.setLineWidth(0.8);
+    doc.line(this.margin, y + 2, this.margin + 110, y + 2);
+    
+    // Reset text color
+    doc.setTextColor(0, 0, 0);
+    y += 18;
 
     editedGoals.forEach((goal, index) => {
-      if (y > 250) { // Add new page if needed
-        doc.addPage();
-        y = this.margin;
-      }
+      // Smart page break - check if we have enough space for the goal details
+      y = this.checkPageBreak(doc, y, 60); // Need ~60mm for a typical goal
 
-      doc.setFontSize(12);
+      // Goal title with enhanced styling
+      doc.setFontSize(13);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${index + 1}. ${goal.title || 'Unnamed Goal'}`, this.margin, y);
-      y += 10;
+      doc.setTextColor(0, 77, 153); // Medium blue
+      doc.text(`${index + 1}. ${goal?.title || 'Unnamed Goal'}`, this.margin, y);
+      doc.setTextColor(0, 0, 0); // Reset to black
+      y += 12;
 
-      doc.setFontSize(10);
+      // Goal details with better formatting
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
       
       const goalDetails = [
-        `Target Amount: ₹${this.formatCurrency(goal.targetAmount || 0)}`,
-        `Time Horizon: ${goal.timeInYears || 'TBD'} years (Target: ${goal.targetYear || 'TBD'})`,
-        `Required Monthly SIP: ₹${this.formatCurrency(goal.monthlySIP || 0)}`,
-        `Expected Return: ${goal.assetAllocation?.expectedReturn || 8}% per annum`,
-        `Risk Level: ${goal.assetAllocation?.riskLevel || 'Medium'}`,
-        `Asset Allocation: ${goal.assetAllocation ? `${goal.assetAllocation.equity}% Equity, ${goal.assetAllocation.debt}% Debt` : 'TBD'}`
+        [`Target Amount:`, goal?.targetAmount ? `₹${this.formatCurrency(goal.targetAmount)}` : 'TBD'],
+        [`Time Horizon:`, goal?.timeInYears ? `${goal.timeInYears} years` : 'TBD', goal?.targetYear ? `(Target: ${goal.targetYear})` : ''],
+        [`Monthly SIP Required:`, goal?.monthlySIP ? `₹${this.formatCurrency(goal.monthlySIP)}` : 'TBD'],
+        [`Expected Return:`, `${goal?.assetAllocation?.expectedReturn || 8}% per annum`],
+        [`Risk Level:`, goal?.assetAllocation?.riskLevel || 'Medium'],
+        [`Asset Allocation:`, goal?.assetAllocation ? `${goal.assetAllocation.equity || 0}% Equity, ${goal.assetAllocation.debt || 0}% Debt` : 'To be determined']
       ];
 
-      goalDetails.forEach(detail => {
-        doc.text(`  • ${detail}`, this.margin + 5, y);
-        y += 7;
+      goalDetails.forEach(([label, value, extra]) => {
+        // Label in semi-bold
+        doc.setFont('helvetica', 'bold');
+        doc.text(`• ${label}`, this.margin + 5, y);
+        
+        // Value in normal weight
+        doc.setFont('helvetica', 'normal');
+        const labelWidth = doc.getTextWidth(`• ${label} `);
+        doc.text(` ${value}`, this.margin + 5 + labelWidth, y);
+        
+        // Extra info if available
+        if (extra) {
+          const valueWidth = doc.getTextWidth(` ${value} `);
+          doc.text(` ${extra}`, this.margin + 5 + labelWidth + valueWidth, y);
+        }
+        
+        y += 8;
       });
 
-      y += 5;
+      // Add spacing between goals
+      y += 8;
     });
 
     return y;
@@ -898,6 +1010,7 @@ class GoalPlanPDFGenerator {
     const sortedGoals = [...editedGoals].sort((a, b) => (a.targetYear || 9999) - (b.targetYear || 9999));
 
     // Timeline Table
+    const timelineHeaders = ['Goal', 'Target Year', 'Monthly SIP', 'Action', 'Priority'];
     const timelineData = sortedGoals.map(goal => [
       goal.title || 'Unnamed Goal',
       `${goal.targetYear || 'TBD'}`,
@@ -911,7 +1024,7 @@ class GoalPlanPDFGenerator {
       try {
         doc.autoTable({
           startY: y,
-          head: [['Goal', 'Target Year', 'Monthly SIP', 'Action', 'Priority']],
+          head: [timelineHeaders],
           body: timelineData,
           theme: 'grid',
           headStyles: { fillColor: [0, 102, 204] },
@@ -919,42 +1032,21 @@ class GoalPlanPDFGenerator {
           styles: { fontSize: 10 }
         });
         y = doc.lastAutoTable.finalY + 15;
-      } catch (autoTableError) {
-        console.warn('❌ [PDF Generator] doc.autoTable failed for timeline table, trying direct function call:', autoTableError);
-        try {
-          autoTable(doc, {
-            startY: y,
-            head: [['Goal', 'Target Year', 'Monthly SIP', 'Action', 'Priority']],
-            body: timelineData,
-            theme: 'grid',
-            headStyles: { fillColor: [0, 102, 204] },
-            margin: { left: this.margin, right: this.margin },
-            styles: { fontSize: 10 }
-          });
-          y = doc.lastAutoTable.finalY + 15;
-        } catch (directCallError) {
-          console.warn('❌ [PDF Generator] Direct autoTable call failed for timeline table, using fallback table:', directCallError);
-          const fallbackResult = this.createFallbackTable(doc, timelineData, 
-            ['Goal', 'Target Year', 'Monthly SIP', 'Action', 'Priority'], 
-            y, {
-              fontSize: 10,
-              title: 'Implementation Timeline'
-            }
-          );
-          y = fallbackResult.endY + 15;
-        }
+      } catch (error) {
+        console.warn('❌ [PDF Generator] autoTable failed for timeline table, using fallback table:', error);
+        y = this.createFallbackTable(doc, timelineData, timelineHeaders, y, {
+          fontSize: 10,
+          headerFontSize: 11,
+          rowHeight: 12
+        });
       }
     } else {
       // Use professional fallback table
-      console.warn('Using professional fallback table for timeline table');
-      const fallbackResult = this.createFallbackTable(
-        doc, 
-        timelineData, 
-        timelineHeaders, 
-        y, 
-        { fontSize: 9, title: 'Implementation Timeline' }
-      );
-      y = fallbackResult.endY + 15;
+      y = this.createFallbackTable(doc, timelineData, timelineHeaders, y, {
+        fontSize: 10,
+        headerFontSize: 11,
+        rowHeight: 12
+      });
     }
 
     // Action Items
@@ -1040,10 +1132,15 @@ class GoalPlanPDFGenerator {
     doc.text('PREPARED BY', this.margin, y);
     y += 20;
 
-    // Advisor details box
+    // Enhanced advisor details box
     doc.setDrawColor(0, 102, 204);
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(this.margin, y, this.contentWidth, 50, 3, 3, 'FD');
+    doc.setFillColor(248, 252, 255);
+    doc.roundedRect(this.margin, y, this.contentWidth, 55, 5, 5, 'FD');
+    
+    // Add subtle inner border
+    doc.setDrawColor(220, 235, 250);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(this.margin + 2, y + 2, this.contentWidth - 4, 51, 3, 3);
     
     y += 15;
     doc.setFontSize(14);
@@ -1084,6 +1181,101 @@ class GoalPlanPDFGenerator {
 
   // Utility Functions
 
+  /**
+   * Check if we need a page break and handle it smartly
+   */
+  checkPageBreak(doc, currentY, requiredSpace = 30, addHeader = true) {
+    if (currentY + requiredSpace > this.pageHeight - this.margin) {
+      doc.addPage();
+      let newY = this.margin;
+      
+      // Add header to new page if requested
+      if (addHeader) {
+        // Add a subtle header line for continuation
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(0.3);
+        doc.line(this.margin, newY, this.pageWidth - this.margin, newY);
+        newY += 10;
+      }
+      
+      return newY;
+    }
+    return currentY;
+  }
+
+  /**
+   * Add consistent section spacing
+   */
+  addSectionSpacing(currentY, spacing = 15) {
+    return currentY + spacing;  
+  }
+
+  /**
+   * Calculate responsive column widths based on content and available space
+   */
+  calculateResponsiveColumnWidths(headers, data, availableWidth = this.contentWidth) {
+    const padding = 10; // Extra padding per column
+    const minColumnWidth = 15; // Minimum column width in mm
+    const maxColumnWidth = availableWidth * 0.4; // Maximum 40% of available width
+    
+    // Calculate content-based widths
+    const contentWidths = headers.map((header, colIndex) => {
+      // Start with header width
+      let maxWidth = header.length * 2; // Approximate mm per character
+      
+      // Check data content width
+      data.forEach(row => {
+        if (row[colIndex]) {
+          const cellLength = String(row[colIndex]).length * 1.8;
+          maxWidth = Math.max(maxWidth, cellLength);
+        }
+      });
+      
+      // Apply constraints
+      return Math.min(Math.max(maxWidth + padding, minColumnWidth), maxColumnWidth);
+    });
+    
+    // Scale to fit available width
+    const totalCalculatedWidth = contentWidths.reduce((sum, width) => sum + width, 0);
+    
+    if (totalCalculatedWidth > availableWidth) {
+      // Scale down proportionally
+      const scaleFactor = availableWidth / totalCalculatedWidth;
+      return contentWidths.map(width => Math.max(width * scaleFactor, minColumnWidth));
+    }
+    
+    return contentWidths;
+  }
+
+  /**
+   * Wrap text to fit within column width
+   */
+  wrapTextForColumn(doc, text, maxWidth, fontSize = 10) {
+    if (!text) return [''];
+    
+    // Set font size for accurate measurement
+    doc.setFontSize(fontSize);
+    
+    // Use jsPDF's built-in text splitting
+    return doc.splitTextToSize(String(text), maxWidth - 4); // 4mm padding
+  }
+
+  /**
+   * Calculate required row height for wrapped text
+   */
+  calculateRowHeight(doc, rowData, columnWidths, fontSize = 10, baseHeight = 8) {
+    let maxLines = 1;
+    
+    rowData.forEach((cell, colIndex) => {
+      if (cell && columnWidths[colIndex]) {
+        const wrappedLines = this.wrapTextForColumn(doc, cell, columnWidths[colIndex], fontSize);
+        maxLines = Math.max(maxLines, wrappedLines.length);
+      }
+    });
+    
+    return Math.max(baseHeight, maxLines * 6 + 4); // 6mm per line + padding
+  }
+
   calculateAge(dateOfBirth) {
     if (!dateOfBirth) return 'N/A';
     const today = new Date();
@@ -1097,8 +1289,21 @@ class GoalPlanPDFGenerator {
   }
 
   formatCurrency(amount) {
-    if (!amount || amount === 0) return '0';
-    return new Intl.NumberFormat('en-IN').format(amount);
+    if (!amount || amount === 0 || isNaN(amount)) return '0';
+    
+    try {
+      // Handle string amounts that might be passed
+      const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+      if (isNaN(numAmount)) return '0';
+      
+      return new Intl.NumberFormat('en-IN', {
+        maximumFractionDigits: 0,
+        minimumFractionDigits: 0
+      }).format(Math.round(numAmount));
+    } catch (error) {
+      console.warn('⚠️ [PDF Generator] Error formatting currency:', error);
+      return String(amount);
+    }
   }
 
   calculateTotalAssets(assets) {
@@ -1127,7 +1332,23 @@ class GoalPlanPDFGenerator {
     return total;
   }
 
-  getMaxTimelineYears(metrics) {
+  getMaxTimelineYears(metrics, editedGoals) {
+    if (metrics?.maxTimelineYears) {
+      return metrics.maxTimelineYears;
+    }
+    
+    if (editedGoals && editedGoals.length > 0) {
+      const years = editedGoals
+        .map(goal => goal?.timeInYears || goal?.targetYear ? (new Date().getFullYear() - (goal.targetYear || new Date().getFullYear())) : 0)
+        .filter(year => year > 0);
+      
+      if (years.length > 0) {
+        const maxYear = Math.max(...years);
+        const minYear = Math.min(...years);
+        return years.length === 1 ? `${maxYear}` : `${minYear}-${maxYear}`;
+      }
+    }
+    
     return '5-20'; // Default timeline range
   }
 

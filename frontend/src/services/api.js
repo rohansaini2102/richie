@@ -915,6 +915,17 @@ export const planAPI = {
     }
   },
 
+  // Store PDF report in database
+  storePDFReport: async (planId, pdfData) => {
+    console.log('📄 STORING PDF REPORT:', { planId });
+    
+    const response = await api.post(`/plans/${planId}/pdf/store`, pdfData);
+    
+    console.log('✅ PDF REPORT STORED:', { planId });
+    
+    return response.data;
+  },
+
 };
 
 // Enhanced Admin API

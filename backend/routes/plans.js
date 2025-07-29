@@ -120,8 +120,8 @@ router.put(
   planController.updateGoalStrategy
 );
 
-// Legacy PDF generation endpoint (deprecated - use jsPDF with storage instead)
-// router.get('/:planId/pdf', planController.generateGoalPlanPDF);
+// PDF generation is now handled on frontend using jsPDF
+// All PDF storage is managed through the PDF Storage Management Routes below
 
 // PDF Storage Management Routes
 

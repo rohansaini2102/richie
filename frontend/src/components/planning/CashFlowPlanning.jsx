@@ -35,7 +35,8 @@ import {
   StepContent,
   Autocomplete,
   Fab,
-  CircularProgress
+  CircularProgress,
+  Snackbar
 } from '@mui/material';
 import {
   Edit,
@@ -59,13 +60,19 @@ import {
   TrendingDown,
   Security,
   Timeline,
-  Analytics
+  Analytics,
+  PictureAsPdf,
+  Download,
+  CloudUpload,
+  ArrowBack
 } from '@mui/icons-material';
 import { planAPI, clientAPI } from '../../services/api';
 import DebtPlanningInterface from './DebtPlanningInterface';
 import ErrorBoundary from './ErrorBoundary';
 import { useAIRecommendations } from '../../hooks/useAIRecommendations';
 import AISuggestionsPanel from './cashflow/AISuggestionsPanel';
+import { CashFlowPDFGenerator } from './cashflow/CashFlowPDFGenerator';
+import axios from 'axios';
 
 const CashFlowPlanning = ({ planId, clientId, onBack }) => {
   console.log('🚀 [CashFlowPlanning] Component mounting:', { planId, clientId });
@@ -85,6 +92,13 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
   const [error, setError] = useState(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [clientLoading, setClientLoading] = useState(false);
+  
+  // New state for save and PDF functionality
+  const [savedPlanId, setSavedPlanId] = useState(planId); // Use existing planId if available
+  const [isPlanSaved, setIsPlanSaved] = useState(!!planId); // True if planId exists
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Use the new AI Recommendations hook
   const {
@@ -834,6 +848,261 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
     setCustomVariables(customVariables.filter(variable => variable.id !== id));
   };
 
+  // Get advisor data helper function
+  const getAdvisorData = () => {
+    try {
+      const user = JSON.parse(localStorage.getItem('user'));
+      return user ? {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        firmName: user.firmName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        sebiRegNumber: user.sebiRegNumber
+      } : null;
+    } catch (error) {
+      console.error('Error getting advisor data:', error);
+      return null;
+    }
+  };
+
+  // Save cash flow plan function
+  const handleSaveCashFlowPlan = async () => {
+    console.log('💾 [CashFlowPlanning] Save Plan button clicked:', {
+      clientId: client?._id,
+      planId: savedPlanId,
+      hasClient: !!client,
+      isPlanSaved
+    });
+
+    setSaving(true);
+    setError(null);
+    
+    try {
+      const planData = {
+        clientId: client._id,
+        planType: 'cash_flow',
+        planDetails: {
+          cashFlowPlan: plan?.planDetails?.cashFlowPlan || {},
+          cashFlowMetrics: calculatedMetrics,
+          debtManagement: plan?.planDetails?.cashFlowPlan?.debtManagement,
+          emergencyFundStrategy: plan?.planDetails?.cashFlowPlan?.emergencyFundStrategy,
+          investmentRecommendations: plan?.planDetails?.cashFlowPlan?.investmentRecommendations
+        },
+        aiRecommendations: aiRecommendations,
+        status: 'draft'
+      };
+
+      console.log('📤 [CashFlowPlanning] Sending plan data to API:', {
+        planDataKeys: Object.keys(planData),
+        clientId: planData.clientId,
+        planType: planData.planType,
+        hasAIRecommendations: !!planData.aiRecommendations
+      });
+
+      const response = await planAPI.createPlan(planData);
+      
+      console.log('📥 [CashFlowPlanning] Save plan response:', {
+        success: response?.success,
+        planId: response?.plan?._id,
+        hasResponse: !!response
+      });
+      
+      if (response.success) {
+        const newPlanId = response.plan._id;
+        setSavedPlanId(newPlanId);
+        setIsPlanSaved(true);
+        setSuccessMessage('Cash flow plan saved successfully!');
+        setShowSuccess(true);
+        
+        console.log('✅ [CashFlowPlanning] Plan saved successfully:', {
+          savedPlanId: newPlanId,
+          planStatus: response.plan.status,
+          isPlanSaved: true
+        });
+        
+        // AUTO-GENERATE AND STORE PDF AFTER PLAN SAVE
+        try {
+          console.log('📄 [CashFlowPlanning] Starting automatic PDF generation after plan save...');
+          await generateAndSavePDF(newPlanId);
+        } catch (pdfError) {
+          console.error('❌ [CashFlowPlanning] Error generating PDF after plan save:', pdfError);
+          // Don't fail the entire save process if PDF generation fails
+        }
+        
+      } else {
+        console.error('❌ [CashFlowPlanning] Plan save failed - response not successful:', response);
+        setError('Failed to save plan - server responded with error');
+      }
+    } catch (err) {
+      console.error('❌ [CashFlowPlanning] Error saving plan:', {
+        error: err.message,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        responseData: err.response?.data
+      });
+      setError(err.response?.data?.message || 'Failed to save plan');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Store PDF in database
+  const storePDFInDatabase = async (pdfBlob, planId) => {
+    try {
+      console.log('📄 [CashFlowPlanning] Starting PDF storage process:', {
+        blobSize: pdfBlob.size,
+        blobType: pdfBlob.type,
+        planId: planId
+      });
+
+      // Convert blob to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise((resolve, reject) => {
+        reader.onloadend = () => {
+          console.log('📄 [CashFlowPlanning] Base64 conversion completed');
+          resolve(reader.result);
+        };
+        reader.onerror = (error) => {
+          console.error('❌ [CashFlowPlanning] FileReader error:', error);
+          reject(error);
+        };
+      });
+      reader.readAsDataURL(pdfBlob);
+      const base64Data = await base64Promise;
+
+      // Validate base64 data
+      if (!base64Data || !base64Data.startsWith('data:application/pdf;base64,')) {
+        throw new Error('Invalid base64 PDF data generated');
+      }
+
+      // Calculate content summary
+      const contentSummary = {
+        monthlyIncome: client?.totalMonthlyIncome || 0,
+        monthlyExpenses: client?.totalMonthlyExpenses || 0,
+        monthlySurplus: (client?.totalMonthlyIncome || 0) - (client?.totalMonthlyExpenses || 0),
+        hasDebtPlan: !!plan?.planDetails?.cashFlowPlan?.debtManagement?.prioritizedDebts?.length,
+        hasEmergencyFund: !!plan?.planDetails?.cashFlowPlan?.emergencyFundStrategy,
+        hasInvestments: !!plan?.planDetails?.cashFlowPlan?.investmentRecommendations?.monthlyInvestments?.length
+      };
+
+      const fileName = `Cash_Flow_Analysis_${client.firstName}_${client.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+      const response = await planAPI.storePDFReport(planId, {
+        reportType: 'cash_flow',
+        pdfData: base64Data,
+        fileName: fileName,
+        contentSummary: contentSummary
+      });
+
+      if (response.success) {
+        console.log('✅ [CashFlowPlanning] PDF stored successfully:', response.report);
+        return response.report;
+      } else {
+        throw new Error(response.error || 'Failed to store PDF');
+      }
+    } catch (error) {
+      console.error('❌ [CashFlowPlanning] Error storing PDF:', error);
+      throw error;
+    }
+  };
+
+  // PDF Generation Functions
+  const generateAndPreviewPDF = async () => {
+    try {
+      setPdfGenerating(true);
+      console.log('🎯 [CashFlowPlanning] Starting PDF preview...');
+
+      const generator = new CashFlowPDFGenerator();
+      const doc = generator.generatePDF({
+        clientData: client,
+        planData: plan?.planDetails?.cashFlowPlan,
+        metrics: calculatedMetrics,
+        aiRecommendations: aiRecommendations,
+        cacheInfo: { planType: 'cash_flow' },
+        advisorData: getAdvisorData()
+      });
+
+      const pdfBlob = doc.output('blob');
+      const pdfURL = URL.createObjectURL(pdfBlob);
+      window.open(pdfURL, '_blank');
+      
+      setTimeout(() => URL.revokeObjectURL(pdfURL), 100);
+      console.log('✅ [CashFlowPlanning] PDF preview opened');
+    } catch (error) {
+      console.error('❌ [CashFlowPlanning] Error generating PDF preview:', error);
+      setError('Failed to generate PDF preview');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
+  const generateAndDownloadPDF = async () => {
+    try {
+      setPdfGenerating(true);
+      console.log('🎯 [CashFlowPlanning] Starting PDF download...');
+
+      const generator = new CashFlowPDFGenerator();
+      const doc = generator.generatePDF({
+        clientData: client,
+        planData: plan?.planDetails?.cashFlowPlan,
+        metrics: calculatedMetrics,
+        aiRecommendations: aiRecommendations,
+        cacheInfo: { planType: 'cash_flow' },
+        advisorData: getAdvisorData()
+      });
+
+      const fileName = `Cash_Flow_Analysis_${client.firstName}_${client.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+
+      console.log('✅ [CashFlowPlanning] PDF downloaded successfully');
+    } catch (error) {
+      console.error('❌ [CashFlowPlanning] Error generating PDF download:', error);
+      setError('Failed to download PDF');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
+  const generateAndSavePDF = async (planIdToUse = savedPlanId) => {
+    if (!planIdToUse) {
+      setError('Please save the plan first before storing PDF');
+      return;
+    }
+
+    try {
+      setPdfGenerating(true);
+      console.log('🎯 [CashFlowPlanning] Starting PDF save to database...');
+
+      const generator = new CashFlowPDFGenerator();
+      const doc = generator.generatePDF({
+        clientData: client,
+        planData: plan?.planDetails?.cashFlowPlan,
+        metrics: calculatedMetrics,
+        aiRecommendations: aiRecommendations,
+        cacheInfo: { planType: 'cash_flow' },
+        advisorData: getAdvisorData()
+      });
+
+      const pdfBlob = doc.output('blob');
+      await storePDFInDatabase(pdfBlob, planIdToUse);
+      
+      // Open PDF after saving
+      const pdfURL = URL.createObjectURL(pdfBlob);
+      window.open(pdfURL, '_blank');
+      setTimeout(() => URL.revokeObjectURL(pdfURL), 100);
+      
+      console.log('✅ [CashFlowPlanning] PDF saved to database and opened');
+      setSuccessMessage('PDF report saved to database and opened for viewing!');
+      setShowSuccess(true);
+    } catch (error) {
+      console.error('❌ [CashFlowPlanning] Error saving PDF to database:', error);
+      setError('Failed to save PDF to database');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
   if (loading || planLoading || clientLoading || !editedClient) {
     return (
       <Box sx={{ width: '100%', mt: 4, textAlign: 'center' }}>
@@ -911,29 +1180,58 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h4" gutterBottom>
-            Cash Flow Planning
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Client: {client?.firstName} {client?.lastName} • Plan ID: {planId}
-          </Typography>
+      <Paper sx={{ p: 2, borderRadius: 0, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <IconButton onClick={onBack}>
+              <ArrowBack />
+            </IconButton>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              Cash Flow Planning
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {client?.firstName} {client?.lastName}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Button 
+              variant="contained" 
+              startIcon={<Save />} 
+              onClick={handleSaveCashFlowPlan}
+              disabled={saving}
+            >
+              {saving ? 'Saving...' : 'Save Plan'}
+            </Button>
+            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+            <Button 
+              variant="outlined" 
+              startIcon={<PictureAsPdf />} 
+              onClick={generateAndPreviewPDF}
+              disabled={pdfGenerating}
+            >
+              Preview
+            </Button>
+            <Button 
+              variant="contained" 
+              startIcon={<Download />} 
+              onClick={generateAndDownloadPDF}
+              disabled={pdfGenerating}
+            >
+              Download
+            </Button>
+            {savedPlanId && (
+              <Button 
+                variant="contained" 
+                startIcon={<CloudUpload />} 
+                onClick={() => generateAndSavePDF()}
+                disabled={pdfGenerating}
+              >
+                Save to DB
+              </Button>
+            )}
+          </Box>
         </Box>
-        <Box>
-          <Button variant="outlined" onClick={onBack} sx={{ mr: 2 }}>
-            Back
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<Save />}
-            onClick={savePlan}
-            disabled={saving}
-          >
-            Save Plan
-          </Button>
-        </Box>
-      </Box>
+      </Paper>
 
       {/* Error Display */}
       {error && (
@@ -955,6 +1253,18 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
           ))}
         </Box>
       )}
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={showSuccess}
+        autoHideDuration={4000}
+        onClose={() => setShowSuccess(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setShowSuccess(false)} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
 
       {/* Financial Health Overview */}
       <Card sx={{ mb: 3, bgcolor: 'background.paper' }}>
@@ -1510,6 +1820,7 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
               />
             </Box>
           </Paper>
+
         </Grid>
       </Grid>
     </Box>
