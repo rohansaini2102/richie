@@ -22,8 +22,15 @@ import EditableClientData from './EditableClientData';
 import DebtManagementSection from './DebtManagementSection';
 import AdvisorRecommendationsForm from './AdvisorRecommendationsForm';
 import AISuggestionsPanel from './AISuggestionsPanel';
-import { CashFlowPDFGenerator } from './CashFlowPDFGenerator';
+import CashFlowPDFGeneratorComponent from './CashFlowPDFGenerator';
+import { generateCashFlowPDF } from './CashFlowPDFDocument';
 import { clientAPI, planAPI } from '../../../services/api';
+import { 
+  transformDebtsForPDF, 
+  buildEmergencyFundStrategy, 
+  buildInvestmentRecommendations,
+  transformAIRecommendations 
+} from './utils/debtTransform';
 
 const CashFlowPlanningInterface = ({ 
   clientId, 
@@ -267,22 +274,58 @@ const CashFlowPlanningInterface = ({
     }
   };
 
+  // Build complete plan data for PDF generation
+  const buildPlanDataForPDF = () => {
+    // Transform debt data
+    const debtManagement = transformDebtsForPDF(clientData?.debtsAndLiabilities);
+    
+    // Build emergency fund strategy
+    const emergencyFundStrategy = buildEmergencyFundStrategy(clientData);
+    
+    // Build investment recommendations
+    const investmentRecommendations = buildInvestmentRecommendations(clientData, debtManagement);
+    
+    // Transform AI recommendations
+    const transformedAIRecommendations = transformAIRecommendations(aiSuggestions);
+    
+    return {
+      debtManagement,
+      emergencyFundStrategy,
+      investmentRecommendations,
+      cashFlowPlan: {
+        monthlyIncome: clientData?.totalMonthlyIncome || 0,
+        monthlyExpenses: clientData?.totalMonthlyExpenses || 0,
+        monthlySurplus: (clientData?.totalMonthlyIncome || 0) - (clientData?.totalMonthlyExpenses || 0)
+      }
+    };
+  };
+
   // PDF Generation Functions
   const generateAndPreviewPDF = async () => {
     try {
       setPdfGenerating(true);
       
-      const generator = new CashFlowPDFGenerator();
-      const doc = generator.generatePDF({
+      // Build complete plan data
+      const planData = buildPlanDataForPDF();
+      
+      // Use new React PDF implementation
+      const data = {
         clientData: clientData,
-        planData: {},
-        metrics: {},
-        aiRecommendations: aiSuggestions,
+        planData: planData,
+        metrics: {
+          totalAssets: clientData?.totalAssets || 0,
+          totalLiabilities: planData.debtManagement.totalDebt || 0,
+          netWorth: (clientData?.totalAssets || 0) - (planData.debtManagement.totalDebt || 0),
+          savingsRate: clientData?.totalMonthlyIncome > 0 
+            ? (((clientData?.totalMonthlyIncome - clientData?.totalMonthlyExpenses) / clientData?.totalMonthlyIncome) * 100).toFixed(1)
+            : 0
+        },
+        aiRecommendations: transformAIRecommendations(aiSuggestions),
         cacheInfo: { planType: 'cash_flow' },
         advisorData: getAdvisorData()
-      });
+      };
 
-      const pdfBlob = doc.output('blob');
+      const pdfBlob = await generateCashFlowPDF(data);
       const pdfURL = URL.createObjectURL(pdfBlob);
       window.open(pdfURL, '_blank');
       
@@ -299,18 +342,38 @@ const CashFlowPlanningInterface = ({
     try {
       setPdfGenerating(true);
       
-      const generator = new CashFlowPDFGenerator();
-      const doc = generator.generatePDF({
+      // Build complete plan data
+      const planData = buildPlanDataForPDF();
+      
+      // Use new React PDF implementation
+      const data = {
         clientData: clientData,
-        planData: {},
-        metrics: {},
-        aiRecommendations: aiSuggestions,
+        planData: planData,
+        metrics: {
+          totalAssets: clientData?.totalAssets || 0,
+          totalLiabilities: planData.debtManagement.totalDebt || 0,
+          netWorth: (clientData?.totalAssets || 0) - (planData.debtManagement.totalDebt || 0),
+          savingsRate: clientData?.totalMonthlyIncome > 0 
+            ? (((clientData?.totalMonthlyIncome - clientData?.totalMonthlyExpenses) / clientData?.totalMonthlyIncome) * 100).toFixed(1)
+            : 0
+        },
+        aiRecommendations: transformAIRecommendations(aiSuggestions),
         cacheInfo: { planType: 'cash_flow' },
         advisorData: getAdvisorData()
-      });
+      };
 
+      const pdfBlob = await generateCashFlowPDF(data);
       const fileName = `Cash_Flow_Analysis_${clientData.firstName}_${clientData.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(fileName);
+      
+      // Create download link
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error generating PDF download:', error);
       setError('Failed to download PDF');
@@ -328,17 +391,27 @@ const CashFlowPlanningInterface = ({
     try {
       setPdfGenerating(true);
       
-      const generator = new CashFlowPDFGenerator();
-      const doc = generator.generatePDF({
+      // Build complete plan data
+      const planData = buildPlanDataForPDF();
+      
+      // Use new React PDF implementation
+      const data = {
         clientData: clientData,
-        planData: {},
-        metrics: {},
-        aiRecommendations: aiSuggestions,
+        planData: planData,
+        metrics: {
+          totalAssets: clientData?.totalAssets || 0,
+          totalLiabilities: planData.debtManagement.totalDebt || 0,
+          netWorth: (clientData?.totalAssets || 0) - (planData.debtManagement.totalDebt || 0),
+          savingsRate: clientData?.totalMonthlyIncome > 0 
+            ? (((clientData?.totalMonthlyIncome - clientData?.totalMonthlyExpenses) / clientData?.totalMonthlyIncome) * 100).toFixed(1)
+            : 0
+        },
+        aiRecommendations: transformAIRecommendations(aiSuggestions),
         cacheInfo: { planType: 'cash_flow' },
         advisorData: getAdvisorData()
-      });
+      };
 
-      const pdfBlob = doc.output('blob');
+      const pdfBlob = await generateCashFlowPDF(data);
       
       // Convert blob to base64
       const reader = new FileReader();

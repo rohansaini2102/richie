@@ -71,7 +71,8 @@ import DebtPlanningInterface from './DebtPlanningInterface';
 import ErrorBoundary from './ErrorBoundary';
 import { useAIRecommendations } from '../../hooks/useAIRecommendations';
 import AISuggestionsPanel from './cashflow/AISuggestionsPanel';
-import { CashFlowPDFGenerator } from './cashflow/CashFlowPDFGenerator';
+import CashFlowPDFGeneratorComponent from './cashflow/CashFlowPDFGenerator';
+import { generateCashFlowPDF } from './cashflow/CashFlowPDFDocument';
 import axios from 'axios';
 
 const CashFlowPlanning = ({ planId, clientId, onBack }) => {
@@ -1013,17 +1014,17 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
       setPdfGenerating(true);
       console.log('🎯 [CashFlowPlanning] Starting PDF preview...');
 
-      const generator = new CashFlowPDFGenerator();
-      const doc = generator.generatePDF({
+      // Use new React PDF implementation
+      const data = {
         clientData: client,
         planData: plan?.planDetails?.cashFlowPlan,
         metrics: calculatedMetrics,
         aiRecommendations: aiRecommendations,
         cacheInfo: { planType: 'cash_flow' },
         advisorData: getAdvisorData()
-      });
+      };
 
-      const pdfBlob = doc.output('blob');
+      const pdfBlob = await generateCashFlowPDF(data);
       const pdfURL = URL.createObjectURL(pdfBlob);
       window.open(pdfURL, '_blank');
       
@@ -1042,18 +1043,28 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
       setPdfGenerating(true);
       console.log('🎯 [CashFlowPlanning] Starting PDF download...');
 
-      const generator = new CashFlowPDFGenerator();
-      const doc = generator.generatePDF({
+      // Use new React PDF implementation
+      const data = {
         clientData: client,
         planData: plan?.planDetails?.cashFlowPlan,
         metrics: calculatedMetrics,
         aiRecommendations: aiRecommendations,
         cacheInfo: { planType: 'cash_flow' },
         advisorData: getAdvisorData()
-      });
+      };
 
+      const pdfBlob = await generateCashFlowPDF(data);
       const fileName = `Cash_Flow_Analysis_${client.firstName}_${client.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(fileName);
+      
+      // Create download link
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
       console.log('✅ [CashFlowPlanning] PDF downloaded successfully');
     } catch (error) {
@@ -1074,17 +1085,17 @@ const CashFlowPlanning = ({ planId, clientId, onBack }) => {
       setPdfGenerating(true);
       console.log('🎯 [CashFlowPlanning] Starting PDF save to database...');
 
-      const generator = new CashFlowPDFGenerator();
-      const doc = generator.generatePDF({
+      // Use new React PDF implementation
+      const data = {
         clientData: client,
         planData: plan?.planDetails?.cashFlowPlan,
         metrics: calculatedMetrics,
         aiRecommendations: aiRecommendations,
         cacheInfo: { planType: 'cash_flow' },
         advisorData: getAdvisorData()
-      });
+      };
 
-      const pdfBlob = doc.output('blob');
+      const pdfBlob = await generateCashFlowPDF(data);
       await storePDFInDatabase(pdfBlob, planIdToUse);
       
       // Open PDF after saving

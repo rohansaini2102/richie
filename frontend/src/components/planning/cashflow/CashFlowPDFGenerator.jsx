@@ -13,7 +13,9 @@ import {
   ListItemText,
   ListItemIcon,
   ListItemSecondaryAction,
-  Chip
+  Chip,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import { 
   PictureAsPdf, 
@@ -25,11 +27,13 @@ import {
   Delete,
   Storage,
   CheckCircle,
-  Error as ErrorIcon
+  Error as ErrorIcon,
+  Science as ScienceIcon
 } from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import axios from 'axios';
+import { generateCashFlowPDF } from './CashFlowPDFDocument';
 
 /**
  * CashFlowPDFGenerator - Generates professional cash flow analysis PDFs
@@ -1206,6 +1210,7 @@ const CashFlowPDFGeneratorComponent = ({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [successMessage, setSuccessMessage] = React.useState(null);
+  const [useReactPDF, setUseReactPDF] = React.useState(true); // Feature flag for new implementation
 
   // Load stored reports on component mount
   React.useEffect(() => {
@@ -1325,23 +1330,42 @@ const CashFlowPDFGeneratorComponent = ({
       setError(null);
       setSuccessMessage(null);
       console.log('🎯 [Cash Flow PDF] Starting PDF generation and storage...');
+      console.log('📊 [Cash Flow PDF] Using:', useReactPDF ? 'React PDF (New)' : 'jsPDF (Legacy)');
 
-      const generator = new CashFlowPDFGenerator();
-      const doc = generator.generatePDF({
-        clientData,
-        planData,
-        metrics,
-        aiRecommendations,
-        cacheInfo,
-        advisorData: getAdvisorData()
-      });
-
-      // Get PDF as blob
-      const pdfBlob = doc.output('blob');
-      console.log('📄 [Cash Flow PDF] PDF blob created for storage:', {
-        size: pdfBlob.size,
-        type: pdfBlob.type
-      });
+      let pdfBlob;
+      
+      if (useReactPDF) {
+        // Use new React PDF implementation
+        const data = {
+          clientData,
+          planData,
+          metrics,
+          aiRecommendations,
+          cacheInfo,
+          advisorData: getAdvisorData()
+        };
+        pdfBlob = await generateCashFlowPDF(data);
+        console.log('✅ [Cash Flow PDF] React PDF blob created:', {
+          size: pdfBlob.size,
+          type: pdfBlob.type
+        });
+      } else {
+        // Use legacy jsPDF implementation
+        const generator = new CashFlowPDFGenerator();
+        const doc = generator.generatePDF({
+          clientData,
+          planData,
+          metrics,
+          aiRecommendations,
+          cacheInfo,
+          advisorData: getAdvisorData()
+        });
+        pdfBlob = doc.output('blob');
+        console.log('📄 [Cash Flow PDF] jsPDF blob created:', {
+          size: pdfBlob.size,
+          type: pdfBlob.type
+        });
+      }
       
       // Store in database
       const savedReport = await storePDFInDatabase(pdfBlob);
@@ -1452,19 +1476,44 @@ const CashFlowPDFGeneratorComponent = ({
       setGenerating(true);
       setSuccessMessage(null);
       console.log('🎯 [Cash Flow PDF] Starting PDF generation...');
-
-      const generator = new CashFlowPDFGenerator();
-      const doc = generator.generatePDF({
-        clientData,
-        planData,
-        metrics,
-        aiRecommendations,
-        cacheInfo,
-        advisorData: getAdvisorData()
-      });
+      console.log('📊 [Cash Flow PDF] Using:', useReactPDF ? 'React PDF (New)' : 'jsPDF (Legacy)');
 
       const fileName = `Cash_Flow_Analysis_${clientData.firstName}_${clientData.lastName}_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(fileName);
+      
+      if (useReactPDF) {
+        // Use new React PDF implementation
+        const data = {
+          clientData,
+          planData,
+          metrics,
+          aiRecommendations,
+          cacheInfo,
+          advisorData: getAdvisorData()
+        };
+        const pdfBlob = await generateCashFlowPDF(data);
+        
+        // Create download link
+        const url = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        // Use legacy jsPDF implementation
+        const generator = new CashFlowPDFGenerator();
+        const doc = generator.generatePDF({
+          clientData,
+          planData,
+          metrics,
+          aiRecommendations,
+          cacheInfo,
+          advisorData: getAdvisorData()
+        });
+        doc.save(fileName);
+      }
 
       console.log('✅ [Cash Flow PDF] PDF downloaded successfully');
     } catch (error) {
@@ -1480,19 +1529,36 @@ const CashFlowPDFGeneratorComponent = ({
       setGenerating(true);
       setSuccessMessage(null);
       console.log('🎯 [Cash Flow PDF] Starting PDF preview...');
+      console.log('📊 [Cash Flow PDF] Using:', useReactPDF ? 'React PDF (New)' : 'jsPDF (Legacy)');
 
-      const generator = new CashFlowPDFGenerator();
-      const doc = generator.generatePDF({
-        clientData,
-        planData,
-        metrics,
-        aiRecommendations,
-        cacheInfo,
-        advisorData: getAdvisorData()
-      });
+      let pdfBlob;
+      
+      if (useReactPDF) {
+        // Use new React PDF implementation
+        const data = {
+          clientData,
+          planData,
+          metrics,
+          aiRecommendations,
+          cacheInfo,
+          advisorData: getAdvisorData()
+        };
+        pdfBlob = await generateCashFlowPDF(data);
+      } else {
+        // Use legacy jsPDF implementation
+        const generator = new CashFlowPDFGenerator();
+        const doc = generator.generatePDF({
+          clientData,
+          planData,
+          metrics,
+          aiRecommendations,
+          cacheInfo,
+          advisorData: getAdvisorData()
+        });
+        pdfBlob = doc.output('blob');
+      }
 
       // Open PDF in new tab for preview
-      const pdfBlob = doc.output('blob');
       const pdfURL = URL.createObjectURL(pdfBlob);
       window.open(pdfURL, '_blank');
       
@@ -1511,10 +1577,29 @@ const CashFlowPDFGeneratorComponent = ({
   return (
     <Paper elevation={3} sx={{ p: 2, mt: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-          <PictureAsPdf sx={{ mr: 1, verticalAlign: 'middle' }} />
-          Cash Flow Analysis PDF Report
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', mr: 2 }}>
+            <PictureAsPdf sx={{ mr: 1, verticalAlign: 'middle' }} />
+            Cash Flow Analysis PDF Report
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={useReactPDF}
+                onChange={(e) => setUseReactPDF(e.target.checked)}
+                color="primary"
+                disabled={generating}
+              />
+            }
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <ScienceIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                <Typography variant="caption">New PDF Engine</Typography>
+              </Box>
+            }
+            sx={{ ml: 2 }}
+          />
+        </Box>
         <Box>
           <Button
             variant="contained"
