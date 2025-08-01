@@ -42,19 +42,124 @@ Font.register({
   ],
 });
 
+// Define brand colors
+const brandColors = {
+  primary: '#1E3A8A', // RicheAI Deep Blue
+  secondary: '#3B82F6', // Bright Blue
+  accent: '#10B981', // Success Green
+  danger: '#EF4444', // Error Red
+  warning: '#F59E0B', // Warning Orange
+  light: '#F3F4F6', // Light Gray
+  dark: '#111827', // Dark Gray
+  background: '#FFFFFF',
+  gradientStart: '#1E3A8A',
+  gradientEnd: '#3B82F6',
+};
+
 // Define styles
 const styles = StyleSheet.create({
   page: {
     fontFamily: 'Roboto',
     fontSize: 11,
-    paddingTop: 35,
+    paddingTop: 0,
     paddingBottom: 65,
-    paddingHorizontal: 35,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 0,
+    backgroundColor: brandColors.background,
   },
+  // Header Styles
+  headerContainer: {
+    backgroundColor: brandColors.primary,
+    paddingVertical: 15,
+    paddingHorizontal: 35,
+    marginBottom: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
+  brandName: {
+    fontSize: 20,
+    fontWeight: 700,
+    color: '#FFFFFF',
+    marginBottom: 3,
+  },
+  brandTagline: {
+    fontSize: 10,
+    color: '#E0E7FF',
+    fontStyle: 'italic',
+  },
+  headerPageInfo: {
+    color: '#FFFFFF',
+    fontSize: 10,
+  },
+  // Cover Page Styles
+  coverPage: {
+    padding: 0,
+  },
+  coverHeader: {
+    backgroundColor: brandColors.primary,
+    height: 200,
+    position: 'relative',
+  },
+  coverPattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.1,
+  },
+  coverBranding: {
+    paddingTop: 40,
+    paddingHorizontal: 35,
+    alignItems: 'center',
+  },
+  richeAILogo: {
+    fontSize: 36,
+    fontWeight: 700,
+    color: '#FFFFFF',
+    marginBottom: 5,
+  },
+  richeAITagline: {
+    fontSize: 14,
+    color: '#E0E7FF',
+    marginBottom: 40,
+  },
+  coverTitleBox: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 35,
+    marginTop: -50,
+    borderRadius: 10,
+    padding: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  coverTitle: {
+    fontSize: 28,
+    fontWeight: 700,
+    color: brandColors.primary,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  coverSubtitle: {
+    fontSize: 16,
+    color: brandColors.dark,
+    textAlign: 'center',
+  },
+  // Updated existing styles with new theme
   header: {
     marginBottom: 20,
-    borderBottom: '2 solid #0066CC',
+    borderBottom: `2 solid ${brandColors.secondary}`,
     paddingBottom: 10,
   },
   headerTop: {
@@ -65,48 +170,50 @@ const styles = StyleSheet.create({
   firmName: {
     fontSize: 16,
     fontWeight: 700,
-    color: '#003366',
+    color: brandColors.primary,
   },
   advisorInfo: {
     fontSize: 10,
-    color: '#666666',
+    color: brandColors.dark,
     marginTop: 2,
   },
   pageNumber: {
     fontSize: 10,
-    color: '#666666',
+    color: brandColors.dark,
     textAlign: 'right',
   },
   date: {
     fontSize: 10,
-    color: '#666666',
+    color: brandColors.dark,
     textAlign: 'right',
   },
   title: {
     fontSize: 24,
     fontWeight: 700,
-    color: '#003366',
+    color: brandColors.primary,
     textAlign: 'center',
     marginTop: 40,
     marginBottom: 20,
   },
   subtitle: {
     fontSize: 16,
-    color: '#003366',
+    color: brandColors.dark,
     textAlign: 'center',
     marginBottom: 40,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 700,
-    color: '#003366',
+    color: brandColors.primary,
     marginTop: 30,
     marginBottom: 15,
+    paddingBottom: 8,
+    borderBottom: `2 solid ${brandColors.light}`,
   },
   subsectionTitle: {
     fontSize: 14,
     fontWeight: 500,
-    color: '#003366',
+    color: brandColors.dark,
     marginTop: 20,
     marginBottom: 10,
   },
@@ -121,25 +228,27 @@ const styles = StyleSheet.create({
     width: 'auto',
     borderStyle: 'solid',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: brandColors.light,
     borderRightWidth: 0,
     borderBottomWidth: 0,
     marginTop: 10,
     marginBottom: 20,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   tableRow: {
     flexDirection: 'row',
   },
   tableRowHeader: {
-    backgroundColor: '#0066CC',
+    backgroundColor: brandColors.primary,
   },
   tableRowAlternate: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAFBFC',
   },
   tableCol: {
     borderStyle: 'solid',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: brandColors.light,
     borderLeftWidth: 0,
     borderTopWidth: 0,
     padding: 8,
@@ -154,17 +263,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   infoBox: {
-    backgroundColor: '#F0F8FF',
-    border: '1 solid #0066CC',
-    borderRadius: 5,
-    padding: 15,
+    backgroundColor: '#F0F4FF',
+    border: `1 solid ${brandColors.secondary}`,
+    borderRadius: 8,
+    padding: 20,
     marginVertical: 15,
+    position: 'relative',
   },
   infoBoxTitle: {
     fontSize: 14,
     fontWeight: 700,
-    color: '#003366',
+    color: brandColors.primary,
     marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -174,25 +286,31 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     width: '48%',
-    backgroundColor: '#F9FAFB',
-    border: '1 solid #E5E7EB',
-    borderRadius: 5,
-    padding: 12,
+    backgroundColor: '#FFFFFF',
+    border: `1 solid ${brandColors.light}`,
+    borderRadius: 8,
+    padding: 15,
     marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
   metricLabel: {
     fontSize: 10,
-    color: '#666666',
+    color: brandColors.dark,
     marginBottom: 5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   metricValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 700,
-    color: '#003366',
+    color: brandColors.primary,
   },
   metricSubtext: {
     fontSize: 9,
-    color: '#666666',
+    color: brandColors.dark,
     marginTop: 3,
   },
   bulletList: {
@@ -215,32 +333,111 @@ const styles = StyleSheet.create({
   footer: {
     position: 'absolute',
     fontSize: 9,
-    bottom: 30,
-    left: 35,
-    right: 35,
-    textAlign: 'center',
-    color: '#666666',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: brandColors.light,
+    paddingVertical: 15,
+    paddingHorizontal: 35,
+  },
+  footerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  footerLeft: {
+    flex: 1,
+  },
+  footerRight: {
+    alignItems: 'flex-end',
+  },
+  footerText: {
+    fontSize: 9,
+    color: brandColors.dark,
+    marginBottom: 2,
+  },
+  footerBrand: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: brandColors.primary,
   },
   disclaimer: {
     fontSize: 9,
-    color: '#666666',
+    color: brandColors.dark,
     marginTop: 30,
-    padding: 10,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 5,
+    padding: 15,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    border: '1 solid #F59E0B',
   },
   pageBreak: {
     breakBefore: 'page',
   },
   // Status colors
   successText: {
-    color: '#059669',
+    color: brandColors.accent,
   },
   warningText: {
-    color: '#D97706',
+    color: brandColors.warning,
   },
   errorText: {
-    color: '#DC2626',
+    color: brandColors.danger,
+  },
+  // New styles for branding
+  brandedSection: {
+    backgroundColor: brandColors.light,
+    borderRadius: 8,
+    padding: 20,
+    marginVertical: 15,
+  },
+  iconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: brandColors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  sectionIcon: {
+    fontSize: 20,
+    color: '#FFFFFF',
+  },
+  clientInfoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 25,
+    marginHorizontal: 35,
+    marginTop: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    border: `1 solid ${brandColors.light}`,
+  },
+  advisorCard: {
+    backgroundColor: brandColors.primary,
+    borderRadius: 10,
+    padding: 20,
+    marginHorizontal: 35,
+    marginTop: 20,
+    marginBottom: 30,
+  },
+  advisorCardTitle: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#FFFFFF',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  advisorCardText: {
+    fontSize: 11,
+    color: '#E0E7FF',
+    marginBottom: 5,
+  },
+  pageContent: {
+    paddingHorizontal: 35,
   },
 });
 
@@ -262,20 +459,39 @@ const calculateAge = (dateOfBirth) => {
   return age;
 };
 
-// Header Component
-const Header = ({ advisorData, pageNumber }) => (
-  <View style={styles.header}>
-    <View style={styles.headerTop}>
-      <View>
-        <Text style={styles.firmName}>{advisorData?.firmName || 'Financial Advisory Services'}</Text>
-        <Text style={styles.advisorInfo}>
-          {advisorData?.firstName} {advisorData?.lastName}
-          {advisorData?.sebiRegNumber ? ` | SEBI Reg: ${advisorData.sebiRegNumber}` : ''}
-        </Text>
+// Branded Header Component
+const BrandedHeader = ({ pageNumber, showBranding = true }) => (
+  <View style={styles.headerContainer}>
+    <View style={styles.headerContent}>
+      <View style={styles.headerLeft}>
+        {showBranding && (
+          <>
+            <Text style={styles.brandName}>RicheAI</Text>
+            <Text style={styles.brandTagline}>Intelligent Financial Planning</Text>
+          </>
+        )}
       </View>
-      <View>
-        <Text style={styles.pageNumber}>Page {pageNumber}</Text>
-        <Text style={styles.date}>{new Date().toLocaleDateString('en-IN')}</Text>
+      <View style={styles.headerRight}>
+        <Text style={styles.headerPageInfo}>Page {pageNumber}</Text>
+        <Text style={styles.headerPageInfo}>{new Date().toLocaleDateString('en-IN')}</Text>
+      </View>
+    </View>
+  </View>
+);
+
+// Branded Footer Component
+const BrandedFooter = ({ advisorData }) => (
+  <View style={styles.footer}>
+    <View style={styles.footerContent}>
+      <View style={styles.footerLeft}>
+        <Text style={styles.footerBrand}>Powered by RicheAI</Text>
+        <Text style={styles.footerText}>© {new Date().getFullYear()} RicheAI - Confidential & Proprietary</Text>
+      </View>
+      <View style={styles.footerRight}>
+        {advisorData?.firmName && (
+          <Text style={styles.footerText}>{advisorData.firmName}</Text>
+        )}
+        <Text style={styles.footerText}>Generated with AI-Powered Analysis</Text>
       </View>
     </View>
   </View>
@@ -330,57 +546,105 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
   return (
     <Document>
       {/* Cover Page */}
-      <Page size="A4" style={styles.page}>
-        <Header advisorData={advisorData} pageNumber={1} />
+      <Page size="A4" style={[styles.page, styles.coverPage]}>
+        {/* Branded Header Section */}
+        <View style={styles.coverHeader}>
+          <View style={styles.coverBranding}>
+            <Text style={styles.richeAILogo}>RicheAI</Text>
+            <Text style={styles.richeAITagline}>Transforming Financial Planning with Intelligence</Text>
+          </View>
+        </View>
         
-        <Text style={styles.title}>CASH FLOW ANALYSIS REPORT</Text>
-        <Text style={styles.subtitle}>Comprehensive Financial Cash Flow Planning</Text>
+        {/* Title Box */}
+        <View style={styles.coverTitleBox}>
+          <Text style={styles.coverTitle}>CASH FLOW ANALYSIS REPORT</Text>
+          <Text style={styles.coverSubtitle}>Comprehensive Financial Planning & Optimization</Text>
+        </View>
         
-        <View style={styles.infoBox}>
-          <Text style={styles.infoBoxTitle}>CLIENT INFORMATION</Text>
+        {/* Client Information Card */}
+        <View style={styles.clientInfoCard}>
+          <Text style={styles.infoBoxTitle}>CLIENT PROFILE</Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.text}>Name: {clientData?.firstName} {clientData?.lastName}</Text>
-              <Text style={styles.text}>Age: {calculateAge(clientData?.dateOfBirth)} years</Text>
-              <Text style={styles.text}>PAN: {clientData?.panCard || 'Not Provided'}</Text>
-              <Text style={styles.text}>Email: {clientData?.email || 'Not Provided'}</Text>
-              <Text style={styles.text}>Phone: {clientData?.phoneNumber || clientData?.contactNumber || 'Not Provided'}</Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>Name:</Text> {clientData?.firstName} {clientData?.lastName}
+              </Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>Age:</Text> {calculateAge(clientData?.dateOfBirth)} years
+              </Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>PAN:</Text> {clientData?.panCard || 'Not Provided'}
+              </Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>Email:</Text> {clientData?.email || 'Not Provided'}
+              </Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>Phone:</Text> {clientData?.phoneNumber || clientData?.contactNumber || 'Not Provided'}
+              </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.text}>Occupation: {clientData?.occupation || 'Not Specified'}</Text>
-              <Text style={styles.text}>Employment Type: {clientData?.employmentType || 'Salaried'}</Text>
-              <Text style={styles.text}>Risk Profile: {clientData?.riskTolerance || 'Moderate'}</Text>
-              <Text style={styles.text}>Monthly Income: {formatCurrency(monthlyIncome)}</Text>
-              <Text style={styles.text}>Annual Income: {formatCurrency(clientData?.annualIncome || monthlyIncome * 12)}</Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>Occupation:</Text> {clientData?.occupation || 'Not Specified'}
+              </Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>Employment:</Text> {clientData?.employmentType || 'Salaried'}
+              </Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>Risk Profile:</Text> {clientData?.riskTolerance || 'Moderate'}
+              </Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>Monthly Income:</Text> {formatCurrency(monthlyIncome)}
+              </Text>
+              <Text style={[styles.text, { marginBottom: 6 }]}>
+                <Text style={{ fontWeight: 700 }}>Annual Income:</Text> {formatCurrency(clientData?.annualIncome || monthlyIncome * 12)}
+              </Text>
             </View>
           </View>
         </View>
         
-        {/* Advisor Information Box */}
-        <View style={[styles.infoBox, { marginTop: 20 }]}>
-          <Text style={styles.infoBoxTitle}>PREPARED BY</Text>
-          <Text style={styles.text}>Advisor: {advisorData?.firstName} {advisorData?.lastName}</Text>
-          <Text style={styles.text}>Firm: {advisorData?.firmName || 'Financial Advisory Services'}</Text>
+        {/* Advisor Information Card */}
+        <View style={styles.advisorCard}>
+          <Text style={styles.advisorCardTitle}>Financial Advisor</Text>
+          <Text style={styles.advisorCardText}>
+            {advisorData?.firstName} {advisorData?.lastName}
+          </Text>
+          <Text style={styles.advisorCardText}>
+            {advisorData?.firmName || 'Financial Advisory Services'}
+          </Text>
           {advisorData?.sebiRegNumber && (
-            <Text style={styles.text}>SEBI Registration: {advisorData.sebiRegNumber}</Text>
+            <Text style={styles.advisorCardText}>
+              SEBI Registration: {advisorData.sebiRegNumber}
+            </Text>
           )}
           {advisorData?.email && (
-            <Text style={styles.text}>Email: {advisorData.email}</Text>
+            <Text style={styles.advisorCardText}>
+              Email: {advisorData.email}
+            </Text>
           )}
           {advisorData?.phoneNumber && (
-            <Text style={styles.text}>Phone: {advisorData.phoneNumber}</Text>
+            <Text style={styles.advisorCardText}>
+              Phone: {advisorData.phoneNumber}
+            </Text>
           )}
         </View>
         
-        <Text style={[styles.text, { marginTop: 20 }]}>
-          Report Generated: {new Date().toLocaleDateString('en-IN')}
-        </Text>
-        <Text style={styles.text}>Plan Type: Cash Flow Analysis</Text>
+        {/* Report Meta Information */}
+        <View style={{ marginHorizontal: 35, marginTop: 30 }}>
+          <Text style={[styles.text, { textAlign: 'center', color: brandColors.dark }]}>
+            Report Generated on {new Date().toLocaleDateString('en-IN')} at {new Date().toLocaleTimeString('en-IN')}
+          </Text>
+          <Text style={[styles.text, { textAlign: 'center', color: brandColors.primary, fontWeight: 700 }]}>
+            Powered by RicheAI's Advanced Financial Analytics
+          </Text>
+        </View>
+        
+        <BrandedFooter advisorData={advisorData} />
       </Page>
 
       {/* Executive Summary */}
       <Page size="A4" style={styles.page}>
-        <Header advisorData={advisorData} pageNumber={2} />
+        <BrandedHeader pageNumber={2} />
+        <View style={styles.pageContent}>
         
         <Text style={styles.sectionTitle}>EXECUTIVE SUMMARY</Text>
         
@@ -415,11 +679,13 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
             : `Your current expenses exceed your income by ${formatCurrency(Math.abs(monthlySurplus))} per month. This negative cash flow requires immediate attention.`
           }
         </Text>
+        </View>
       </Page>
 
       {/* Financial Metrics Dashboard */}
       <Page size="A4" style={styles.page}>
-        <Header advisorData={advisorData} pageNumber={3} />
+        <BrandedHeader pageNumber={3} />
+        <View style={styles.pageContent}>
         
         <Text style={styles.sectionTitle}>FINANCIAL METRICS DASHBOARD</Text>
         
@@ -499,11 +765,14 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
             }
           </Text>
         </View>
+        </View>
+        <BrandedFooter advisorData={advisorData} />
       </Page>
 
       {/* Income Analysis */}
       <Page size="A4" style={styles.page}>
-        <Header advisorData={advisorData} pageNumber={4} />
+        <BrandedHeader pageNumber={4} />
+        <View style={styles.pageContent}>
         
         <Text style={styles.sectionTitle}>INCOME ANALYSIS</Text>
         
@@ -525,11 +794,14 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
         <Text style={styles.text}>
           Based on current monthly income, your projected annual income is {formatCurrency(monthlyIncome * 12)}.
         </Text>
+        </View>
+        <BrandedFooter advisorData={advisorData} />
       </Page>
 
       {/* Expense Analysis */}
       <Page size="A4" style={styles.page}>
-        <Header advisorData={advisorData} pageNumber={5} />
+        <BrandedHeader pageNumber={5} />
+        <View style={styles.pageContent}>
         
         <Text style={styles.sectionTitle}>EXPENSE ANALYSIS</Text>
         
@@ -561,11 +833,14 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
             </Text>
           </>
         )}
+        </View>
+        <BrandedFooter advisorData={advisorData} />
       </Page>
 
       {/* Cash Flow Statement */}
       <Page size="A4" style={styles.page}>
-        <Header advisorData={advisorData} pageNumber={6} />
+        <BrandedHeader pageNumber={6} />
+        <View style={styles.pageContent}>
         
         <Text style={styles.sectionTitle}>CASH FLOW STATEMENT</Text>
         
@@ -591,12 +866,15 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
           ]}
           columnWidths={['70%', '30%']}
         />
+        </View>
+        <BrandedFooter advisorData={advisorData} />
       </Page>
 
       {/* Debt Management Plan (if applicable) */}
       {planData?.debtManagement?.prioritizedDebts?.length > 0 && (
         <Page size="A4" style={styles.page}>
-          <Header advisorData={advisorData} pageNumber={7} />
+          <BrandedHeader pageNumber={7} />
+          <View style={styles.pageContent}>
           
           <Text style={styles.sectionTitle}>DEBT MANAGEMENT PLAN</Text>
           
@@ -641,13 +919,16 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
               <Text style={styles.text}>{planData.debtManagement.strategy}</Text>
             </>
           )}
+          </View>
+          <BrandedFooter advisorData={advisorData} />
         </Page>
       )}
 
       {/* Emergency Fund Strategy */}
       {planData?.emergencyFundStrategy && (
         <Page size="A4" style={styles.page}>
-          <Header advisorData={advisorData} pageNumber={8} />
+          <BrandedHeader pageNumber={8} />
+          <View style={styles.pageContent}>
           
           <Text style={styles.sectionTitle}>EMERGENCY FUND STRATEGY</Text>
           
@@ -686,13 +967,16 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
               <Text style={styles.text}>{planData.emergencyFundStrategy.strategy}</Text>
             </>
           )}
+          </View>
+          <BrandedFooter advisorData={advisorData} />
         </Page>
       )}
 
       {/* Investment Recommendations */}
       {planData?.investmentRecommendations?.monthlyInvestments?.length > 0 && (
         <Page size="A4" style={styles.page}>
-          <Header advisorData={advisorData} pageNumber={9} />
+          <BrandedHeader pageNumber={9} />
+          <View style={styles.pageContent}>
           
           <Text style={styles.sectionTitle}>INVESTMENT RECOMMENDATIONS</Text>
           
@@ -721,13 +1005,15 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
             ]}
             columnWidths={['30%', '25%', '25%', '20%']}
           />
+          </View>
         </Page>
       )}
 
       {/* AI Recommendations - Enhanced */}
       {aiRecommendations && (
         <Page size="A4" style={styles.page}>
-          <Header advisorData={advisorData} pageNumber={10} />
+          <BrandedHeader pageNumber={10} />
+          <View style={styles.pageContent}>
           
           <Text style={styles.sectionTitle}>AI-POWERED ANALYSIS & RECOMMENDATIONS</Text>
           
@@ -913,12 +1199,15 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
               </View>
             </>
           )}
+          </View>
+          <BrandedFooter advisorData={advisorData} />
         </Page>
       )}
 
       {/* Advisor's Professional Analysis */}
       <Page size="A4" style={styles.page}>
-        <Header advisorData={advisorData} pageNumber={11} />
+        <BrandedHeader pageNumber={11} />
+        <View style={styles.pageContent}>
         
         <Text style={styles.sectionTitle}>ADVISOR'S PROFESSIONAL ANALYSIS</Text>
         
@@ -998,11 +1287,14 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
             based on the information provided and current market conditions as of {new Date().toLocaleDateString('en-IN')}.
           </Text>
         </View>
+        </View>
+        <BrandedFooter advisorData={advisorData} />
       </Page>
 
       {/* Implementation Timeline & Disclaimers */}
       <Page size="A4" style={styles.page}>
-        <Header advisorData={advisorData} pageNumber={12} />
+        <BrandedHeader pageNumber={12} />
+        <View style={styles.pageContent}>
         
         <Text style={styles.sectionTitle}>IMPLEMENTATION TIMELINE</Text>
         
@@ -1039,7 +1331,7 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
         </View>
         
         <View style={styles.disclaimer}>
-          <Text style={styles.subsectionTitle}>IMPORTANT DISCLAIMERS</Text>
+          <Text style={[styles.subsectionTitle, { color: brandColors.warning }]}>IMPORTANT DISCLAIMERS</Text>
           <Text style={styles.text}>
             • This cash flow analysis is based on information provided and current financial conditions.
           </Text>
@@ -1052,14 +1344,28 @@ const CashFlowPDFDocument = ({ clientData, planData, metrics, aiRecommendations,
           <Text style={styles.text}>
             • Please consult with a qualified financial advisor before making major financial decisions.
           </Text>
-          <Text style={styles.text}>
-            • This report is generated using AI-assisted analysis and should be used for guidance only.
+          <Text style={[styles.text, { fontWeight: 700 }]}>
+            • This report is generated using RicheAI's proprietary AI technology and should be used for guidance only.
+          </Text>
+          <Text style={[styles.text, { marginTop: 10, fontStyle: 'italic' }]}>
+            RicheAI employs advanced machine learning algorithms to provide personalized financial insights. 
+            All recommendations are based on current data and market conditions as of {new Date().toLocaleDateString('en-IN')}.
           </Text>
         </View>
         
-        <Text style={styles.footer}>
-          Prepared by {advisorData?.firstName} {advisorData?.lastName} for {clientData?.firstName} {clientData?.lastName} on {new Date().toLocaleDateString('en-IN')}
-        </Text>
+        {/* RicheAI Branding Section */}
+        <View style={[styles.brandedSection, { marginTop: 30, backgroundColor: brandColors.primary }]}>
+          <Text style={[styles.infoBoxTitle, { color: '#FFFFFF', textAlign: 'center' }]}>
+            Powered by RicheAI Technology
+          </Text>
+          <Text style={[styles.text, { color: '#E0E7FF', textAlign: 'center' }]}>
+            This report utilizes RicheAI's cutting-edge financial analysis platform, combining artificial intelligence 
+            with expert financial planning principles to deliver comprehensive, personalized recommendations.
+          </Text>
+        </View>
+        
+        </View>
+        <BrandedFooter advisorData={advisorData} />
       </Page>
     </Document>
   );
